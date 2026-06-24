@@ -1,0 +1,252 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LoginType {
+  EMAIL
+  MEMBER_CODE
+}
+
+enum GroupType {
+  PERSONAL
+  SUSU
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  CUSTODIAN
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  REMOVED
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CircleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum CircleMemberStatus {
+  ACTIVE
+  REMOVED
+}
+
+enum ContributionFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum PayoutRoundStatus {
+  UPCOMING
+  ACTIVE
+  PAID
+  CLOSED
+}
+
+enum ContributionStatus {
+  DUE
+  PAID
+  MISSED
+}
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  email        String? @unique
+  passwordHash String?
+
+  loginType    LoginType @default(EMAIL)
+
+  groupsCreated RelaisGroup[] @relation("GroupCreator")
+  memberships   GroupMember[]
+  personalGoals PersonalGoal[] @relation("GoalOwner")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RelaisGroup {
+  id          String @id @default(cuid())
+  name        String
+  type        GroupType
+
+  createdById String
+  createdBy   User @relation("GroupCreator", fields: [createdById], references: [id])
+
+  members     GroupMember[]
+  goals       PersonalGoal[]
+  circles     SavingsCircle[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GroupMember {
+  id        String @id @default(cuid())
+
+  groupId   String
+  group     RelaisGroup @relation(fields: [groupId], references: [id])
+
+  userId    String
+  user      User @relation(fields: [userId], references: [id])
+
+  role      GroupRole
+  status    MemberStatus @default(ACTIVE)
+
+  circleMemberships CircleMember[]
+
+  memberCode String? @unique
+  pinHash    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model PersonalGoal {
+  id      String @id @default(cuid())
+
+  groupId String
+  group   RelaisGroup @relation(fields: [groupId], references: [id])
+
+  ownerId String
+  owner   User @relation("GoalOwner", fields: [ownerId], references: [id])
+
+  name          String
+  targetAmount  Decimal
+  weeklyAmount  Decimal
+  startDate     DateTime
+  unlockDate    DateTime
+  status        GoalStatus @default(ACTIVE)
+
+  deposits Deposit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Deposit {
+  id      String @id @default(cuid())
+
+  goalId  String
+  goal    PersonalGoal @relation(fields: [goalId], references: [id])
+
+  amount      Decimal
+  depositDate DateTime
+  status      DepositStatus @default(PENDING)
+
+  note       String?
+  approvedAt DateTime?
+  rejectedAt DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model SavingsCircle {
+  id      String @id @default(cuid())
+
+  groupId String
+  group   RelaisGroup @relation(fields: [groupId], references: [id])
+
+  name               String
+  contributionAmount Decimal
+  frequency          ContributionFrequency
+  status             CircleStatus @default(DRAFT)
+
+  members       CircleMember[]
+  rounds        PayoutRound[]
+  contributions Contribution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CircleMember {
+  id       String @id @default(cuid())
+
+  circleId String
+  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+
+  groupMemberId String
+  groupMember   GroupMember @relation(fields: [groupMemberId], references: [id])
+
+  payoutOrder Int?
+  status      CircleMemberStatus @default(ACTIVE)
+
+  contributions Contribution[]
+  payoutRounds  PayoutRound[]
+
+  @@unique([circleId, groupMemberId])
+}
+
+model PayoutRound {
+  id       String @id @default(cuid())
+
+  circleId String
+  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+
+  roundNumber Int
+  dueDate     DateTime
+  status      PayoutRoundStatus @default(UPCOMING)
+
+  receiverId String
+  receiver   CircleMember @relation(fields: [receiverId], references: [id])
+
+  contributions Contribution[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([circleId, roundNumber])
+}
+
+model Contribution {
+  id       String @id @default(cuid())
+
+  circleId String
+  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+
+  roundId  String
+  round    PayoutRound @relation(fields: [roundId], references: [id])
+
+  memberId String
+  member   CircleMember @relation(fields: [memberId], references: [id])
+
+  amount Decimal
+  status ContributionStatus @default(DUE)
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([roundId, memberId])
+}
+
+
