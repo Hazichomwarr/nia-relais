@@ -1,43 +1,22 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
-  // output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-enum LoginType {
-  EMAIL
-  MEMBER_CODE
-}
-
-enum GroupType {
-  PERSONAL
-  SUSU
-}
-
-enum GroupRole {
-  OWNER
-  ADMIN
-  CUSTODIAN
-  MEMBER
-}
-
-enum MemberStatus {
-  ACTIVE
-  REMOVED
-}
-
 enum GoalStatus {
   ACTIVE
   COMPLETED
   ARCHIVED
+}
+
+enum GoalCustodianStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  ENDED
 }
 
 enum DepositStatus {
@@ -83,103 +62,102 @@ model User {
   email        String? @unique
   passwordHash String?
 
-  loginType    LoginType @default(EMAIL)
-
-  groupsCreated RelaisGroup[] @relation("GroupCreator")
-  memberships   GroupMember[]
-  personalGoals PersonalGoal[] @relation("GoalOwner")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model RelaisGroup {
-  id          String @id @default(cuid())
-  name        String
-  type        GroupType
-
-  createdById String
-  createdBy   User @relation("GroupCreator", fields: [createdById], references: [id])
-
-  members     GroupMember[]
-  goals       PersonalGoal[]
-  circles     SavingsCircle[]
+  ownedGoals        PersonalGoal[]  @relation("GoalOwner")
+  assignedCustody   GoalCustodian[] @relation("CustodianUser")
+  assignedDeposits  Deposit[]       @relation("DepositApprover")
+  rejectedDeposits  Deposit[]       @relation("DepositRejector")
+  ownedCircles      SavingsCircle[] @relation("CircleOwner")
+  circleMemberships CircleMember[]  @relation("CircleMemberUser")
+  assignedByCustody GoalCustodian[] @relation("CustodianAssigner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-model GroupMember {
-  id        String @id @default(cuid())
-
-  groupId   String
-  group     RelaisGroup @relation(fields: [groupId], references: [id])
-
-  userId    String
-  user      User @relation(fields: [userId], references: [id])
-
-  role      GroupRole
-  status    MemberStatus @default(ACTIVE)
-
-  circleMemberships CircleMember[]
-
-  memberCode String? @unique
-  pinHash    String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([groupId, userId])
 }
 
 model PersonalGoal {
   id      String @id @default(cuid())
-
-  groupId String
-  group   RelaisGroup @relation(fields: [groupId], references: [id])
-
   ownerId String
-  owner   User @relation("GoalOwner", fields: [ownerId], references: [id])
+  owner   User   @relation("GoalOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
-  name          String
-  targetAmount  Decimal
-  weeklyAmount  Decimal
-  startDate     DateTime
-  unlockDate    DateTime
-  status        GoalStatus @default(ACTIVE)
+  name         String
+  currency     String     @db.Char(3)
+  targetAmount Decimal    @db.Decimal(18, 2)
+  weeklyAmount Decimal    @db.Decimal(18, 2)
+  startDate    DateTime
+  unlockDate   DateTime
+  status       GoalStatus @default(ACTIVE)
+  completedAt  DateTime?
+  archivedAt   DateTime?
 
-  deposits Deposit[]
+  deposits   Deposit[]
+  custodians GoalCustodian[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+}
+
+model GoalCustodian {
+  id     String       @id @default(cuid())
+  goalId String
+  goal   PersonalGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
+
+  // A custodian can be invited before they have a platform account.
+  userId       String?
+  user         User?               @relation("CustodianUser", fields: [userId], references: [id], onDelete: Restrict)
+  displayName  String
+  email        String?
+  status       GoalCustodianStatus @default(PENDING)
+  assignedById String
+  assignedBy   User                @relation("CustodianAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  assignedAt DateTime  @default(now())
+  acceptedAt DateTime?
+  declinedAt DateTime?
+  endedAt    DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  @@index([goalId, status])
+  @@index([userId, status])
 }
 
 model Deposit {
-  id      String @id @default(cuid())
+  id     String       @id @default(cuid())
+  goalId String
+  goal   PersonalGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
 
-  goalId  String
-  goal    PersonalGoal @relation(fields: [goalId], references: [id])
-
-  amount      Decimal
+  amount      Decimal       @db.Decimal(18, 2)
   depositDate DateTime
   status      DepositStatus @default(PENDING)
+  note        String?
 
-  note       String?
-  approvedAt DateTime?
-  rejectedAt DateTime?
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   User?     @relation("DepositApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  rejectedAt   DateTime?
+  rejectedById String?
+  rejectedBy   User?     @relation("DepositRejector", fields: [rejectedById], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([goalId, status])
 }
 
 model SavingsCircle {
   id      String @id @default(cuid())
-
-  groupId String
-  group   RelaisGroup @relation(fields: [groupId], references: [id])
+  ownerId String
+  owner   User   @relation("CircleOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   name               String
-  contributionAmount Decimal
+  currency           String                @db.Char(3)
+  contributionAmount Decimal               @db.Decimal(18, 2)
   frequency          ContributionFrequency
-  status             CircleStatus @default(DRAFT)
+  status             CircleStatus          @default(DRAFT)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
 
   members       CircleMember[]
   rounds        PayoutRound[]
@@ -187,66 +165,84 @@ model SavingsCircle {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
 }
 
 model CircleMember {
-  id       String @id @default(cuid())
-
+  id       String        @id @default(cuid())
   circleId String
-  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+  circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
 
-  groupMemberId String
-  groupMember   GroupMember @relation(fields: [groupMemberId], references: [id])
+  // Circle membership is the identity boundary; linking a User is optional.
+  userId      String?
+  user        User?   @relation("CircleMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+  displayName String
+  email       String?
+  memberCode  String?
+  pinHash     String?
 
   payoutOrder Int?
   status      CircleMemberStatus @default(ACTIVE)
+  removedAt   DateTime?
+  updatedAt   DateTime           @updatedAt
 
   contributions Contribution[]
-  payoutRounds  PayoutRound[]
+  payoutRounds  PayoutRound[]  @relation("RoundReceiver")
 
-  @@unique([circleId, groupMemberId])
+  @@unique([circleId, payoutOrder])
+  @@unique([circleId, memberCode])
+  @@unique([circleId, userId])
+  @@unique([id, circleId])
+  @@index([circleId, status])
+  @@index([userId])
 }
 
 model PayoutRound {
-  id       String @id @default(cuid())
-
+  id       String        @id @default(cuid())
   circleId String
-  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+  circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
 
   roundNumber Int
   dueDate     DateTime
   status      PayoutRoundStatus @default(UPCOMING)
 
+  // This relation preserves the receiver for this historical round.
   receiverId String
-  receiver   CircleMember @relation(fields: [receiverId], references: [id])
+  receiver   CircleMember @relation("RoundReceiver", fields: [receiverId, circleId], references: [id, circleId], onDelete: Restrict)
 
   contributions Contribution[]
-
-  createdAt DateTime @default(now())
+  activatedAt   DateTime?
+  paidAt        DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@unique([circleId, roundNumber])
+  @@unique([circleId, receiverId])
+  @@unique([id, circleId])
+  @@index([circleId, status])
 }
 
 model Contribution {
-  id       String @id @default(cuid())
-
+  id       String        @id @default(cuid())
   circleId String
-  circle   SavingsCircle @relation(fields: [circleId], references: [id])
+  circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
 
   roundId  String
-  round    PayoutRound @relation(fields: [roundId], references: [id])
-
+  round    PayoutRound  @relation(fields: [roundId, circleId], references: [id, circleId], onDelete: Restrict)
   memberId String
-  member   CircleMember @relation(fields: [memberId], references: [id])
+  member   CircleMember @relation(fields: [memberId, circleId], references: [id, circleId], onDelete: Restrict)
 
-  amount Decimal
-  status ContributionStatus @default(DUE)
-
-  paidAt DateTime?
+  amount   Decimal            @db.Decimal(18, 2)
+  status   ContributionStatus @default(DUE)
+  paidAt   DateTime?
+  missedAt DateTime?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([roundId, memberId])
+  @@index([circleId, memberId, status])
+  @@index([circleId, roundId, status])
 }
-
-
