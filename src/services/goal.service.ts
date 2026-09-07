@@ -5,7 +5,10 @@ import {
   findPersonalGoalsByOwnerId,
 } from "@/src/repositories/goal.repository";
 import { sumApprovedDepositAmountsByGoalIds } from "@/src/repositories/deposit.repository";
-import type { CreatePersonalGoalInput } from "@/src/validations/goal.schema";
+import {
+  PERSONAL_GOAL_CURRENCIES,
+  type CreatePersonalGoalInput,
+} from "@/src/validations/goal.schema";
 
 export class InvalidPersonalGoalError extends Error {
   constructor(message: string) {
@@ -41,6 +44,27 @@ function toMoney(value: string, fieldName: string) {
   return amount;
 }
 
+export function calculateGoalUnlockDate(input: {
+  targetAmount: Prisma.Decimal;
+  weeklyAmount: Prisma.Decimal;
+  startDate: Date;
+}) {
+  if (!input.targetAmount.gt(0) || !input.weeklyAmount.gt(0)) {
+    throw new InvalidPersonalGoalError("Goal amounts must be greater than zero.");
+  }
+
+  const weeksNeeded = input.targetAmount.div(input.weeklyAmount).ceil();
+  const milliseconds = BigInt(7 * 24 * 60 * 60 * 1000);
+  const timestamp = BigInt(input.startDate.getTime()) + BigInt(weeksNeeded.toFixed(0)) * milliseconds;
+  const maximumDateMilliseconds = BigInt(8640000000000000);
+
+  if (timestamp > maximumDateMilliseconds || timestamp < -maximumDateMilliseconds) {
+    throw new InvalidPersonalGoalError("Goal timeline is too far in the future.");
+  }
+
+  return new Date(Number(timestamp));
+}
+
 export async function createPersonalGoal(
   user: { id: string },
   input: CreatePersonalGoalInput,
@@ -49,27 +73,24 @@ export async function createPersonalGoal(
 
   if (!user.id) throw new InvalidPersonalGoalError("A platform User is required.");
   if (!input.name.trim()) throw new InvalidPersonalGoalError("Goal name is required.");
-  if (!/^[A-Z]{3}$/.test(input.currency)) {
-    throw new InvalidPersonalGoalError("Currency must be a three-letter uppercase code.");
+  if (!PERSONAL_GOAL_CURRENCIES.includes(input.currency as (typeof PERSONAL_GOAL_CURRENCIES)[number])) {
+    throw new InvalidPersonalGoalError("Choose USD, XOF, EUR, or GBP.");
   }
   if (input.startDate > today) {
     throw new InvalidPersonalGoalError("Start date cannot be in the future.");
   }
-  if (input.unlockDate <= input.startDate) {
-    throw new InvalidPersonalGoalError("Unlock date must be after the start date.");
-  }
-  if (input.unlockDate < today) {
-    throw new InvalidPersonalGoalError("Unlock date cannot be in the past.");
-  }
+  const targetAmount = toMoney(input.targetAmount, "Target amount");
+  const weeklyAmount = toMoney(input.weeklyAmount, "Weekly amount");
+  const startDate = toUtcDate(input.startDate);
 
   return createPersonalGoalRecord({
     ownerId: user.id,
     name: input.name,
     currency: input.currency,
-    targetAmount: toMoney(input.targetAmount, "Target amount"),
-    weeklyAmount: toMoney(input.weeklyAmount, "Weekly amount"),
-    startDate: toUtcDate(input.startDate),
-    unlockDate: toUtcDate(input.unlockDate),
+    targetAmount,
+    weeklyAmount,
+    startDate,
+    unlockDate: calculateGoalUnlockDate({ targetAmount, weeklyAmount, startDate }),
   });
 }
 

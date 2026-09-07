@@ -18,7 +18,8 @@ PersonalGoal V1 is:
 - assigned an immutable `targetAmount`;
 - assigned an immutable `weeklyAmount`;
 - assigned an immutable `startDate`;
-- assigned an immutable `unlockDate`;
+- assigned an immutable `unlockDate` derived by the domain/service layer for
+  newly-created goals;
 - created with status `ACTIVE`;
 - created with `completedAt = null`;
 - created with `archivedAt = null`.
@@ -52,6 +53,26 @@ The implemented creation path is:
 `ownerId` never comes from client input. Ownership is derived from the trusted
 authenticated platform `User` returned by `requireUser()`.
 
+For a new PersonalGoal, the user supplies only:
+
+- `name`;
+- `currency`;
+- `targetAmount`;
+- `weeklyAmount`;
+- `startDate`.
+
+The domain/service layer derives `unlockDate` using exact Decimal-safe
+arithmetic:
+
+```text
+weeksNeeded = ceil(targetAmount / weeklyAmount)
+unlockDate = startDate + weeksNeeded weeks
+```
+
+Any client-side timeline preview is informational only. The server-derived
+value is authoritative, and a client-supplied unlock date is not part of the
+creation contract.
+
 Creating a PersonalGoal does not create `Deposit`, `GoalCustodian`, or SUSU
 records.
 
@@ -64,8 +85,9 @@ records.
 - The dashboard read model serializes Decimal values safely for presentation.
 - Phase 3 performs no currency conversion.
 
-The current input and display scope supports `USD`, `EUR`, and `XOF`. This is
-display/input scope only; it is not currency-conversion support.
+The current input and display scope supports the ISO currency codes `USD`,
+`XOF`, `EUR`, and `GBP`. This is display/input scope only; it is not
+currency-conversion support.
 
 ## Date convention
 
@@ -183,6 +205,14 @@ result, no current code path can rewrite:
 
 Future mutations must preserve this contract and must not rewrite historical
 PersonalGoal truth as a side effect of unrelated behavior.
+
+The derived unlock-date rule applies only to newly-created PersonalGoal rows.
+Existing PersonalGoal rows keep their stored `unlockDate` unchanged; P1 does
+not recalculate historical goals.
+
+The calculated `unlockDate` does not imply automatic completion. Reaching the
+target early does not unlock the goal early, and automatic completion remains
+outside the Phase 3 creation contract. Phase 6 owns completion semantics.
 
 ## Deferred behavior
 

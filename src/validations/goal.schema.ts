@@ -3,6 +3,8 @@ import { z } from "zod";
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONEY_PATTERN = /^\d+(?:\.\d{1,2})?$/;
 
+export const PERSONAL_GOAL_CURRENCIES = ["USD", "XOF", "EUR", "GBP"] as const;
+
 function isValidDateOnly(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -36,11 +38,17 @@ const money = z
 export const createPersonalGoalSchema = z
   .object({
     name: z.string().trim().min(1, "Enter a goal name.").max(100, "Goal name must be 100 characters or fewer."),
-    currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Use a three-letter currency code."),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine(
+        (value) => PERSONAL_GOAL_CURRENCIES.includes(value as (typeof PERSONAL_GOAL_CURRENCIES)[number]),
+        "Choose USD, XOF, EUR, or GBP.",
+      ),
     targetAmount: money,
     weeklyAmount: money,
     startDate: dateOnly,
-    unlockDate: dateOnly,
   })
   .superRefine((value, context) => {
     const today = todayUtcDateOnly();
@@ -49,13 +57,6 @@ export const createPersonalGoalSchema = z
       context.addIssue({ code: "custom", path: ["startDate"], message: "Start date cannot be in the future." });
     }
 
-    if (value.unlockDate <= value.startDate) {
-      context.addIssue({ code: "custom", path: ["unlockDate"], message: "Unlock date must be after the start date." });
-    }
-
-    if (value.unlockDate < today) {
-      context.addIssue({ code: "custom", path: ["unlockDate"], message: "Unlock date cannot be in the past." });
-    }
   });
 
 export type CreatePersonalGoalInput = z.infer<typeof createPersonalGoalSchema>;

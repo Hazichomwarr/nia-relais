@@ -12,7 +12,7 @@ import { createPersonalGoalSchema } from "@/src/validations/goal.schema";
 export type CreatePersonalGoalActionState = {
   fieldErrors?: Partial<
     Record<
-      "name" | "currency" | "targetAmount" | "weeklyAmount" | "startDate" | "unlockDate",
+      "name" | "currency" | "targetAmount" | "weeklyAmount" | "startDate",
       string[]
     >
   >;
@@ -29,7 +29,6 @@ export async function createPersonalGoalAction(
     targetAmount: formData.get("targetAmount"),
     weeklyAmount: formData.get("weeklyAmount"),
     startDate: formData.get("startDate"),
-    unlockDate: formData.get("unlockDate"),
   });
 
   if (!parsed.success) {
