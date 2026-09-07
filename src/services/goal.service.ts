@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 
-import { createPersonalGoalRecord } from "@/src/repositories/goal.repository";
+import {
+  createPersonalGoalRecord,
+  findPersonalGoalsByOwnerId,
+} from "@/src/repositories/goal.repository";
 import type { CreatePersonalGoalInput } from "@/src/validations/goal.schema";
 
 export class InvalidPersonalGoalError extends Error {
@@ -67,4 +70,50 @@ export async function createPersonalGoal(
     startDate: toUtcDate(input.startDate),
     unlockDate: toUtcDate(input.unlockDate),
   });
+}
+
+export type PersonalGoalDashboardSummary = {
+  id: string;
+  name: string;
+  currency: string;
+  targetAmount: string;
+  weeklyAmount: string;
+  startDate: string;
+  unlockDate: string;
+  status: "ACTIVE" | "COMPLETED" | "ARCHIVED";
+  completedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+};
+
+function serializeDate(date: Date | null) {
+  return date ? date.toISOString().slice(0, 10) : null;
+}
+
+function statusRank(status: PersonalGoalDashboardSummary["status"]) {
+  return status === "ACTIVE" ? 0 : status === "COMPLETED" ? 1 : 2;
+}
+
+export async function getPersonalGoalsForDashboard(user: { id: string }) {
+  const goals = await findPersonalGoalsByOwnerId(user.id);
+
+  return [...goals]
+    .sort((left, right) => {
+      const statusDifference = statusRank(left.status) - statusRank(right.status);
+      if (statusDifference !== 0) return statusDifference;
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    })
+    .map<PersonalGoalDashboardSummary>((goal) => ({
+      id: goal.id,
+      name: goal.name,
+      currency: goal.currency,
+      targetAmount: goal.targetAmount.toFixed(2),
+      weeklyAmount: goal.weeklyAmount.toFixed(2),
+      startDate: goal.startDate.toISOString().slice(0, 10),
+      unlockDate: goal.unlockDate.toISOString().slice(0, 10),
+      status: goal.status,
+      completedAt: serializeDate(goal.completedAt),
+      archivedAt: serializeDate(goal.archivedAt),
+      createdAt: goal.createdAt.toISOString(),
+    }));
 }

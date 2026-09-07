@@ -38,3 +38,23 @@ export function createPersonalGoalRecord(input: {
     },
   });
 }
+
+export function findPersonalGoalsByOwnerId(ownerId: string) {
+  return prisma.personalGoal.findMany({
+    where: { ownerId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      currency: true,
+      targetAmount: true,
+      weeklyAmount: true,
+      startDate: true,
+      unlockDate: true,
+      status: true,
+      completedAt: true,
+      archivedAt: true,
+      createdAt: true,
+    },
+  });
+}
