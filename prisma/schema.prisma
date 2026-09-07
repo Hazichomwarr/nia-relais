@@ -25,6 +25,11 @@ enum DepositStatus {
   REJECTED
 }
 
+enum DepositVerificationMode {
+  OWNER
+  CUSTODIAN
+}
+
 enum CircleStatus {
   DRAFT
   ACTIVE
@@ -66,6 +71,7 @@ model User {
   assignedCustody   GoalCustodian[] @relation("CustodianUser")
   assignedDeposits  Deposit[]       @relation("DepositApprover")
   rejectedDeposits  Deposit[]       @relation("DepositRejector")
+  recordedDeposits  Deposit[]       @relation("DepositRecorder")
   ownedCircles      SavingsCircle[] @relation("CircleOwner")
   circleMemberships CircleMember[]  @relation("CircleMemberUser")
   assignedByCustody GoalCustodian[] @relation("CustodianAssigner")
@@ -118,6 +124,9 @@ model GoalCustodian {
   endedAt    DateTime?
   updatedAt  DateTime  @updatedAt
 
+  responsibleDeposits Deposit[] @relation("DepositResponsibleCustodian")
+
+  @@unique([id, goalId])
   @@index([goalId, status])
   @@index([userId, status])
 }
@@ -127,10 +136,17 @@ model Deposit {
   goalId String
   goal   PersonalGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
 
-  amount      Decimal       @db.Decimal(18, 2)
-  depositDate DateTime
-  status      DepositStatus @default(PENDING)
-  note        String?
+  amount                 Decimal                 @db.Decimal(18, 2)
+  depositDate            DateTime
+  recordedById           String
+  recordedBy             User                    @relation("DepositRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  verificationMode       DepositVerificationMode
+  responsibleCustodianId String?
+  responsibleCustodian   GoalCustodian?          @relation("DepositResponsibleCustodian", fields: [responsibleCustodianId, goalId], references: [id, goalId], onDelete: Restrict)
+  clientOperationId      String
+  status                 DepositStatus           @default(PENDING)
+  note                   String?
+  rejectionReason        String?                 @db.VarChar(500)
 
   approvedAt   DateTime?
   approvedById String?
@@ -142,6 +158,7 @@ model Deposit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([goalId, clientOperationId])
   @@index([goalId, status])
 }
 
