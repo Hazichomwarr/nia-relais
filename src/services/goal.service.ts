@@ -4,6 +4,7 @@ import {
   createPersonalGoalRecord,
   findPersonalGoalsByOwnerId,
 } from "@/src/repositories/goal.repository";
+import { sumApprovedDepositAmountsByGoalIds } from "@/src/repositories/deposit.repository";
 import type { CreatePersonalGoalInput } from "@/src/validations/goal.schema";
 
 export class InvalidPersonalGoalError extends Error {
@@ -84,6 +85,9 @@ export type PersonalGoalDashboardSummary = {
   completedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
+  savedAmount: string;
+  remainingAmount: string;
+  progressPercent: number;
 };
 
 function serializeDate(date: Date | null) {
@@ -96,6 +100,10 @@ function statusRank(status: PersonalGoalDashboardSummary["status"]) {
 
 export async function getPersonalGoalsForDashboard(user: { id: string }) {
   const goals = await findPersonalGoalsByOwnerId(user.id);
+  const approvedTotals = await sumApprovedDepositAmountsByGoalIds(goals.map((goal) => goal.id));
+  const approvedTotalsByGoalId = new Map(
+    approvedTotals.map((total) => [total.goalId, total._sum.amount ?? new Prisma.Decimal(0)]),
+  );
 
   return [...goals]
     .sort((left, right) => {
@@ -115,5 +123,15 @@ export async function getPersonalGoalsForDashboard(user: { id: string }) {
       completedAt: serializeDate(goal.completedAt),
       archivedAt: serializeDate(goal.archivedAt),
       createdAt: goal.createdAt.toISOString(),
+      savedAmount: (approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0)).toFixed(2),
+      remainingAmount: (() => {
+        const savedAmount = approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0);
+        const remainingAmount = goal.targetAmount.minus(savedAmount);
+        return (remainingAmount.gt(0) ? remainingAmount : new Prisma.Decimal(0)).toFixed(2);
+      })(),
+      progressPercent: (() => {
+        const savedAmount = approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0);
+        return savedAmount.div(goal.targetAmount).mul(100).toNumber();
+      })(),
     }));
 }

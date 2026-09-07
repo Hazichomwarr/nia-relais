@@ -5,6 +5,8 @@ import {
   createDepositRecord,
   findDepositByOperationId,
   findDepositCreationContext,
+  findDepositHistoryByGoalId,
+  type DepositHistoryRecord,
   type DepositRecord,
 } from "@/src/repositories/deposit.repository";
 import { prisma } from "@/src/prisma";
@@ -43,6 +45,20 @@ export type CreatedDeposit = {
   approvedAt: string | null;
   rejectedAt: string | null;
   note: string | null;
+  createdAt: string;
+};
+
+export type DepositHistoryItem = {
+  id: string;
+  goalId: string;
+  amount: string;
+  depositDate: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  verificationMode: "OWNER" | "CUSTODIAN";
+  note: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
   createdAt: string;
 };
 
@@ -86,6 +102,22 @@ function serializeDeposit(deposit: DepositRecord): CreatedDeposit {
     approvedAt: deposit.approvedAt?.toISOString() ?? null,
     rejectedAt: deposit.rejectedAt?.toISOString() ?? null,
     note: deposit.note,
+    createdAt: deposit.createdAt.toISOString(),
+  };
+}
+
+function serializeDepositHistoryItem(deposit: DepositHistoryRecord): DepositHistoryItem {
+  return {
+    id: deposit.id,
+    goalId: deposit.goalId,
+    amount: deposit.amount.toFixed(2),
+    depositDate: deposit.depositDate.toISOString().slice(0, 10),
+    status: deposit.status,
+    verificationMode: deposit.verificationMode,
+    note: deposit.note,
+    approvedAt: deposit.approvedAt?.toISOString() ?? null,
+    rejectedAt: deposit.rejectedAt?.toISOString() ?? null,
+    rejectionReason: deposit.rejectionReason,
     createdAt: deposit.createdAt.toISOString(),
   };
 }
@@ -155,4 +187,9 @@ export async function createDeposit(input: CreateDepositInput) {
 
     throw new InvalidDepositError("This deposit could not be created.");
   }
+}
+
+export async function getDepositHistoryForGoal(goalId: string) {
+  const deposits = await findDepositHistoryByGoalId(goalId);
+  return deposits.map(serializeDepositHistoryItem);
 }

@@ -18,8 +18,26 @@ const depositSelect = {
   createdAt: true,
 } satisfies Prisma.DepositSelect;
 
+const depositHistorySelect = {
+  id: true,
+  goalId: true,
+  amount: true,
+  depositDate: true,
+  status: true,
+  verificationMode: true,
+  note: true,
+  approvedAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+} satisfies Prisma.DepositSelect;
+
 export type DepositRecord = Prisma.DepositGetPayload<{
   select: typeof depositSelect;
+}>;
+
+export type DepositHistoryRecord = Prisma.DepositGetPayload<{
+  select: typeof depositHistorySelect;
 }>;
 
 type DepositClient = Prisma.TransactionClient;
@@ -30,7 +48,9 @@ export function findPersonalGoalByIdAndOwnerId(goalId: string, ownerId: string) 
     select: {
       id: true,
       ownerId: true,
+      name: true,
       status: true,
+      weeklyAmount: true,
       startDate: true,
       unlockDate: true,
       currency: true,
@@ -108,5 +128,26 @@ export function findDepositByOperationId(
       goalId_clientOperationId: { goalId, clientOperationId },
     },
     select: depositSelect,
+  });
+}
+
+export function findDepositHistoryByGoalId(goalId: string) {
+  return prisma.deposit.findMany({
+    where: { goalId },
+    orderBy: [{ depositDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    select: depositHistorySelect,
+  });
+}
+
+export function sumApprovedDepositAmountsByGoalIds(goalIds: string[]) {
+  if (goalIds.length === 0) return Promise.resolve([]);
+
+  return prisma.deposit.groupBy({
+    by: ["goalId"],
+    where: {
+      goalId: { in: goalIds },
+      status: "APPROVED",
+    },
+    _sum: { amount: true },
   });
 }
