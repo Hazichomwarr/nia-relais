@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import { GoalNotFoundOrUnauthorizedError } from "@/src/auth/require-goal-owner";
 import {
   GoalNotAvailableForDepositsError,
@@ -14,6 +12,10 @@ import { createDepositSchema } from "@/src/validations/deposit.schema";
 export type CreateDepositActionState = {
   fieldErrors?: Partial<Record<"amount" | "depositDate" | "note" | "clientOperationId", string[]>>;
   formError?: string;
+  success?: {
+    status: "PENDING" | "APPROVED";
+    amount: string;
+  };
 };
 
 function isNextRedirectError(error: unknown) {
@@ -49,7 +51,18 @@ export async function createDepositAction(
   }
 
   try {
-    await createDeposit(parsed.data);
+    const created = await createDeposit(parsed.data);
+
+    if (created.status !== "PENDING" && created.status !== "APPROVED") {
+      return { formError: "We could not confirm the recording status. Please try again." };
+    }
+
+    return {
+      success: {
+        status: created.status,
+        amount: created.amount,
+      },
+    };
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
 
@@ -75,6 +88,4 @@ export async function createDepositAction(
     );
     return { formError: "We could not record this deposit. Please try again." };
   }
-
-  redirect("/dashboard");
 }

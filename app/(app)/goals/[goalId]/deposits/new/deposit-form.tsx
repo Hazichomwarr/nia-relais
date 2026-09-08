@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
+import Link from "next/link";
 
 import {
   createDepositAction,
@@ -42,8 +43,21 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
     createDepositAction,
     initialCreateDepositState,
   );
-  const [clientOperationId] = useState(operationId);
+  const [clientOperationId, setClientOperationId] = useState(operationId);
+  const formRef = useRef<HTMLFormElement>(null);
   const today = todayDate();
+
+  function handleFormInput() {
+    if (state.success) setClientOperationId(operationId());
+  }
+
+  useEffect(() => {
+    if (!state.success) return;
+    formRef.current?.reset();
+  }, [state.success]);
+
+  const successAmount = state.success ? formatAmount(state.success.amount, goal.currency) : null;
+  const savingsHistoryHref = `/goals/${encodeURIComponent(goalId)}/deposits`;
 
   return (
     <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-12">
@@ -53,7 +67,7 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">Record savings</p>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">{goal.name}</h1>
             <p className="mt-3 text-base leading-7 text-[#587066]">
-              Record what you saved toward this goal. NiaRelais does not hold or receive the money.
+              Record what you saved toward this goal. NIA does not hold or receive the money.
             </p>
           </div>
 
@@ -61,9 +75,33 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
             Your weekly commitment is {goal.currency} {goal.weeklyAmount}, but you can record any amount you actually saved.
           </div>
 
-          <form action={formAction} className="mt-8 space-y-6">
+          {state.success ? (
+            <section className="mt-6 rounded-2xl border border-[#d7e5d7] bg-[#edf5eb] p-5 text-[#315b4b]" role="status" aria-live="polite">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#d7e5d7] font-serif text-lg text-[#315b4b]" aria-hidden="true">✦</span>
+                <div>
+                  <h2 className="font-semibold text-[#173b32]">
+                    {state.success.status === "APPROVED" ? "Another step toward your dream." : "Your savings were recorded."}
+                  </h2>
+                  <p className="mt-1 text-sm leading-6">
+                    {state.success.status === "APPROVED"
+                      ? `${successAmount} has been added to your savings.`
+                      : `${successAmount} is waiting for your trusted person to confirm it.`}
+                  </p>
+                  <Link
+                    href={savingsHistoryHref}
+                    className="mt-4 inline-flex min-h-10 items-center justify-center rounded-full border border-[#a9c5b0] px-4 text-sm font-semibold text-[#315b4b] transition hover:bg-[#e1efdf] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]"
+                  >
+                    View savings
+                  </Link>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <form ref={formRef} action={formAction} onInput={handleFormInput} className="mt-8 space-y-6">
             <input type="hidden" name="goalId" value={goalId} />
-            <input type="hidden" name="clientOperationId" value={clientOperationId} />
+            <input type="hidden" name="clientOperationId" value={clientOperationId} readOnly />
 
             <label className="block" htmlFor="deposit-amount">
               <span className="text-sm font-semibold">Amount saved</span>
@@ -138,4 +176,13 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
       </div>
     </main>
   );
+}
+
+function formatAmount(value: string, currency: string) {
+  const [wholePart, fractionPart = ""] = value.split(".");
+  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = fractionPart.padEnd(2, "0");
+  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
+
+  return `${currency} ${groupedWhole}${displayedFraction}`;
 }

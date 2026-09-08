@@ -25,7 +25,7 @@ export function CustodianAssignmentForm({ goalId }: { goalId: string }) {
     <form action={formAction} className="mt-4 space-y-3">
       <input type="hidden" name="goalId" value={goalId} />
       <label className="block" htmlFor={`custodian-email-${goalId}`}>
-        <span className="text-sm font-semibold text-[#173b32]">Their NiaRelais email</span>
+        <span className="text-sm font-semibold text-[#173b32]">Their NIA email</span>
         <input
           id={`custodian-email-${goalId}`}
           name="custodianEmail"
@@ -41,7 +41,7 @@ export function CustodianAssignmentForm({ goalId }: { goalId: string }) {
         />
       </label>
       <p id={`custodian-email-${goalId}-hint`} className="text-xs leading-5 text-[#7b8179]">
-        They need an existing NiaRelais account to receive this request.
+        They need an existing NIA account to receive this request.
       </p>
       {state.fieldErrors?.custodianEmail?.map((error) => (
         <p key={error} id={`custodian-email-${goalId}-error`} className="text-sm text-[#a53f2b]" role="alert">
