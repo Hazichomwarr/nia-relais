@@ -16,7 +16,7 @@ export default function DepositHistoryItem({
         <div>
           <p className="text-xl font-semibold tracking-tight text-[#173b32]">{formatAmount(deposit.amount, currency)}</p>
           <time className="mt-1 block text-sm text-[#7b8179]" dateTime={deposit.depositDate}>
-            Saved on {formatDateOnly(deposit.depositDate)}
+            Recorded on {formatDateOnly(deposit.depositDate)}
           </time>
         </div>
         <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>
@@ -42,18 +42,10 @@ export default function DepositHistoryItem({
 }
 
 function getStatusCopy(deposit: DepositHistoryItemModel) {
-  if (deposit.status === "APPROVED" && deposit.verificationMode === "OWNER") {
-    return {
-      label: "Confirmed",
-      description: "You confirmed this saving for your personal record.",
-      className: "bg-[#e6f0e8] text-[#35634f]",
-    };
-  }
-
   if (deposit.status === "APPROVED") {
     return {
       label: "Confirmed",
-      description: "This saving was confirmed.",
+      description: "This saving has been confirmed and counts toward your progress.",
       className: "bg-[#e6f0e8] text-[#35634f]",
     };
   }
@@ -61,14 +53,14 @@ function getStatusCopy(deposit: DepositHistoryItemModel) {
   if (deposit.status === "PENDING") {
     return {
       label: "Awaiting confirmation",
-      description: "This saving was recorded and is awaiting confirmation.",
+      description: "This saving was recorded and is waiting for your trusted person to confirm it.",
       className: "bg-[#fff0d9] text-[#8a5b27]",
     };
   }
 
   return {
     label: "Not confirmed",
-    description: "This saving is not counted as confirmed.",
+    description: "This saving was not confirmed.",
     className: "bg-[#f4e6e1] text-[#8d4f42]",
   };
 }
