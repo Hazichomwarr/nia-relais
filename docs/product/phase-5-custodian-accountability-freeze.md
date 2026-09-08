@@ -300,9 +300,9 @@ P0/P1 defects.
 ## Deferred findings and out-of-scope work
 
 The `/custodian` route is protected authoritatively by app-level `requireUser()`
-and unauthenticated access was verified to redirect to `/login`. `proxy.ts`
-does not currently include `/custodian/:path*`; this is a P2 defense-in-depth
-and hygiene gap, not a security defect, and is deferred.
+and unauthenticated access was verified to redirect to `/login`. Ticket 6J.1
+subsequently added `/custodian/:path*` to the optimistic Proxy matcher; this
+does not alter the authoritative app-level or service-level boundaries.
 
 The following P3 cleanup items are also deferred:
 
@@ -344,4 +344,3 @@ custodian authority, PersonalGoal lock ordering, Deposit responsibility,
 historical Deposit decisions, and approved-only accounting. Changes to these
 contracts require deliberate domain review and, where applicable, migration and
 history analysis.
-

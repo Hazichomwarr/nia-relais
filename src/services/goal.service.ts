@@ -4,7 +4,10 @@ import {
   createPersonalGoalRecord,
   findPersonalGoalsByOwnerId,
 } from "@/src/repositories/goal.repository";
-import { sumApprovedDepositAmountsByGoalIds } from "@/src/repositories/deposit.repository";
+import {
+  countPendingDepositsByGoalIds,
+  sumApprovedDepositAmountsByGoalIds,
+} from "@/src/repositories/deposit.repository";
 import {
   PERSONAL_GOAL_CURRENCIES,
   type CreatePersonalGoalInput,
@@ -109,7 +112,28 @@ export type PersonalGoalDashboardSummary = {
   savedAmount: string;
   remainingAmount: string;
   progressPercent: number;
+  targetReached: boolean;
+  unlockDateReached: boolean;
+  completionEligible: boolean;
+  pendingDepositCount: number;
 };
+
+export function getGoalCompletionEligibility(input: {
+  status: PersonalGoalDashboardSummary["status"];
+  savedAmount: Prisma.Decimal;
+  targetAmount: Prisma.Decimal;
+  unlockDate: Date;
+  today: Date;
+}) {
+  const targetReached = input.savedAmount.greaterThanOrEqualTo(input.targetAmount);
+  const unlockDateReached = input.today.getTime() >= input.unlockDate.getTime();
+
+  return {
+    targetReached,
+    unlockDateReached,
+    completionEligible: input.status === "ACTIVE" && targetReached && unlockDateReached,
+  };
+}
 
 function serializeDate(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : null;
@@ -121,10 +145,18 @@ function statusRank(status: PersonalGoalDashboardSummary["status"]) {
 
 export async function getPersonalGoalsForDashboard(user: { id: string }) {
   const goals = await findPersonalGoalsByOwnerId(user.id);
-  const approvedTotals = await sumApprovedDepositAmountsByGoalIds(goals.map((goal) => goal.id));
+  const goalIds = goals.map((goal) => goal.id);
+  const [approvedTotals, pendingCounts] = await Promise.all([
+    sumApprovedDepositAmountsByGoalIds(goalIds),
+    countPendingDepositsByGoalIds(goalIds),
+  ]);
   const approvedTotalsByGoalId = new Map(
     approvedTotals.map((total) => [total.goalId, total._sum.amount ?? new Prisma.Decimal(0)]),
   );
+  const pendingCountsByGoalId = new Map(
+    pendingCounts.map((count) => [count.goalId, count._count._all]),
+  );
+  const today = toUtcDate(todayUtcDateOnly());
 
   return [...goals]
     .sort((left, right) => {
@@ -132,27 +164,36 @@ export async function getPersonalGoalsForDashboard(user: { id: string }) {
       if (statusDifference !== 0) return statusDifference;
       return right.createdAt.getTime() - left.createdAt.getTime();
     })
-    .map<PersonalGoalDashboardSummary>((goal) => ({
-      id: goal.id,
-      name: goal.name,
-      currency: goal.currency,
-      targetAmount: goal.targetAmount.toFixed(2),
-      weeklyAmount: goal.weeklyAmount.toFixed(2),
-      startDate: goal.startDate.toISOString().slice(0, 10),
-      unlockDate: goal.unlockDate.toISOString().slice(0, 10),
-      status: goal.status,
-      completedAt: serializeDate(goal.completedAt),
-      archivedAt: serializeDate(goal.archivedAt),
-      createdAt: goal.createdAt.toISOString(),
-      savedAmount: (approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0)).toFixed(2),
-      remainingAmount: (() => {
-        const savedAmount = approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0);
-        const remainingAmount = goal.targetAmount.minus(savedAmount);
-        return (remainingAmount.gt(0) ? remainingAmount : new Prisma.Decimal(0)).toFixed(2);
-      })(),
-      progressPercent: (() => {
-        const savedAmount = approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0);
-        return savedAmount.div(goal.targetAmount).mul(100).toNumber();
-      })(),
-    }));
+    .map<PersonalGoalDashboardSummary>((goal) => {
+      const savedAmount = approvedTotalsByGoalId.get(goal.id) ?? new Prisma.Decimal(0);
+      const { targetReached, unlockDateReached, completionEligible } = getGoalCompletionEligibility({
+        status: goal.status,
+        savedAmount,
+        targetAmount: goal.targetAmount,
+        unlockDate: goal.unlockDate,
+        today,
+      });
+      const remainingAmount = goal.targetAmount.minus(savedAmount);
+
+      return {
+        id: goal.id,
+        name: goal.name,
+        currency: goal.currency,
+        targetAmount: goal.targetAmount.toFixed(2),
+        weeklyAmount: goal.weeklyAmount.toFixed(2),
+        startDate: goal.startDate.toISOString().slice(0, 10),
+        unlockDate: goal.unlockDate.toISOString().slice(0, 10),
+        status: goal.status,
+        completedAt: serializeDate(goal.completedAt),
+        archivedAt: serializeDate(goal.archivedAt),
+        createdAt: goal.createdAt.toISOString(),
+        savedAmount: savedAmount.toFixed(2),
+        remainingAmount: (remainingAmount.gt(0) ? remainingAmount : new Prisma.Decimal(0)).toFixed(2),
+        progressPercent: savedAmount.div(goal.targetAmount).mul(100).toNumber(),
+        targetReached,
+        unlockDateReached,
+        completionEligible,
+        pendingDepositCount: pendingCountsByGoalId.get(goal.id) ?? 0,
+      };
+    });
 }

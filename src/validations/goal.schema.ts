@@ -35,6 +35,13 @@ const money = z
     return whole.length <= 16 && !/^0*$/.test(whole + fraction);
   }, "Amount must be greater than zero and fit DECIMAL(18,2).");
 
+const goalId = z
+  .string()
+  .trim()
+  .min(1, "A goal is required.")
+  .max(100, "The goal identifier is invalid.")
+  .regex(/^[A-Za-z0-9_-]+$/, "The goal identifier is invalid.");
+
 export const createPersonalGoalSchema = z
   .object({
     name: z.string().trim().min(1, "Enter a goal name.").max(100, "Goal name must be 100 characters or fewer."),
@@ -58,5 +65,8 @@ export const createPersonalGoalSchema = z
     }
 
   });
+
+export const completePersonalGoalSchema = z.object({ goalId });
+export const archivePersonalGoalSchema = z.object({ goalId });
 
 export type CreatePersonalGoalInput = z.infer<typeof createPersonalGoalSchema>;

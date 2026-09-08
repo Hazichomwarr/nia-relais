@@ -78,6 +78,8 @@ model User {
   assignedByCustody GoalCustodian[] @relation("CustodianAssigner")
   endedCustody      GoalCustodian[] @relation("CustodianEnder")
   cancelledCustody  GoalCustodian[] @relation("CustodianCanceller")
+  completedGoals    PersonalGoal[]  @relation("GoalCompleter")
+  archivedGoals     PersonalGoal[]  @relation("GoalArchiver")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -88,15 +90,19 @@ model PersonalGoal {
   ownerId String
   owner   User   @relation("GoalOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
-  name         String
-  currency     String     @db.Char(3)
-  targetAmount Decimal    @db.Decimal(18, 2)
-  weeklyAmount Decimal    @db.Decimal(18, 2)
-  startDate    DateTime
-  unlockDate   DateTime
-  status       GoalStatus @default(ACTIVE)
-  completedAt  DateTime?
-  archivedAt   DateTime?
+  name          String
+  currency      String     @db.Char(3)
+  targetAmount  Decimal    @db.Decimal(18, 2)
+  weeklyAmount  Decimal    @db.Decimal(18, 2)
+  startDate     DateTime
+  unlockDate    DateTime
+  status        GoalStatus @default(ACTIVE)
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?      @relation("GoalCompleter", fields: [completedById], references: [id], onDelete: Restrict)
+  archivedAt    DateTime?
+  archivedById  String?
+  archivedBy    User?      @relation("GoalArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
 
   deposits   Deposit[]
   custodians GoalCustodian[]

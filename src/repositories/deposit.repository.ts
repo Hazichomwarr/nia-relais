@@ -180,3 +180,37 @@ export function sumApprovedDepositAmountsByGoalIds(goalIds: string[]) {
     _sum: { amount: true },
   });
 }
+
+export function countPendingDepositsByGoalIds(goalIds: string[]) {
+  if (goalIds.length === 0) return Promise.resolve([]);
+
+  return prisma.deposit.groupBy({
+    by: ["goalId"],
+    where: {
+      goalId: { in: goalIds },
+      status: "PENDING",
+    },
+    _count: { _all: true },
+  });
+}
+
+export async function sumApprovedDepositAmountForGoal(
+  transaction: DepositClient,
+  goalId: string,
+) {
+  const aggregate = await transaction.deposit.aggregate({
+    where: { goalId, status: "APPROVED" },
+    _sum: { amount: true },
+  });
+
+  return aggregate._sum.amount ?? new Prisma.Decimal(0);
+}
+
+export function countPendingDepositsForGoal(
+  transaction: DepositClient,
+  goalId: string,
+) {
+  return transaction.deposit.count({
+    where: { goalId, status: "PENDING" },
+  });
+}

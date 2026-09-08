@@ -3,6 +3,8 @@ import Link from "next/link";
 import { CustodianAssignmentForm } from "./custodian-assignment-form";
 import { CancelCustodianRequestControl } from "./cancel-custodian-request-control";
 import { EndCustodianRoleControl } from "./end-custodian-role-control";
+import { CompleteGoalControl } from "./complete-goal-control";
+import { ArchiveGoalControl } from "./archive-goal-control";
 import type { OwnerCustodianAssignmentState } from "@/src/services/custodian.service";
 import type { PersonalGoalDashboardSummary } from "@/src/services/goal.service";
 
@@ -84,6 +86,10 @@ export function GoalCard({
           </time>
         </div>
 
+        <CompletionSection goal={goal} />
+
+        <ArchiveSection goal={goal} />
+
         <CustodianSection goalId={goal.id} goalStatus={goal.status} state={custodianState} />
 
         {goal.status === "ACTIVE" ? (
@@ -102,15 +108,117 @@ export function GoalCard({
             </Link>
           </div>
         ) : (
-          <Link
-            href={`/goals/${encodeURIComponent(goal.id)}/deposits`}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[#dfd2c1] px-4 text-sm font-semibold text-[#587066] transition hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
-          >
-            View savings
-          </Link>
+          <>
+            <LifecycleSummary goal={goal} />
+            <Link
+              href={`/goals/${encodeURIComponent(goal.id)}/deposits`}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[#dfd2c1] px-4 text-sm font-semibold text-[#587066] transition hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
+            >
+              View savings
+            </Link>
+          </>
         )}
       </div>
     </article>
+  );
+}
+
+function ArchiveSection({ goal }: { goal: PersonalGoalDashboardSummary }) {
+  if (goal.status !== "COMPLETED") return null;
+
+  if (goal.pendingDepositCount > 0) {
+    return (
+      <section className="border-t border-[#e8dfd3] pt-4" aria-labelledby={`archive-heading-${goal.id}`}>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a95f45]">Archive</p>
+        <h4 id={`archive-heading-${goal.id}`} className="mt-1 text-base font-semibold text-[#173b32]">
+          This goal still has {goal.pendingDepositCount} {goal.pendingDepositCount === 1 ? "saving" : "savings"} waiting for confirmation.
+        </h4>
+        <p className="mt-2 text-sm leading-6 text-[#587066]">Resolve them before archiving this goal.</p>
+        <Link
+          href={`/goals/${encodeURIComponent(goal.id)}/deposits`}
+          className="mt-3 inline-flex rounded-full px-1 py-2 text-sm font-semibold text-[#a95f45] transition hover:text-[#7b4838] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b95035]"
+        >
+          View savings waiting for confirmation
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-t border-[#e8dfd3] pt-4" aria-labelledby={`archive-heading-${goal.id}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a95f45]">Archive</p>
+      <h4 id={`archive-heading-${goal.id}`} className="mt-1 text-base font-semibold text-[#173b32]">
+        Keep this completed goal in your history.
+      </h4>
+      <p className="mt-2 text-sm leading-6 text-[#587066]">Your savings history will remain available.</p>
+      <ArchiveGoalControl goalId={goal.id} />
+    </section>
+  );
+}
+
+function LifecycleSummary({ goal }: { goal: PersonalGoalDashboardSummary }) {
+  if (goal.status === "COMPLETED") {
+    return (
+      <p className="text-sm leading-6 text-[#587066]">
+        {goal.completedAt ? `Completed on ${formatGoalDate(goal.completedAt)}. ` : "Completed. "}
+        Saved {formatGoalAmount(goal.savedAmount, goal.currency)} toward a target of {formatGoalAmount(goal.targetAmount, goal.currency)}.
+      </p>
+    );
+  }
+
+  if (goal.status === "ARCHIVED") {
+    return (
+      <p className="text-sm leading-6 text-[#7b8179]">
+        {goal.completedAt ? `Completed ${formatGoalDate(goal.completedAt)}. ` : "Completed. "}
+        {goal.archivedAt ? `Archived ${formatGoalDate(goal.archivedAt)}. ` : "Archived. "}
+        Saved {formatGoalAmount(goal.savedAmount, goal.currency)} toward a target of {formatGoalAmount(goal.targetAmount, goal.currency)}.
+      </p>
+    );
+  }
+
+  return null;
+}
+
+function CompletionSection({ goal }: { goal: PersonalGoalDashboardSummary }) {
+  if (goal.status !== "ACTIVE") return null;
+
+  if (goal.completionEligible) {
+    return (
+      <section className="border-t border-[#e8dfd3] pt-4" aria-labelledby={`completion-heading-${goal.id}`}>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a95f45]">Ready when you are</p>
+        <h4 id={`completion-heading-${goal.id}`} className="mt-1 text-base font-semibold text-[#173b32]">
+          You reached your target and your goal is now ready to complete.
+        </h4>
+        {goal.pendingDepositCount > 0 ? (
+          <p className="mt-2 text-sm leading-6 text-[#587066]">
+            You still have {goal.pendingDepositCount} {goal.pendingDepositCount === 1 ? "saving" : "savings"} waiting for confirmation. They can still be reviewed after you complete this goal.
+          </p>
+        ) : null}
+        <CompleteGoalControl goalId={goal.id} />
+      </section>
+    );
+  }
+
+  if (goal.targetReached) {
+    return (
+      <p className="border-t border-[#e8dfd3] pt-4 text-sm leading-6 text-[#587066]">
+        You reached your target. This goal unlocks on {formatGoalDate(goal.unlockDate)}.
+      </p>
+    );
+  }
+
+  if (goal.unlockDateReached) {
+    return (
+      <p className="border-t border-[#e8dfd3] pt-4 text-sm leading-6 text-[#587066]">
+        Your goal is unlocked. Keep going until you reach your target.
+      </p>
+    );
+  }
+
+  return (
+    <p className="border-t border-[#e8dfd3] pt-4 text-sm leading-6 text-[#587066]">
+      Keep saving toward your target. This goal unlocks on {formatGoalDate(goal.unlockDate)}.
+    </p>
   );
 }
 
