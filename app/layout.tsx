@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NiaRelais — Small steps. Brighter tomorrows.",
+  title: "NIA — Small steps. Brighter tomorrows.",
   description: "A peaceful place to keep promises to yourself.",
 };
 

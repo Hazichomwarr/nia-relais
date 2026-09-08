@@ -11,7 +11,7 @@ export default function LoginForm() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <h1 className="text-2xl font-semibold">Sign in to NiaRelais</h1>
+      <h1 className="text-2xl font-semibold">Sign in to NIA</h1>
       <form action={formAction} className="mt-6 space-y-4">
         <label className="block">
           <span className="text-sm font-medium">Email</span>

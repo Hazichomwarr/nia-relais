@@ -1,14 +1,18 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function LandingHeader() {
   return (
     <header className="flex items-center justify-between gap-6">
-      <Link href="/" className="group flex items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]">
-        <span className="flex size-11 items-center justify-center rounded-full bg-[#173b32] font-serif text-lg text-[#fffaf2] shadow-[0_8px_20px_rgba(23,59,50,0.14)]">
-          N
-        </span>
-        <span className="font-serif text-xl tracking-[0.08em] text-[#173b32] transition-colors group-hover:text-[#a95f45]">
-          NiaRelais
+      <Link href="/" aria-label="NIA, powered by RELAIS" className="group flex items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]">
+        <Image src="/images/nia-logo.png" alt="NIA logo" width={44} height={44} priority className="size-11 shrink-0" />
+        <span className="flex flex-col leading-none">
+          <span className="font-serif text-xl font-semibold tracking-[0.12em] text-[#173b32] transition-colors group-hover:text-[#a95f45]">
+            NIA
+          </span>
+          <span className="mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-[#7b8179]">
+            powered by RELAIS
+          </span>
         </span>
       </Link>
 
