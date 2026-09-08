@@ -17,6 +17,7 @@ enum GoalCustodianStatus {
   ACTIVE
   DECLINED
   ENDED
+  CANCELLED
 }
 
 enum DepositStatus {
@@ -75,6 +76,8 @@ model User {
   ownedCircles      SavingsCircle[] @relation("CircleOwner")
   circleMemberships CircleMember[]  @relation("CircleMemberUser")
   assignedByCustody GoalCustodian[] @relation("CustodianAssigner")
+  endedCustody      GoalCustodian[] @relation("CustodianEnder")
+  cancelledCustody  GoalCustodian[] @relation("CustodianCanceller")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -110,13 +113,18 @@ model GoalCustodian {
   goal   PersonalGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
 
   // A custodian can be invited before they have a platform account.
-  userId       String?
-  user         User?               @relation("CustodianUser", fields: [userId], references: [id], onDelete: Restrict)
-  displayName  String
-  email        String?
-  status       GoalCustodianStatus @default(PENDING)
-  assignedById String
-  assignedBy   User                @relation("CustodianAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  userId        String?
+  user          User?               @relation("CustodianUser", fields: [userId], references: [id], onDelete: Restrict)
+  displayName   String
+  email         String?
+  status        GoalCustodianStatus @default(PENDING)
+  assignedById  String
+  assignedBy    User                @relation("CustodianAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  endedById     String?
+  endedBy       User?               @relation("CustodianEnder", fields: [endedById], references: [id], onDelete: Restrict)
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?               @relation("CustodianCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
 
   assignedAt DateTime  @default(now())
   acceptedAt DateTime?
@@ -127,6 +135,7 @@ model GoalCustodian {
   responsibleDeposits Deposit[] @relation("DepositResponsibleCustodian")
 
   @@unique([id, goalId])
+  // PostgreSQL migration adds a partial unique index: one ACTIVE custodian per goal.
   @@index([goalId, status])
   @@index([userId, status])
 }

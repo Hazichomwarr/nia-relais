@@ -1,13 +1,19 @@
 import Link from "next/link";
 
+import { CustodianAssignmentForm } from "./custodian-assignment-form";
+import { CancelCustodianRequestControl } from "./cancel-custodian-request-control";
+import { EndCustodianRoleControl } from "./end-custodian-role-control";
+import type { OwnerCustodianAssignmentState } from "@/src/services/custodian.service";
 import type { PersonalGoalDashboardSummary } from "@/src/services/goal.service";
 
 export function GoalCard({
   goal,
   subdued = false,
+  custodianState,
 }: {
   goal: PersonalGoalDashboardSummary;
   subdued?: boolean;
+  custodianState?: OwnerCustodianAssignmentState;
 }) {
   const isArchived = goal.status === "ARCHIVED";
 
@@ -78,6 +84,8 @@ export function GoalCard({
           </time>
         </div>
 
+        <CustodianSection goalId={goal.id} goalStatus={goal.status} state={custodianState} />
+
         {goal.status === "ACTIVE" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Link
@@ -103,6 +111,68 @@ export function GoalCard({
         )}
       </div>
     </article>
+  );
+}
+
+function CustodianSection({
+  goalId,
+  goalStatus,
+  state,
+}: {
+  goalId: string;
+  goalStatus: PersonalGoalDashboardSummary["status"];
+  state?: OwnerCustodianAssignmentState;
+}) {
+  const current = state?.current ?? null;
+
+  return (
+    <section className="border-t border-[#e8dfd3] pt-4" aria-labelledby={`custodian-heading-${goalId}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#a95f45]">Trusted person</p>
+      <h4 id={`custodian-heading-${goalId}`} className="mt-1 text-base font-semibold text-[#173b32]">
+        {current ? "Your savings accountability" : "Add someone you trust"}
+      </h4>
+
+      {current ? (
+        <div className="mt-3 rounded-2xl bg-[#f7eee4] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-[#173b32]">{current.displayName}</p>
+              <p className="mt-1 break-all text-sm text-[#587066]">{current.email}</p>
+            </div>
+            <StatusPill status={current.status} />
+          </div>
+          <p className="mt-3 text-sm leading-6 text-[#587066]">
+            {current.status === "PENDING"
+              ? "Waiting for them to accept. Until they do, your deposits continue to be recorded normally without custodian confirmation."
+              : "New deposits will wait for this person’s confirmation."}
+          </p>
+          {current.status === "PENDING" ? <CancelCustodianRequestControl assignmentId={current.id} /> : null}
+          {current.status === "ACTIVE" ? <EndCustodianRoleControl assignmentId={current.id} /> : null}
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-sm leading-6 text-[#587066]">
+            Add someone you trust to confirm your savings when you record a deposit.
+          </p>
+          {state?.historical?.status === "DECLINED" ? (
+            <p className="mt-2 text-sm font-medium text-[#a95f45]">Previous request declined.</p>
+          ) : state?.historical?.status === "CANCELLED" ? (
+            <p className="mt-2 text-sm font-medium text-[#a95f45]">Previous request cancelled.</p>
+          ) : state?.historical?.status === "ENDED" ? (
+            <p className="mt-2 text-sm font-medium text-[#587066]">Previous trusted-person role ended.</p>
+          ) : null}
+          {goalStatus === "ACTIVE" ? <CustodianAssignmentForm goalId={goalId} /> : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function StatusPill({ status }: { status: "PENDING" | "ACTIVE" }) {
+  return (
+    <span className="rounded-full bg-[#fffaf0] px-3 py-1 text-xs font-semibold text-[#a95f45]">
+      {status === "PENDING" ? "Awaiting acceptance" : "Active"}
+    </span>
   );
 }
 

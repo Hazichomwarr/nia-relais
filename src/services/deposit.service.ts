@@ -10,6 +10,7 @@ import {
   type DepositRecord,
 } from "@/src/repositories/deposit.repository";
 import { prisma } from "@/src/prisma";
+import { lockPersonalGoalForUpdate } from "@/src/repositories/goal-lock.repository";
 import type { CreateDepositInput } from "@/src/validations/deposit.schema";
 
 export class InvalidDepositError extends Error {
@@ -149,6 +150,12 @@ export async function createDeposit(input: CreateDepositInput) {
 
   try {
     const deposit = await prisma.$transaction(async (transaction) => {
+      const lockedGoal = await lockPersonalGoalForUpdate(transaction, input.goalId);
+
+      if (!lockedGoal) {
+        throw new GoalNotAvailableForDepositsError();
+      }
+
       const context = await findDepositCreationContext(transaction, input.goalId, user.id);
 
       if (!context || context.status !== "ACTIVE") {

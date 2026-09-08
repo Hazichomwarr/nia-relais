@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireUser } from "@/src/auth/require-user";
+import { getCustodianAssignmentStatesForOwner } from "@/src/services/custodian.service";
 import { getPersonalGoalsForDashboard } from "@/src/services/goal.service";
 import { EmptyGoalsState } from "./empty-goals-state";
 import { GoalCard } from "./goal-card";
@@ -17,6 +18,7 @@ const copy = {
 export default async function DashboardPage() {
   const user = await requireUser();
   const goals = await getPersonalGoalsForDashboard(user);
+  const custodianStates = await getCustodianAssignmentStatesForOwner(user.id, goals.map((goal) => goal.id));
   const activeGoals = goals.filter((goal) => goal.status === "ACTIVE");
   const completedGoals = goals.filter((goal) => goal.status === "COMPLETED");
   const archivedGoals = goals.filter((goal) => goal.status === "ARCHIVED");
@@ -48,7 +50,7 @@ export default async function DashboardPage() {
             {activeGoals.length > 0 ? (
               <GoalSection heading={copy.active}>
                 {activeGoals.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} />
+                  <GoalCard key={goal.id} goal={goal} custodianState={custodianStates.get(goal.id)} />
                 ))}
               </GoalSection>
             ) : null}
@@ -56,7 +58,7 @@ export default async function DashboardPage() {
             {completedGoals.length > 0 ? (
               <GoalSection heading={copy.completed} subdued>
                 {completedGoals.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} subdued />
+                  <GoalCard key={goal.id} goal={goal} subdued custodianState={custodianStates.get(goal.id)} />
                 ))}
               </GoalSection>
             ) : null}
@@ -64,7 +66,7 @@ export default async function DashboardPage() {
             {archivedGoals.length > 0 ? (
               <GoalSection heading={copy.archived} subdued>
                 {archivedGoals.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} subdued />
+                  <GoalCard key={goal.id} goal={goal} subdued custodianState={custodianStates.get(goal.id)} />
                 ))}
               </GoalSection>
             ) : null}
