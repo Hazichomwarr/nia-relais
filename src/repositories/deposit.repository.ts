@@ -32,12 +32,34 @@ const depositHistorySelect = {
   createdAt: true,
 } satisfies Prisma.DepositSelect;
 
+const depositDetailSelect = {
+  id: true,
+  goalId: true,
+  amount: true,
+  depositDate: true,
+  status: true,
+  verificationMode: true,
+  note: true,
+  approvedAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+  recordedBy: { select: { name: true } },
+  responsibleCustodian: { select: { displayName: true } },
+  approvedBy: { select: { name: true } },
+  rejectedBy: { select: { name: true } },
+} satisfies Prisma.DepositSelect;
+
 export type DepositRecord = Prisma.DepositGetPayload<{
   select: typeof depositSelect;
 }>;
 
 export type DepositHistoryRecord = Prisma.DepositGetPayload<{
   select: typeof depositHistorySelect;
+}>;
+
+export type DepositDetailRecord = Prisma.DepositGetPayload<{
+  select: typeof depositDetailSelect;
 }>;
 
 type DepositClient = Prisma.TransactionClient;
@@ -136,6 +158,13 @@ export function findDepositHistoryByGoalId(goalId: string) {
     where: { goalId },
     orderBy: [{ depositDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     select: depositHistorySelect,
+  });
+}
+
+export function findDepositDetailByGoalIdAndId(goalId: string, depositId: string) {
+  return prisma.deposit.findFirst({
+    where: { id: depositId, goalId },
+    select: depositDetailSelect,
   });
 }
 

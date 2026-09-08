@@ -5,7 +5,9 @@ import {
   createDepositRecord,
   findDepositByOperationId,
   findDepositCreationContext,
+  findDepositDetailByGoalIdAndId,
   findDepositHistoryByGoalId,
+  type DepositDetailRecord,
   type DepositHistoryRecord,
   type DepositRecord,
 } from "@/src/repositories/deposit.repository";
@@ -61,6 +63,13 @@ export type DepositHistoryItem = {
   rejectedAt: string | null;
   rejectionReason: string | null;
   createdAt: string;
+};
+
+export type DepositDetail = DepositHistoryItem & {
+  recordedByName: string;
+  responsibleCustodianName: string | null;
+  approvedByName: string | null;
+  rejectedByName: string | null;
 };
 
 function todayUtcDateOnly() {
@@ -120,6 +129,16 @@ function serializeDepositHistoryItem(deposit: DepositHistoryRecord): DepositHist
     rejectedAt: deposit.rejectedAt?.toISOString() ?? null,
     rejectionReason: deposit.rejectionReason,
     createdAt: deposit.createdAt.toISOString(),
+  };
+}
+
+function serializeDepositDetail(deposit: DepositDetailRecord): DepositDetail {
+  return {
+    ...serializeDepositHistoryItem(deposit),
+    recordedByName: deposit.recordedBy.name,
+    responsibleCustodianName: deposit.responsibleCustodian?.displayName ?? null,
+    approvedByName: deposit.approvedBy?.name ?? null,
+    rejectedByName: deposit.rejectedBy?.name ?? null,
   };
 }
 
@@ -199,4 +218,9 @@ export async function createDeposit(input: CreateDepositInput) {
 export async function getDepositHistoryForGoal(goalId: string) {
   const deposits = await findDepositHistoryByGoalId(goalId);
   return deposits.map(serializeDepositHistoryItem);
+}
+
+export async function getDepositDetailForGoal(goalId: string, depositId: string) {
+  const deposit = await findDepositDetailByGoalIdAndId(goalId, depositId);
+  return deposit ? serializeDepositDetail(deposit) : null;
 }
