@@ -1,0 +1,591 @@
+import { Prisma, type ContributionFrequency } from "@prisma/client";
+import { hash } from "bcryptjs";
+import { randomBytes } from "crypto";
+
+import { lockSavingsCircleForUpdate } from "@/src/repositories/circle-lock.repository";
+import {
+  createDraftCircleMember,
+  createDraftCircleRecord,
+  clearActiveDraftCirclePayoutOrders,
+  assignActiveDraftCirclePayoutOrder,
+  createCircleActivationObligations,
+  createCircleActivationRounds,
+  findActiveDraftCircleMembers,
+  findCircleActivationObligations,
+  findCircleActivationRounds,
+  findCircleForActivation,
+  findCircleForDraftMembership,
+  findDraftCircleMember,
+  markCircleActive,
+  removeActiveDraftCircleMember,
+  type CircleActivationObligationRecord,
+  type CircleActivationRecord,
+  type CircleActivationRoundRecord,
+  type DraftCircleMemberRecord,
+  type DraftCirclePayoutMemberRecord,
+} from "@/src/repositories/circle.repository";
+import { prisma } from "@/src/prisma";
+import {
+  addDraftCircleMemberSchema,
+  createDraftCircleSchema,
+  setDraftCirclePayoutOrderSchema,
+  type AddDraftCircleMemberInput,
+  type CreateDraftCircleInput,
+  type SetDraftCirclePayoutOrderInput,
+} from "@/src/validations/circle.schema";
+
+export class InvalidDraftCircleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidDraftCircleError";
+  }
+}
+
+export class DraftCircleMemberNotFoundError extends Error {
+  constructor() {
+    super("Circle member not found.");
+    this.name = "DraftCircleMemberNotFoundError";
+  }
+}
+
+export class DraftCircleMembershipAuthorizationError extends Error {
+  constructor() {
+    super("You are not authorized to manage this circle.");
+    this.name = "DraftCircleMembershipAuthorizationError";
+  }
+}
+
+export class DraftCircleMembershipConflictError extends Error {
+  constructor() {
+    super("Circle members can only be changed while the circle is a draft.");
+    this.name = "DraftCircleMembershipConflictError";
+  }
+}
+
+export class DraftCircleMemberCodeGenerationError extends Error {
+  constructor() {
+    super("A secure member code could not be generated. Please try again.");
+    this.name = "DraftCircleMemberCodeGenerationError";
+  }
+}
+
+export class DraftCirclePayoutOrderError extends Error {
+  constructor() {
+    super("The payout order must include each active circle member exactly once.");
+    this.name = "DraftCirclePayoutOrderError";
+  }
+}
+
+export class CircleActivationEligibilityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CircleActivationEligibilityError";
+  }
+}
+
+export class CircleActivationIntegrityError extends Error {
+  constructor() {
+    super("The activated circle rotation is incomplete or inconsistent.");
+    this.name = "CircleActivationIntegrityError";
+  }
+}
+
+export type DraftCircleResult = {
+  id: string;
+  name: string;
+  currency: string;
+  contributionAmount: string;
+  frequency: ContributionFrequency;
+  startDate: string;
+  status: "DRAFT";
+};
+
+export type DraftCircleMemberResult = {
+  id: string;
+  circleId: string;
+  displayName: string;
+  email: string | null;
+  memberCode: string;
+  payoutOrder: number | null;
+  status: "ACTIVE" | "REMOVED";
+  addedAt: string;
+  removedAt: string | null;
+};
+
+export type DraftCirclePayoutOrderMemberResult = {
+  id: string;
+  circleId: string;
+  displayName: string;
+  memberCode: string;
+  payoutOrder: number;
+  status: "ACTIVE";
+};
+
+export type CircleActivationResult = {
+  circle: { id: string; status: "ACTIVE"; activatedAt: string };
+  memberCount: number;
+  roundCount: number;
+  obligationCount: number;
+  rounds: Array<{
+    id: string;
+    roundNumber: number;
+    recipientId: string;
+    dueDate: string;
+    status: "UPCOMING";
+  }>;
+};
+
+function toUtcDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function generateMemberCode() {
+  return randomBytes(8).toString("hex").toUpperCase();
+}
+
+function serializeDraftCircleMember(member: DraftCircleMemberRecord): DraftCircleMemberResult {
+  return {
+    id: member.id,
+    circleId: member.circleId,
+    displayName: member.displayName,
+    email: member.email,
+    memberCode: member.memberCode,
+    payoutOrder: member.payoutOrder,
+    status: member.status,
+    addedAt: member.addedAt.toISOString(),
+    removedAt: member.removedAt?.toISOString() ?? null,
+  };
+}
+
+function serializeDraftCirclePayoutMember(
+  member: DraftCirclePayoutMemberRecord,
+): DraftCirclePayoutOrderMemberResult {
+  if (member.payoutOrder === null || member.status !== "ACTIVE") {
+    throw new DraftCirclePayoutOrderError();
+  }
+
+  return {
+    id: member.id,
+    circleId: member.circleId,
+    displayName: member.displayName,
+    memberCode: member.memberCode,
+    payoutOrder: member.payoutOrder,
+    status: "ACTIVE",
+  };
+}
+
+function assertDraftOwner(circle: { ownerId: string; status: string }, ownerId: string) {
+  if (circle.ownerId !== ownerId) throw new DraftCircleMembershipAuthorizationError();
+  if (circle.status !== "DRAFT") throw new DraftCircleMembershipConflictError();
+}
+
+function addUtcDays(startDate: Date, days: number) {
+  return new Date(Date.UTC(
+    startDate.getUTCFullYear(),
+    startDate.getUTCMonth(),
+    startDate.getUTCDate() + days,
+  ));
+}
+
+function addUtcCalendarMonths(startDate: Date, months: number) {
+  const targetMonthIndex = startDate.getUTCMonth() + months;
+  const targetYear = startDate.getUTCFullYear() + Math.floor(targetMonthIndex / 12);
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+
+  return new Date(Date.UTC(
+    targetYear,
+    targetMonth,
+    Math.min(startDate.getUTCDate(), lastDayOfTargetMonth),
+  ));
+}
+
+function roundDueDate(circle: CircleActivationRecord, roundNumber: number) {
+  const completedIntervals = roundNumber - 1;
+  if (circle.frequency === "WEEKLY") return addUtcDays(circle.startDate, completedIntervals * 7);
+  if (circle.frequency === "BIWEEKLY") return addUtcDays(circle.startDate, completedIntervals * 14);
+  return addUtcCalendarMonths(circle.startDate, completedIntervals);
+}
+
+function assertActivationEligible(
+  circle: CircleActivationRecord,
+  members: DraftCirclePayoutMemberRecord[],
+  rounds: CircleActivationRoundRecord[],
+  obligations: CircleActivationObligationRecord[],
+) {
+  if (members.length < 2) {
+    throw new CircleActivationEligibilityError("At least two active members are required to activate a circle.");
+  }
+  if (rounds.length !== 0 || obligations.length !== 0) {
+    throw new CircleActivationEligibilityError("A draft circle cannot contain generated rotation records.");
+  }
+
+  const payoutOrders = members.map((member) => member.payoutOrder).sort((left, right) => {
+    if (left === null || right === null) return 0;
+    return left - right;
+  });
+  if (payoutOrders.some((order, index) => order !== index + 1)) {
+    throw new CircleActivationEligibilityError("Active members must have a complete payout order from 1 through the cohort size.");
+  }
+}
+
+function serializeActivationResult(
+  circle: CircleActivationRecord,
+  members: DraftCirclePayoutMemberRecord[],
+  rounds: CircleActivationRoundRecord[],
+  obligations: CircleActivationObligationRecord[],
+): CircleActivationResult {
+  if (circle.status !== "ACTIVE" || !circle.activatedAt || !circle.activatedById) {
+    throw new CircleActivationIntegrityError();
+  }
+
+  return {
+    circle: { id: circle.id, status: "ACTIVE", activatedAt: circle.activatedAt.toISOString() },
+    memberCount: members.length,
+    roundCount: rounds.length,
+    obligationCount: obligations.length,
+    rounds: rounds
+      .sort((left, right) => left.roundNumber - right.roundNumber)
+      .map((round) => ({
+        id: round.id,
+        roundNumber: round.roundNumber,
+        recipientId: round.recipientId,
+        dueDate: round.dueDate.toISOString(),
+        status: "UPCOMING" as const,
+      })),
+  };
+}
+
+function assertActivatedRotationIntegrity(
+  circle: CircleActivationRecord,
+  members: DraftCirclePayoutMemberRecord[],
+  rounds: CircleActivationRoundRecord[],
+  obligations: CircleActivationObligationRecord[],
+) {
+  const memberIds = new Set(members.map((member) => member.id));
+  if (members.length < 2 || rounds.length !== members.length || obligations.length !== members.length ** 2) {
+    throw new CircleActivationIntegrityError();
+  }
+
+  const payoutOrders = members.map((member) => member.payoutOrder).sort((left, right) => {
+    if (left === null || right === null) return 0;
+    return left - right;
+  });
+  if (payoutOrders.some((order, index) => order !== index + 1)) {
+    throw new CircleActivationIntegrityError();
+  }
+
+  const recipientIds = new Set(rounds.map((round) => round.recipientId));
+  if (recipientIds.size !== members.length || [...recipientIds].some((memberId) => !memberIds.has(memberId))) {
+    throw new CircleActivationIntegrityError();
+  }
+
+  const membersById = new Map(members.map((member) => [member.id, member]));
+  const roundsById = new Map(rounds.map((round) => [round.id, round]));
+  const obligationsByRound = new Map<string, CircleActivationObligationRecord[]>();
+  for (const obligation of obligations) {
+    const round = roundsById.get(obligation.roundId);
+    if (!round || obligation.circleId !== circle.id || !memberIds.has(obligation.memberId)) {
+      throw new CircleActivationIntegrityError();
+    }
+    obligationsByRound.set(obligation.roundId, [...(obligationsByRound.get(obligation.roundId) ?? []), obligation]);
+  }
+
+  for (const round of rounds) {
+    const recipient = membersById.get(round.recipientId);
+    const expectedDueDate = roundDueDate(circle, round.roundNumber);
+    const roundObligations = obligationsByRound.get(round.id) ?? [];
+    const obligatedMembers = new Set(roundObligations.map((obligation) => obligation.memberId));
+    if (
+      !recipient
+      || recipient.payoutOrder !== round.roundNumber
+      || round.roundNumber < 1
+      || round.status !== "UPCOMING"
+      || round.activatedAt !== null
+      || round.activatedById !== null
+      || round.closedAt !== null
+      || round.dueDate.getTime() !== expectedDueDate.getTime()
+      || roundObligations.length !== members.length
+      || obligatedMembers.size !== members.length
+    ) {
+      throw new CircleActivationIntegrityError();
+    }
+
+    for (const obligation of roundObligations) {
+      if (
+        !obligation.expectedAmount.equals(circle.contributionAmount)
+        || obligation.currency !== circle.currency
+        || obligation.dueDate.getTime() !== round.dueDate.getTime()
+        || obligation.status !== "OPEN"
+        || obligation.fulfilledAt !== null
+      ) {
+        throw new CircleActivationIntegrityError();
+      }
+    }
+  }
+}
+
+export async function createDraftCircle(input: {
+  ownerId: string;
+  input: CreateDraftCircleInput;
+}): Promise<DraftCircleResult> {
+  if (!input.ownerId) {
+    throw new InvalidDraftCircleError("A platform User is required.");
+  }
+
+  const parsed = createDraftCircleSchema.safeParse(input.input);
+  if (!parsed.success) {
+    throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Circle details are invalid.");
+  }
+
+  const circle = await createDraftCircleRecord({
+    ownerId: input.ownerId,
+    name: parsed.data.name,
+    currency: parsed.data.currency,
+    contributionAmount: new Prisma.Decimal(parsed.data.contributionAmount),
+    frequency: parsed.data.frequency,
+    startDate: toUtcDate(parsed.data.startDate),
+  });
+
+  return {
+    id: circle.id,
+    name: circle.name,
+    currency: circle.currency,
+    contributionAmount: circle.contributionAmount.toFixed(2),
+    frequency: circle.frequency,
+    startDate: circle.startDate.toISOString().slice(0, 10),
+    status: "DRAFT",
+  };
+}
+
+export async function addDraftCircleMember(input: {
+  ownerId: string;
+  circleId: string;
+  input: AddDraftCircleMemberInput;
+}): Promise<DraftCircleMemberResult> {
+  if (!input.ownerId || !input.circleId) throw new DraftCircleMemberNotFoundError();
+
+  const parsed = addDraftCircleMemberSchema.safeParse(input.input);
+  if (!parsed.success) {
+    throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Member details are invalid.");
+  }
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (transaction) => {
+        const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
+        if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
+
+        const circle = await findCircleForDraftMembership(transaction, input.circleId);
+        if (!circle) throw new DraftCircleMemberNotFoundError();
+        assertDraftOwner(circle, input.ownerId);
+
+        const pinHash = await hash(parsed.data.pin, 12);
+        const member = await createDraftCircleMember(transaction, {
+          circleId: circle.id,
+          displayName: parsed.data.displayName,
+          email: parsed.data.email,
+          memberCode: generateMemberCode(),
+          pinHash,
+          addedAt: new Date(),
+          addedById: input.ownerId,
+        });
+
+        return serializeDraftCircleMember(member);
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue;
+      throw error;
+    }
+  }
+
+  throw new DraftCircleMemberCodeGenerationError();
+}
+
+export async function removeDraftCircleMember(input: {
+  ownerId: string;
+  circleId: string;
+  memberId: string;
+}): Promise<DraftCircleMemberResult> {
+  if (!input.ownerId || !input.circleId || !input.memberId) throw new DraftCircleMemberNotFoundError();
+
+  return prisma.$transaction(async (transaction) => {
+    const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
+    if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
+
+    const circle = await findCircleForDraftMembership(transaction, input.circleId);
+    if (!circle) throw new DraftCircleMemberNotFoundError();
+    assertDraftOwner(circle, input.ownerId);
+
+    const member = await findDraftCircleMember(transaction, input.circleId, input.memberId);
+    if (!member) throw new DraftCircleMemberNotFoundError();
+    if (member.status === "REMOVED") return serializeDraftCircleMember(member);
+
+    const updated = await removeActiveDraftCircleMember(transaction, {
+      circleId: input.circleId,
+      memberId: input.memberId,
+      removedAt: new Date(),
+      removedById: input.ownerId,
+    });
+
+    if (updated.count !== 1) {
+      const current = await findDraftCircleMember(transaction, input.circleId, input.memberId);
+      if (!current) throw new DraftCircleMemberNotFoundError();
+      if (current.status === "REMOVED") return serializeDraftCircleMember(current);
+      throw new DraftCircleMembershipConflictError();
+    }
+
+    const removed = await findDraftCircleMember(transaction, input.circleId, input.memberId);
+    if (!removed) throw new DraftCircleMemberNotFoundError();
+
+    return serializeDraftCircleMember(removed);
+  });
+}
+
+export async function setDraftCirclePayoutOrder(input: {
+  ownerId: string;
+  circleId: string;
+  orderedMemberIds: SetDraftCirclePayoutOrderInput["orderedMemberIds"];
+}): Promise<DraftCirclePayoutOrderMemberResult[]> {
+  if (!input.ownerId || !input.circleId) throw new DraftCircleMemberNotFoundError();
+
+  const parsed = setDraftCirclePayoutOrderSchema.safeParse({
+    orderedMemberIds: input.orderedMemberIds,
+  });
+  if (!parsed.success) {
+    throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Payout order is invalid.");
+  }
+
+  return prisma.$transaction(async (transaction) => {
+    const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
+    if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
+
+    const circle = await findCircleForDraftMembership(transaction, input.circleId);
+    if (!circle) throw new DraftCircleMemberNotFoundError();
+    assertDraftOwner(circle, input.ownerId);
+
+    const activeMembers = await findActiveDraftCircleMembers(transaction, circle.id);
+    const activeMemberIds = new Set(activeMembers.map((member) => member.id));
+    const requestedMemberIds = parsed.data.orderedMemberIds;
+
+    if (
+      activeMemberIds.size !== requestedMemberIds.length
+      || requestedMemberIds.some((memberId) => !activeMemberIds.has(memberId))
+    ) {
+      throw new DraftCirclePayoutOrderError();
+    }
+
+    const membersById = new Map(activeMembers.map((member) => [member.id, member]));
+    const alreadyOrdered = requestedMemberIds.every(
+      (memberId, index) => membersById.get(memberId)?.payoutOrder === index + 1,
+    );
+
+    if (!alreadyOrdered) {
+      await clearActiveDraftCirclePayoutOrders(transaction, circle.id);
+
+      for (const [index, memberId] of requestedMemberIds.entries()) {
+        const assigned = await assignActiveDraftCirclePayoutOrder(transaction, {
+          circleId: circle.id,
+          memberId,
+          payoutOrder: index + 1,
+        });
+        if (assigned.count !== 1) throw new DraftCirclePayoutOrderError();
+      }
+    }
+
+    const orderedMembers = requestedMemberIds.map((memberId) => membersById.get(memberId));
+    if (orderedMembers.some((member) => !member)) throw new DraftCirclePayoutOrderError();
+
+    if (alreadyOrdered) {
+      return orderedMembers.map((member) => serializeDraftCirclePayoutMember(member!));
+    }
+
+    return orderedMembers.map((member, index) =>
+      serializeDraftCirclePayoutMember({ ...member!, payoutOrder: index + 1 }),
+    );
+  });
+}
+
+export async function activateCircle(input: {
+  ownerId: string;
+  circleId: string;
+}): Promise<CircleActivationResult> {
+  if (!input.ownerId || !input.circleId) throw new DraftCircleMemberNotFoundError();
+
+  return prisma.$transaction(async (transaction) => {
+    const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
+    if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
+
+    const circle = await findCircleForActivation(transaction, input.circleId);
+    if (!circle) throw new DraftCircleMemberNotFoundError();
+    if (circle.ownerId !== input.ownerId) throw new DraftCircleMembershipAuthorizationError();
+
+    const [members, rounds, obligations] = await Promise.all([
+      findActiveDraftCircleMembers(transaction, circle.id),
+      findCircleActivationRounds(transaction, circle.id),
+      findCircleActivationObligations(transaction, circle.id),
+    ]);
+
+    if (circle.status === "ACTIVE") {
+      assertActivatedRotationIntegrity(circle, members, rounds, obligations);
+      return serializeActivationResult(circle, members, rounds, obligations);
+    }
+
+    if (circle.status !== "DRAFT") {
+      throw new CircleActivationEligibilityError("Only draft circles can be activated.");
+    }
+
+    assertActivationEligible(circle, members, rounds, obligations);
+    const membersByPayoutOrder = [...members].sort((left, right) => left.payoutOrder! - right.payoutOrder!);
+    const generatedRounds = await createCircleActivationRounds(transaction, {
+      circleId: circle.id,
+      rounds: membersByPayoutOrder.map((member) => ({
+        roundNumber: member.payoutOrder!,
+        recipientId: member.id,
+        dueDate: roundDueDate(circle, member.payoutOrder!),
+      })),
+    });
+    const createdObligations = await createCircleActivationObligations(transaction, {
+      circleId: circle.id,
+      expectedAmount: circle.contributionAmount,
+      currency: circle.currency,
+      obligations: generatedRounds.flatMap((round) => members.map((member) => ({
+        roundId: round.id,
+        memberId: member.id,
+        dueDate: round.dueDate,
+      }))),
+    });
+    if (createdObligations.count !== members.length ** 2) {
+      throw new CircleActivationIntegrityError();
+    }
+
+    const activatedAt = new Date();
+    const transitioned = await markCircleActive(transaction, {
+      circleId: circle.id,
+      activatedAt,
+      activatedById: input.ownerId,
+    });
+    if (transitioned.count !== 1) throw new CircleActivationIntegrityError();
+
+    const activatedCircle: CircleActivationRecord = {
+      ...circle,
+      status: "ACTIVE",
+      activatedAt,
+      activatedById: input.ownerId,
+      completedAt: null,
+      completedById: null,
+      archivedAt: null,
+      archivedById: null,
+    };
+    const generatedObligations = await findCircleActivationObligations(transaction, circle.id);
+    assertActivatedRotationIntegrity(activatedCircle, members, generatedRounds, generatedObligations);
+
+    return serializeActivationResult(
+      activatedCircle,
+      members,
+      generatedRounds,
+      generatedObligations,
+    );
+  });
+}

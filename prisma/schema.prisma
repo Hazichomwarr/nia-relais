@@ -36,6 +36,7 @@ enum CircleStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  ARCHIVED
 }
 
 enum CircleMemberStatus {
@@ -52,14 +53,30 @@ enum ContributionFrequency {
 enum PayoutRoundStatus {
   UPCOMING
   ACTIVE
-  PAID
   CLOSED
 }
 
-enum ContributionStatus {
-  DUE
-  PAID
-  MISSED
+enum ContributionObligationStatus {
+  OPEN
+  FULFILLED
+}
+
+enum ContributionPaymentStatus {
+  RECORDED
+  CONFIRMED
+  REJECTED
+}
+
+enum PayoutStatus {
+  RECORDED
+  CONFIRMED
+  DISPUTED
+}
+
+enum CircleMemberAuthRateLimitScope {
+  SOURCE
+  TARGET
+  GLOBAL
 }
 
 model User {
@@ -68,18 +85,28 @@ model User {
   email        String? @unique
   passwordHash String?
 
-  ownedGoals        PersonalGoal[]  @relation("GoalOwner")
-  assignedCustody   GoalCustodian[] @relation("CustodianUser")
-  assignedDeposits  Deposit[]       @relation("DepositApprover")
-  rejectedDeposits  Deposit[]       @relation("DepositRejector")
-  recordedDeposits  Deposit[]       @relation("DepositRecorder")
-  ownedCircles      SavingsCircle[] @relation("CircleOwner")
-  circleMemberships CircleMember[]  @relation("CircleMemberUser")
-  assignedByCustody GoalCustodian[] @relation("CustodianAssigner")
-  endedCustody      GoalCustodian[] @relation("CustodianEnder")
-  cancelledCustody  GoalCustodian[] @relation("CustodianCanceller")
-  completedGoals    PersonalGoal[]  @relation("GoalCompleter")
-  archivedGoals     PersonalGoal[]  @relation("GoalArchiver")
+  ownedGoals                    PersonalGoal[]        @relation("GoalOwner")
+  assignedCustody               GoalCustodian[]       @relation("CustodianUser")
+  assignedDeposits              Deposit[]             @relation("DepositApprover")
+  rejectedDeposits              Deposit[]             @relation("DepositRejector")
+  recordedDeposits              Deposit[]             @relation("DepositRecorder")
+  ownedCircles                  SavingsCircle[]       @relation("CircleOwner")
+  circleMemberships             CircleMember[]        @relation("CircleMemberUser")
+  activatedCircles              SavingsCircle[]       @relation("CircleActivator")
+  completedCircles              SavingsCircle[]       @relation("CircleCompleter")
+  archivedCircles               SavingsCircle[]       @relation("CircleArchiver")
+  addedCircleMembers            CircleMember[]        @relation("CircleMemberAdder")
+  removedCircleMembers          CircleMember[]        @relation("CircleMemberRemover")
+  activatedPayoutRounds         PayoutRound[]         @relation("PayoutRoundActivator")
+  recordedContributionPayments  ContributionPayment[] @relation("ContributionPaymentRecorder")
+  confirmedContributionPayments ContributionPayment[] @relation("ContributionPaymentConfirmer")
+  rejectedContributionPayments  ContributionPayment[] @relation("ContributionPaymentRejector")
+  recordedPayouts               Payout[]              @relation("PayoutRecorder")
+  assignedByCustody             GoalCustodian[]       @relation("CustodianAssigner")
+  endedCustody                  GoalCustodian[]       @relation("CustodianEnder")
+  cancelledCustody              GoalCustodian[]       @relation("CustodianCanceller")
+  completedGoals                PersonalGoal[]        @relation("GoalCompleter")
+  archivedGoals                 PersonalGoal[]        @relation("GoalArchiver")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -186,14 +213,23 @@ model SavingsCircle {
   currency           String                @db.Char(3)
   contributionAmount Decimal               @db.Decimal(18, 2)
   frequency          ContributionFrequency
+  startDate          DateTime
   status             CircleStatus          @default(DRAFT)
-  startedAt          DateTime?
+  activatedAt        DateTime?
+  activatedById      String?
+  activatedBy        User?                 @relation("CircleActivator", fields: [activatedById], references: [id], onDelete: Restrict)
   completedAt        DateTime?
-  cancelledAt        DateTime?
+  completedById      String?
+  completedBy        User?                 @relation("CircleCompleter", fields: [completedById], references: [id], onDelete: Restrict)
+  archivedAt         DateTime?
+  archivedById       String?
+  archivedBy         User?                 @relation("CircleArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
 
-  members       CircleMember[]
-  rounds        PayoutRound[]
-  contributions Contribution[]
+  members                 CircleMember[]
+  rounds                  PayoutRound[]
+  contributionObligations ContributionObligation[]
+  contributionPayments    ContributionPayment[]
+  payouts                 Payout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -211,23 +247,73 @@ model CircleMember {
   user        User?   @relation("CircleMemberUser", fields: [userId], references: [id], onDelete: Restrict)
   displayName String
   email       String?
-  memberCode  String?
-  pinHash     String?
+  memberCode  String
+  pinHash     String
+
+  // Durable, shared authentication security state. These values are not financial history.
+  failedPinAttempts Int       @default(0)
+  lockedUntil       DateTime?
+  credentialVersion Int       @default(1)
 
   payoutOrder Int?
   status      CircleMemberStatus @default(ACTIVE)
+  addedAt     DateTime           @default(now())
+  addedById   String
+  addedBy     User               @relation("CircleMemberAdder", fields: [addedById], references: [id], onDelete: Restrict)
   removedAt   DateTime?
+  removedById String?
+  removedBy   User?              @relation("CircleMemberRemover", fields: [removedById], references: [id], onDelete: Restrict)
   updatedAt   DateTime           @updatedAt
 
-  contributions Contribution[]
-  payoutRounds  PayoutRound[]  @relation("RoundReceiver")
+  obligations      ContributionObligation[]
+  payoutRounds     PayoutRound[]            @relation("RoundRecipient")
+  confirmedPayouts Payout[]                 @relation("PayoutRecipientConfirmer")
+  disputedPayouts  Payout[]                 @relation("PayoutRecipientDisputer")
+  sessions         CircleMemberSession[]
 
-  @@unique([circleId, payoutOrder])
   @@unique([circleId, memberCode])
   @@unique([circleId, userId])
   @@unique([id, circleId])
+  // PostgreSQL migration adds a partial unique index for ACTIVE members with a payout order.
   @@index([circleId, status])
   @@index([userId])
+}
+
+model CircleMemberSession {
+  id                String       @id @default(cuid())
+  circleId          String
+  memberId          String
+  member            CircleMember @relation(fields: [memberId, circleId], references: [id, circleId], onDelete: Restrict)
+  tokenHash         String       @unique
+  credentialVersion Int
+  createdAt         DateTime     @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  lastUsedAt        DateTime?
+
+  // Runtime contract: opaque token hashes only. Successful authentication resets failures;
+  // PIN rotation increments the member version and revokes sessions; logout revokes one session.
+  // Every protected request verifies version, expiry, revocation, and current membership eligibility.
+  // These membership sessions remain separate from platform User/Auth.js sessions.
+  @@index([memberId, revokedAt])
+  @@index([expiresAt])
+}
+
+model CircleMemberAuthRateLimitBucket {
+  id           String                         @id @default(cuid())
+  scope        CircleMemberAuthRateLimitScope
+  keyHash      String                         @db.Char(64)
+  windowStart  DateTime
+  attemptCount Int                            @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+
+  // Ephemeral, HMAC-keyed security infrastructure: expired buckets may be deleted
+  // without altering domain history. Cleanup keeps this table bounded; secret rotation
+  // is a future server-configuration concern, not persisted state.
+  @@unique([scope, keyHash, windowStart])
+  @@index([expiresAt])
 }
 
 model PayoutRound {
@@ -239,24 +325,27 @@ model PayoutRound {
   dueDate     DateTime
   status      PayoutRoundStatus @default(UPCOMING)
 
-  // This relation preserves the receiver for this historical round.
-  receiverId String
-  receiver   CircleMember @relation("RoundReceiver", fields: [receiverId, circleId], references: [id, circleId], onDelete: Restrict)
+  // This relation preserves the recipient for this historical round.
+  recipientId String
+  recipient   CircleMember @relation("RoundRecipient", fields: [recipientId, circleId], references: [id, circleId], onDelete: Restrict)
 
-  contributions Contribution[]
   activatedAt   DateTime?
-  paidAt        DateTime?
+  activatedById String?
+  activatedBy   User?     @relation("PayoutRoundActivator", fields: [activatedById], references: [id], onDelete: Restrict)
   closedAt      DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  obligations ContributionObligation[]
+  payouts     Payout[]
 
   @@unique([circleId, roundNumber])
-  @@unique([circleId, receiverId])
+  @@unique([circleId, recipientId])
   @@unique([id, circleId])
-  @@index([circleId, status])
+  @@index([circleId, status, roundNumber])
 }
 
-model Contribution {
+model ContributionObligation {
   id       String        @id @default(cuid())
   circleId String
   circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
@@ -266,15 +355,78 @@ model Contribution {
   memberId String
   member   CircleMember @relation(fields: [memberId, circleId], references: [id, circleId], onDelete: Restrict)
 
-  amount   Decimal            @db.Decimal(18, 2)
-  status   ContributionStatus @default(DUE)
-  paidAt   DateTime?
-  missedAt DateTime?
+  expectedAmount Decimal                      @db.Decimal(18, 2)
+  currency       String                       @db.Char(3)
+  dueDate        DateTime
+  status         ContributionObligationStatus @default(OPEN)
+  fulfilledAt    DateTime?
+
+  payments  ContributionPayment[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@unique([roundId, memberId])
+  @@unique([id, circleId])
+  @@index([circleId, roundId, status])
+}
+
+model ContributionPayment {
+  id       String        @id @default(cuid())
+  circleId String
+  circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
+
+  obligationId String
+  obligation   ContributionObligation @relation(fields: [obligationId, circleId], references: [id, circleId], onDelete: Restrict)
+
+  amount            Decimal                   @db.Decimal(18, 2)
+  currency          String                    @db.Char(3)
+  status            ContributionPaymentStatus @default(RECORDED)
+  clientOperationId String
+  recordedAt        DateTime                  @default(now())
+  recordedById      String
+  recordedBy        User                      @relation("ContributionPaymentRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  confirmedAt       DateTime?
+  confirmedById     String?
+  confirmedBy       User?                     @relation("ContributionPaymentConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  rejectedAt        DateTime?
+  rejectedById      String?
+  rejectedBy        User?                     @relation("ContributionPaymentRejector", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectionReason   String?                   @db.VarChar(500)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([roundId, memberId])
-  @@index([circleId, memberId, status])
-  @@index([circleId, roundId, status])
+  @@unique([circleId, clientOperationId])
+  @@index([circleId, obligationId, status])
+}
+
+model Payout {
+  id       String        @id @default(cuid())
+  circleId String
+  circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
+
+  roundId String
+  round   PayoutRound @relation(fields: [roundId, circleId], references: [id, circleId], onDelete: Restrict)
+
+  amount              Decimal       @db.Decimal(18, 2)
+  currency            String        @db.Char(3)
+  status              PayoutStatus  @default(RECORDED)
+  clientOperationId   String
+  recordedAt          DateTime      @default(now())
+  recordedById        String
+  recordedBy          User          @relation("PayoutRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  confirmedAt         DateTime?
+  confirmedByMemberId String?
+  confirmedByMember   CircleMember? @relation("PayoutRecipientConfirmer", fields: [confirmedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
+  disputedAt          DateTime?
+  disputedByMemberId  String?
+  disputedByMember    CircleMember? @relation("PayoutRecipientDisputer", fields: [disputedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
+  disputeReason       String?       @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roundId])
+  @@unique([circleId, clientOperationId])
+  @@index([circleId, status])
 }
