@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 
+import { clampToZero, isObligationFulfilled, toMoney } from "@/src/domain/contribution-accounting";
 import { selectCurrentAndNextRound } from "@/src/domain/circle-round-selection";
 import {
   findCircleSummary,
@@ -52,13 +53,6 @@ export class CircleMemberDashboardMemberNotActiveError extends Error {
   }
 }
 
-function toMoney(value: Prisma.Decimal): string {
-  return value.toFixed(2);
-}
-
-function clampToZero(value: Prisma.Decimal): Prisma.Decimal {
-  return value.isNegative() ? new Prisma.Decimal(0) : value;
-}
 
 export type CircleSummaryResult = {
   readonly id: string;
@@ -191,7 +185,7 @@ export async function getCircleMemberDashboard(input: {
     // comment above: nothing in this codebase writes ContributionObligation
     // .status to FULFILLED, so it cannot be trusted as payment truth. This
     // is computed live from the payment ledger every time.
-    const fulfilled = confirmedAmount.greaterThanOrEqualTo(obligation.expectedAmount);
+    const fulfilled = isObligationFulfilled(confirmedAmount, obligation.expectedAmount);
 
     return {
       roundNumber: obligation.round.roundNumber,
@@ -227,7 +221,7 @@ export async function getCircleMemberDashboard(input: {
     );
     const confirmedMemberCount = roundObligationsForProgress.filter((obligation) => {
       const confirmedAmount = confirmedByRoundObligationId.get(obligation.id) ?? new Prisma.Decimal(0);
-      return confirmedAmount.greaterThanOrEqualTo(obligation.expectedAmount);
+      return isObligationFulfilled(confirmedAmount, obligation.expectedAmount);
     }).length;
 
     roundProgress = { confirmedMemberCount, totalMemberCount: roundObligationsForProgress.length };
