@@ -78,6 +78,48 @@ test("on success, activateCircleAction revalidates then redirects to /circles/<t
   assert.match(source, /if \(!outcome\.ok\) return outcome\.state;\s*\n\s*revalidatePath\(`\/circles\/\$\{encodeURIComponent\(outcome\.circleId\)\}`\);\s*\n\s*redirect\(`\/circles\/\$\{encodeURIComponent\(outcome\.circleId\)\}`\);/);
 });
 
+// --- recordContributionAction ---
+
+test("recordContributionAction delegates to runRecordContributionAction rather than reimplementing validation/service logic", () => {
+  assert.match(source, /export async function recordContributionAction\(/);
+  assert.match(source, /runRecordContributionAction\(formData\)/);
+});
+
+test("recordContributionAction revalidates the circle summary route only after a genuine success", () => {
+  assert.match(
+    source,
+    /export async function recordContributionAction\([\s\S]*?if \(outcome\.status === "success"[\s\S]*?revalidatePath\(`\/circles\/\$\{encodeURIComponent\(circleId\)\}`\)/,
+  );
+});
+
+// --- confirmContributionAction ---
+
+test("confirmContributionAction delegates to runConfirmContributionAction rather than reimplementing validation/service logic", () => {
+  assert.match(source, /export async function confirmContributionAction\(/);
+  assert.match(source, /runConfirmContributionAction\(formData\)/);
+});
+
+test("confirmContributionAction revalidates the circle summary route only after a genuine success", () => {
+  assert.match(
+    source,
+    /export async function confirmContributionAction\([\s\S]*?if \(outcome\.status === "success"[\s\S]*?revalidatePath\(`\/circles\/\$\{encodeURIComponent\(circleId\)\}`\)/,
+  );
+});
+
+// --- rejectContributionAction ---
+
+test("rejectContributionAction delegates to runRejectContributionAction rather than reimplementing validation/service logic", () => {
+  assert.match(source, /export async function rejectContributionAction\(/);
+  assert.match(source, /runRejectContributionAction\(formData\)/);
+});
+
+test("rejectContributionAction revalidates the circle summary route only after a genuine success", () => {
+  assert.match(
+    source,
+    /export async function rejectContributionAction\([\s\S]*?if \(outcome\.status === "success"[\s\S]*?revalidatePath\(`\/circles\/\$\{encodeURIComponent\(circleId\)\}`\)/,
+  );
+});
+
 // --- no duplicated domain validation anywhere in this thin wrapper file ---
 
 test("no inline Zod schema parsing or direct circle.service import -- all validation stays in the core action modules", () => {
@@ -95,12 +137,25 @@ test("no reference to the member-session identity system or platform Auth.js int
   }
 });
 
-// --- no domain mutation outside the four wired-up actions, and no
-// financial (payment/payout) service reference ---
+// --- no domain mutation outside the wired-up actions, and no direct
+// financial (payment/payout) service reference -- only the testable-core
+// action modules (which themselves own the service import) may be
+// imported here ---
 
-test("no direct Prisma reference, and no contribution/payout mutation service reference", () => {
+test("no direct Prisma reference, and no raw ContributionPayment/Payout mutation reference", () => {
   assert.doesNotMatch(source, /prisma\./);
-  for (const forbidden of ["ContributionPayment", "Payout.create", "recordContribution", "recordPayout"]) {
+  for (const forbidden of ["ContributionPayment", "Payout.create", "recordPayout"]) {
     assert.ok(!source.includes(forbidden), `expected no reference to "${forbidden}"`);
   }
+});
+
+test("contribution services are never imported directly -- only the run*ContributionAction core modules are", () => {
+  for (const forbidden of [
+    "@/src/services/contribution-recording.service",
+    "@/src/services/contribution-confirmation.service",
+    "@/src/services/contribution-rejection.service",
+  ]) {
+    assert.ok(!source.includes(forbidden), `expected no direct import of "${forbidden}"`);
+  }
+  assert.doesNotMatch(source, /recordContributionSchema|confirmContributionSchema|rejectContributionSchema/);
 });

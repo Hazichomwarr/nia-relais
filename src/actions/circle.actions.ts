@@ -12,9 +12,18 @@ import {
   type AddDraftCircleMemberActionState,
 } from "@/src/actions/add-draft-circle-member";
 import {
+  runConfirmContributionAction,
+  type ConfirmContributionActionState,
+} from "@/src/actions/confirm-contribution";
+import {
   runCreateDraftCircleAction,
   type CreateDraftCircleActionState,
 } from "@/src/actions/create-draft-circle";
+import {
+  runRecordContributionAction,
+  type RecordContributionActionState,
+} from "@/src/actions/record-contribution";
+import { runRejectContributionAction, type RejectContributionActionState } from "@/src/actions/reject-contribution";
 import { runRemoveDraftCircleMemberAction } from "@/src/actions/remove-draft-circle-member";
 import {
   runSetDraftCirclePayoutOrderAction,
@@ -24,7 +33,10 @@ import {
 export type {
   ActivateCircleActionState,
   AddDraftCircleMemberActionState,
+  ConfirmContributionActionState,
   CreateDraftCircleActionState,
+  RecordContributionActionState,
+  RejectContributionActionState,
   SetDraftCirclePayoutOrderActionState,
 };
 
@@ -124,4 +136,74 @@ export async function activateCircleAction(
 
   revalidatePath(`/circles/${encodeURIComponent(outcome.circleId)}`);
   redirect(`/circles/${encodeURIComponent(outcome.circleId)}`);
+}
+
+/**
+ * The real Server Action the future owner contribution-recording UI
+ * (7J.7, not built by this ticket) will bind to useActionState. All real
+ * logic -- requireUser(), form validation, the recordContribution call,
+ * and error mapping -- lives in runRecordContributionAction
+ * (record-contribution.ts, 7J.6); this wrapper only forwards the
+ * FormData and revalidates the circle summary route after a genuine
+ * success (a fresh recording, or a legitimate idempotent replay), never
+ * on a validation/domain failure. There is no separate "contribution
+ * desk" route yet -- /circles/[circleId] is the only owner-facing circle
+ * route that exists today, so it is the only one revalidated here.
+ */
+export async function recordContributionAction(
+  _previousState: RecordContributionActionState,
+  formData: FormData,
+): Promise<RecordContributionActionState> {
+  const circleId = String(formData.get("circleId") ?? "");
+  const outcome = await runRecordContributionAction(formData);
+
+  if (outcome.status === "success" && circleId.length > 0) {
+    revalidatePath(`/circles/${encodeURIComponent(circleId)}`);
+  }
+
+  return outcome;
+}
+
+/**
+ * The real Server Action the future owner confirmation/rejection UI
+ * (7J.8, not built by this ticket) will bind to useActionState. All real
+ * logic lives in runConfirmContributionAction (confirm-contribution.ts,
+ * 7J.6); this wrapper only forwards the FormData and revalidates the
+ * circle summary route after a genuine success (a fresh confirmation, or
+ * a legitimate replay of an already-CONFIRMED payment).
+ */
+export async function confirmContributionAction(
+  _previousState: ConfirmContributionActionState,
+  formData: FormData,
+): Promise<ConfirmContributionActionState> {
+  const circleId = String(formData.get("circleId") ?? "");
+  const outcome = await runConfirmContributionAction(formData);
+
+  if (outcome.status === "success" && circleId.length > 0) {
+    revalidatePath(`/circles/${encodeURIComponent(circleId)}`);
+  }
+
+  return outcome;
+}
+
+/**
+ * The real Server Action the future owner confirmation/rejection UI
+ * (7J.8, not built by this ticket) will bind to useActionState. All real
+ * logic lives in runRejectContributionAction (reject-contribution.ts,
+ * 7J.6); this wrapper only forwards the FormData and revalidates the
+ * circle summary route after a genuine success (a fresh rejection, or a
+ * legitimate exact-intent replay of an already-REJECTED payment).
+ */
+export async function rejectContributionAction(
+  _previousState: RejectContributionActionState,
+  formData: FormData,
+): Promise<RejectContributionActionState> {
+  const circleId = String(formData.get("circleId") ?? "");
+  const outcome = await runRejectContributionAction(formData);
+
+  if (outcome.status === "success" && circleId.length > 0) {
+    revalidatePath(`/circles/${encodeURIComponent(circleId)}`);
+  }
+
+  return outcome;
 }
