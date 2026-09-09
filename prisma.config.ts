@@ -9,6 +9,15 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Prisma CLI commands (migrate, validate, studio) read this URL. Prefer a
+    // direct, non-pooled Neon connection (DIRECT_URL) so migrations run
+    // against a real session instead of through PgBouncer's transaction
+    // pooling. Falls back to DATABASE_URL when DIRECT_URL is not yet
+    // configured, so existing behavior is unaffected until it is set.
+    //
+    // This does not change how the running application connects: src/prisma.ts
+    // constructs its own PrismaPg adapter directly from DATABASE_URL and never
+    // reads this config file.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });
