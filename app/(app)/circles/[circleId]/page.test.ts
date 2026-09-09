@@ -62,10 +62,21 @@ test("a DraftCircleOwnerReadNotDraftError falls back to a minimal, owner-scoped 
   assert.match(dataLoaderSource, /getActiveCircleSummaryForOwner\(\{\s*ownerId,\s*circleId\s*\}\)/);
 });
 
-test("every ActiveCircleOwnerRead* failure in the fallback also collapses to notFound()", () => {
+test("the ACTIVE fallback also fetches getOwnerCircleContributions, in parallel with the summary, not via a duplicate read model", () => {
+  assert.match(dataLoaderSource, /getOwnerCircleContributions\(\{\s*ownerId,\s*circleId\s*\}\)/);
+  assert.match(
+    dataLoaderSource,
+    /Promise\.all\(\[\s*getActiveCircleSummaryForOwner\([\s\S]*?getOwnerCircleContributions\([\s\S]*?\]\)/,
+  );
+});
+
+test("every ActiveCircleOwnerRead* and OwnerContributions* failure in the fallback also collapses to notFound()", () => {
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadNotFoundError/);
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadAuthorizationError/);
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadNotActiveError/);
+  assert.match(dataLoaderSource, /OwnerContributionsCircleNotFoundError/);
+  assert.match(dataLoaderSource, /OwnerContributionsAuthorizationError/);
+  assert.match(dataLoaderSource, /OwnerContributionsCircleNotActiveError/);
 });
 
 test("the page renders circle name, a DRAFT badge, contribution terms, the add-member form, the member list, the payout-order form, and the activation review", () => {
@@ -77,13 +88,14 @@ test("the page renders circle name, a DRAFT badge, contribution terms, the add-m
   assert.match(source, /<ActivationReviewSection circleId=\{circleId\} review=\{review\} \/>/);
 });
 
-test("the ACTIVE branch renders the ActiveCircleSummary component -- no draft-only forms or controls", () => {
+test("the ACTIVE branch renders ActiveCircleSummary and ContributionDesk -- no draft-only forms or controls", () => {
   const activeBranchIndex = source.indexOf('data.kind === "active"');
   const draftDestructureIndex = source.indexOf("const { circle, members, review } = data;");
   assert.ok(activeBranchIndex >= 0 && draftDestructureIndex > activeBranchIndex);
   const activeBranch = source.slice(activeBranchIndex, draftDestructureIndex);
 
   assert.match(activeBranch, /<ActiveCircleSummary summary=\{data\.summary\} \/>/);
+  assert.match(activeBranch, /<ContributionDesk circleId=\{circleId\} contributions=\{data\.contributions\} \/>/);
   assert.doesNotMatch(activeBranch, /<MemberList/);
   assert.doesNotMatch(activeBranch, /<PayoutOrderForm/);
   assert.doesNotMatch(activeBranch, /<AddMemberForm/);

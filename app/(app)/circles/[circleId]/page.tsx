@@ -18,12 +18,20 @@ import {
   type DraftCircleOwnerCircleResult,
   type DraftCircleOwnerMemberResult,
 } from "@/src/services/circle-draft-owner.service";
+import {
+  getOwnerCircleContributions,
+  OwnerContributionsAuthorizationError,
+  OwnerContributionsCircleNotActiveError,
+  OwnerContributionsCircleNotFoundError,
+  type OwnerCircleContributionsResult,
+} from "@/src/services/contribution-owner-read.service";
 import type { DraftCircleActivationReviewResult } from "@/src/domain/circle-activation-review";
 
 import { getFrequencyLabel } from "../new/new-circle-form-display";
 import { ActiveCircleSummary } from "./active-circle-summary";
 import { ActivationReviewSection } from "./activation-review-section";
 import { AddMemberForm } from "./add-member-form";
+import { ContributionDesk } from "./contribution-desk";
 import { MemberList } from "./member-list";
 import { PayoutOrderForm } from "./payout-order-form";
 
@@ -41,6 +49,7 @@ type DraftWorkspaceData = {
 type ActiveSummaryData = {
   readonly kind: "active";
   readonly summary: ActiveCircleOwnerSummaryResult;
+  readonly contributions: OwnerCircleContributionsResult;
 };
 
 // All data fetching (and the try/catch it needs) happens below, before any
@@ -94,13 +103,23 @@ async function loadWorkspaceOrSummary(
     // real COMPLETED/ARCHIVED owner summary does not exist yet and would
     // need its own read model when that lifecycle work begins.
     try {
-      const summary = await getActiveCircleSummaryForOwner({ ownerId, circleId });
-      return { kind: "active", summary };
+      // Fetched in parallel: two independent, lock-free reads of the same
+      // ACTIVE circle -- getOwnerCircleContributions (7J.5) is the read
+      // model this route's contribution desk (7J.7) renders; it is never
+      // queried directly against Prisma from a component.
+      const [summary, contributions] = await Promise.all([
+        getActiveCircleSummaryForOwner({ ownerId, circleId }),
+        getOwnerCircleContributions({ ownerId, circleId }),
+      ]);
+      return { kind: "active", summary, contributions };
     } catch (activeReadError) {
       if (
         activeReadError instanceof ActiveCircleOwnerReadNotFoundError
         || activeReadError instanceof ActiveCircleOwnerReadAuthorizationError
         || activeReadError instanceof ActiveCircleOwnerReadNotActiveError
+        || activeReadError instanceof OwnerContributionsCircleNotFoundError
+        || activeReadError instanceof OwnerContributionsAuthorizationError
+        || activeReadError instanceof OwnerContributionsCircleNotActiveError
       ) {
         notFound();
       }
@@ -140,8 +159,9 @@ export default async function OwnerCirclePage({
 
   if (data.kind === "active") {
     return (
-      <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
+      <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
         <ActiveCircleSummary summary={data.summary} />
+        <ContributionDesk circleId={circleId} contributions={data.contributions} />
       </main>
     );
   }
