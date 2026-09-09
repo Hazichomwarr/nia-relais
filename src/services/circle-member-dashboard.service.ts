@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 
+import { selectCurrentAndNextRound } from "@/src/domain/circle-round-selection";
 import {
   findCircleSummary,
   findConfirmedPaymentSums,
@@ -131,41 +132,6 @@ function serializeRound(round: RoundScheduleRecord): RoundScheduleEntry {
   };
 }
 
-/**
- * Deterministic current/next round selection (7H audit, section 3/5):
- *
- * - If exactly one round is ACTIVE, it is "the current round."
- * - Otherwise, for an ACTIVE circle only, the lowest-roundNumber round that
- *   is not CLOSED is offered as "the next round" -- explicitly NOT labeled
- *   "current" or "currently collecting," since nothing in the schema
- *   distinguishes it from any other UPCOMING round. Under today's runtime
- *   (no round-lifecycle writer exists yet -- see docs/security or the 7H
- *   audit), every round is UPCOMING, so this is always roundNumber 1 for a
- *   freshly activated circle.
- * - For COMPLETED/ARCHIVED circles with no ACTIVE round, neither field is
- *   set -- no forward-looking "next" framing applies to a finished circle.
- *
- * currentRound and nextRound are mutually exclusive by construction.
- */
-function selectCurrentAndNextRound(
-  circleStatus: string,
-  rounds: readonly RoundScheduleRecord[],
-): { currentRound: RoundScheduleRecord | null; nextRound: RoundScheduleRecord | null } {
-  const activeRounds = rounds.filter((round) => round.status === "ACTIVE");
-  if (activeRounds.length === 1) {
-    return { currentRound: activeRounds[0], nextRound: null };
-  }
-
-  if (circleStatus !== "ACTIVE") {
-    return { currentRound: null, nextRound: null };
-  }
-
-  const lowestNonClosed = [...rounds]
-    .filter((round) => round.status !== "CLOSED")
-    .sort((left, right) => left.roundNumber - right.roundNumber)[0];
-
-  return { currentRound: null, nextRound: lowestNonClosed ?? null };
-}
 
 /**
  * Builds the read-only SUSU member dashboard for exactly one

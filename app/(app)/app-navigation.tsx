@@ -15,6 +15,7 @@ export function AppNavigation({ userName }: AppNavigationProps) {
   const isSavingsRoute =
     pathname === "/deposits" ||
     /^\/goals\/[^/]+\/deposits(?:\/|$)/.test(pathname);
+  const isCirclesRoute = pathname === "/circles" || pathname.startsWith("/circles/");
   const navItems = [
     { href: "/dashboard", label: "Dashboard", isActive: pathname === "/dashboard" },
     { href: "/deposits", label: "My savings", isActive: isSavingsRoute },
@@ -23,6 +24,7 @@ export function AppNavigation({ userName }: AppNavigationProps) {
       label: "Trusted person",
       isActive: pathname === "/custodian" || pathname.startsWith("/custodian/"),
     },
+    { href: "/circles/new", label: "SUSU circles", isActive: isCirclesRoute },
   ];
 
   return (

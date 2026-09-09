@@ -2,6 +2,8 @@ import { Prisma, type ContributionFrequency } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { randomBytes } from "crypto";
 
+import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
+import { roundDueDate } from "@/src/domain/circle-rotation-schedule";
 import { lockSavingsCircleForUpdate } from "@/src/repositories/circle-lock.repository";
 import {
   createDraftCircleMember,
@@ -87,6 +89,15 @@ export class CircleActivationIntegrityError extends Error {
   constructor() {
     super("The activated circle rotation is incomplete or inconsistent.");
     this.name = "CircleActivationIntegrityError";
+  }
+}
+
+export class CircleActivationStaleReviewError extends Error {
+  constructor() {
+    super(
+      "This circle's members or payout order changed since it was last reviewed. Please review the current configuration and try again.",
+    );
+    this.name = "CircleActivationStaleReviewError";
   }
 }
 
@@ -180,32 +191,50 @@ function assertDraftOwner(circle: { ownerId: string; status: string }, ownerId: 
   if (circle.status !== "DRAFT") throw new DraftCircleMembershipConflictError();
 }
 
-function addUtcDays(startDate: Date, days: number) {
-  return new Date(Date.UTC(
-    startDate.getUTCFullYear(),
-    startDate.getUTCMonth(),
-    startDate.getUTCDate() + days,
-  ));
-}
+/**
+ * Closes the race between an owner's activation review (a separate,
+ * unlocked read -- see circle-activation-review.service.ts) and this
+ * function's own row lock: without this check, membership or payout order
+ * could change in the window between the review and lock acquisition, and
+ * activateCircle would silently activate that DIFFERENT, never-reviewed
+ * configuration. Called only from inside the transaction, after the row
+ * lock is held and `members` has been freshly read under that lock -- so
+ * the fingerprint compared here is guaranteed current at the instant
+ * activation actually proceeds.
+ *
+ * Reuses computeActivationReviewFingerprint (src/domain/circle-activation-review.ts)
+ * unchanged -- the exact same function circle-activation-review.service.ts
+ * uses to fingerprint the review the owner actually saw. `members` is
+ * sorted by payoutOrder ascending first: for the only cohort shape that
+ * ever reaches this call meaningfully -- a complete, valid 1..N order --
+ * that sort is unambiguous (no ties) and identical to the review's own
+ * ordering; an incomplete order has no well-defined ordering either way,
+ * but is already rejected moments later by assertActivationEligible (the
+ * DRAFT path) regardless of whether the fingerprint happens to match.
+ *
+ * expectedFingerprint is optional: omitting it (undefined) skips this
+ * check entirely, for any future caller with no review-fingerprint
+ * concept.
+ */
+function assertFreshReviewMatches(
+  expectedFingerprint: string | undefined,
+  members: DraftCirclePayoutMemberRecord[],
+) {
+  if (expectedFingerprint === undefined) return;
 
-function addUtcCalendarMonths(startDate: Date, months: number) {
-  const targetMonthIndex = startDate.getUTCMonth() + months;
-  const targetYear = startDate.getUTCFullYear() + Math.floor(targetMonthIndex / 12);
-  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
-  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const orderedActiveMembers = [...members]
+    .sort((left, right) => (left.payoutOrder ?? Number.POSITIVE_INFINITY) - (right.payoutOrder ?? Number.POSITIVE_INFINITY))
+    .map((member) => ({
+      id: member.id,
+      displayName: member.displayName,
+      memberCode: member.memberCode,
+      payoutOrder: member.payoutOrder,
+    }));
 
-  return new Date(Date.UTC(
-    targetYear,
-    targetMonth,
-    Math.min(startDate.getUTCDate(), lastDayOfTargetMonth),
-  ));
-}
-
-function roundDueDate(circle: CircleActivationRecord, roundNumber: number) {
-  const completedIntervals = roundNumber - 1;
-  if (circle.frequency === "WEEKLY") return addUtcDays(circle.startDate, completedIntervals * 7);
-  if (circle.frequency === "BIWEEKLY") return addUtcDays(circle.startDate, completedIntervals * 14);
-  return addUtcCalendarMonths(circle.startDate, completedIntervals);
+  const freshFingerprint = computeActivationReviewFingerprint({ orderedActiveMembers });
+  if (freshFingerprint !== expectedFingerprint) {
+    throw new CircleActivationStaleReviewError();
+  }
 }
 
 function assertActivationEligible(
@@ -510,6 +539,19 @@ export async function setDraftCirclePayoutOrder(input: {
 export async function activateCircle(input: {
   ownerId: string;
   circleId: string;
+  /**
+   * The fingerprint (computeActivationReviewFingerprint) of the cohort +
+   * payout order the caller actually reviewed before confirming
+   * activation. When provided, verified atomically against fresh,
+   * lock-held state -- see assertFreshReviewMatches -- so a concurrent
+   * membership/order change between the caller's review and this
+   * function's lock acquisition is rejected rather than silently
+   * activating a different configuration than the one confirmed. Omit to
+   * skip this check (e.g. a future caller with no review-fingerprint
+   * concept); the caller in this codebase (activateCircleAction) always
+   * supplies it.
+   */
+  expectedFingerprint?: string;
 }): Promise<CircleActivationResult> {
   if (!input.ownerId || !input.circleId) throw new DraftCircleMemberNotFoundError();
 
@@ -529,6 +571,14 @@ export async function activateCircle(input: {
 
     if (circle.status === "ACTIVE") {
       assertActivatedRotationIntegrity(circle, members, rounds, obligations);
+      // Preserves replay idempotency for a caller reconfirming the same
+      // fingerprint it originally activated with (membership/order are
+      // frozen post-activation, so a legitimate retry's fingerprint always
+      // still matches); a caller whose review no longer matches what is
+      // actually persisted is told to review again rather than being
+      // handed a success for a configuration it never confirmed. No
+      // rounds/obligations are created either way on this branch.
+      assertFreshReviewMatches(input.expectedFingerprint, members);
       return serializeActivationResult(circle, members, rounds, obligations);
     }
 
@@ -537,6 +587,12 @@ export async function activateCircle(input: {
     }
 
     assertActivationEligible(circle, members, rounds, obligations);
+    // The atomic guard: rejects a stale review BEFORE any round/obligation
+    // is created, using the same fresh, lock-held `members` read above --
+    // see assertFreshReviewMatches for why this must happen here, inside
+    // the transaction, rather than only in the caller's own separate
+    // preflight review check.
+    assertFreshReviewMatches(input.expectedFingerprint, members);
     const membersByPayoutOrder = [...members].sort((left, right) => left.payoutOrder! - right.payoutOrder!);
     const generatedRounds = await createCircleActivationRounds(transaction, {
       circleId: circle.id,
