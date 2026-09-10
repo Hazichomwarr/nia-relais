@@ -1129,11 +1129,23 @@ Mirroring the contribution workflow's own narrow-ticket precedent
   own real-race tests), so no separate concurrency-only ticket was ever
   needed. Documentation/architecture only — no service, repository,
   action, UI, or schema change. See §21 for the full contract.
-- **Round-lifecycle implementation and circle completion** — confirmed by
-  7K.1 as their own future lifecycle slice, deliberately not a
-  prerequisite for any 7K payout-writer ticket. §21 (7K.11) freezes the
-  contract those future tickets implement against; neither is
-  implemented yet.
+- **7K.12** — ✅ **COMPLETE.** Round closure provenance persistence:
+  `PayoutRound.closedById` (schema + migration only, §21.15's own
+  implementation note) — closing the one schema gap §21.11 identified.
+  No round-lifecycle runtime behavior; `assertActivatedRotationIntegrity`
+  deliberately unchanged.
+- **7K.13** — ✅ **COMPLETE.** Round lifecycle services:
+  `activateFirstRound`/`advanceRound` (§21.22's own recommended API,
+  §21.28's own implementation note) — `src/domain/round-lifecycle.ts`,
+  `src/repositories/round-lifecycle.repository.ts`,
+  `src/services/round-lifecycle.service.ts`, plus the required
+  `assertActivatedRotationIntegrity` evolution in `circle.service.ts`
+  (§21.3). No Server Actions, no UI, no circle completion, no schema
+  change.
+- **Circle completion** — confirmed by 7K.1 as its own future slice,
+  deliberately not a prerequisite for any 7K payout-writer ticket. §21.25
+  freezes "every round CLOSED" as sufficient domain authority for it; not
+  implemented by 7K.13 or any ticket before it.
 
 ## 21. Round Lifecycle V1 Contract — 7K.11 (Audit & Freeze)
 
@@ -1632,6 +1644,29 @@ schema work in this codebase has been sequenced). Either is compatible
 with this contract; 7K.11 itself creates no migration, per its own
 explicit instruction.
 
+**7K.12 implementation note** (factual, does not reopen this section's
+own frozen reasoning above): `PayoutRound.closedById` now exists —
+nullable `String`, FK to `User` (`"PayoutRoundCloser"` relation,
+reciprocal `User.closedPayoutRounds`), `onDelete: Restrict`/
+`onUpdate: Cascade`, identical shape and delete policy to
+`activatedById`. Migration `20260910152621_add_payout_round_closed_by_
+provenance` — purely additive (one nullable column, one foreign key), no
+index, no data rewrite, no other table touched. **No historical backfill
+was needed or attempted**: a live pre-migration audit of the configured
+database found 47 persisted `PayoutRound` rows, all `UPCOMING`, all with
+`closedAt`/`activatedAt` null — zero `CLOSED` rows, confirming this
+document's own §21.3 prediction exactly. No `closedById` value was ever
+inferred from `activatedById`, a recipient, an owner, or any other proxy;
+none was needed. **No runtime round-lifecycle behavior exists after this
+ticket** — `payoutRound.create` (activation) remains the only writer to
+this table (re-confirmed by the same grep methodology as §21.3);
+`activateFirstRound`/`advanceRound` do not exist. **
+`assertActivatedRotationIntegrity` (`circle.service.ts`) is deliberately
+left unchanged** — its `round.status !== "UPCOMING"` assumption remains
+truthful until a lifecycle writer exists, and its relaxation is
+intentionally deferred to the lifecycle-implementation ticket itself
+(§21.3), not this schema-only one.
+
 ### 21.16 dueDate semantics — frozen
 
 **`PayoutRound.dueDate` is historical/scheduling information only. It
@@ -1889,7 +1924,7 @@ reminders. All remain future features, entirely outside this contract.
 | 9 | Is circle completion a separate operation? | Yes, explicitly deferred; "all rounds CLOSED" is sufficient authority for it (§21.13/§21.25) |
 | 10 | Does dueDate gate anything? | No — display/scheduling only (§21.16) |
 | 11 | Is startDate a mutation gate or schedule anchor? | Schedule anchor only, made explicit by this audit (§21.17) |
-| 12 | Does the schema need closedById or another migration? | **Yes — `closedById` recommended before implementation** (§21.15) |
+| 12 | Does the schema need closedById or another migration? | **Yes — `closedById` recommended before implementation** (§21.15); **added in 7K.12** (migration `20260910152621_add_payout_round_closed_by_provenance`) |
 | 13 | Replay/idempotency contract | Natural idempotency from persisted round state; no clientOperationId (§21.21) |
 | 14 | Lock/concurrency model required | Shared `SavingsCircle` lock, identical to all seven existing writers; six races audited explicitly (§21.18/§21.19) |
 | 15 | Is "all rounds CLOSED" enough for eventual circle completion? | Yes, sufficient domain authority; an optional defense-in-depth re-check is permitted, not required (§21.25) |
@@ -1899,6 +1934,341 @@ concrete action item this audit surfaces for the implementation ticket
 (distinct from the frozen contract itself) is §21.3's
 `assertActivatedRotationIntegrity` relaxation — required, scoped, and
 not a design ambiguity.
+
+### 21.28 7K.13 implementation note
+
+**Status: implemented and tested.** This is the first factual note in
+§21 describing runtime behavior that actually exists, rather than a
+frozen contract awaiting implementation.
+
+**Service API, exactly as shipped** (`src/services/round-lifecycle
+.service.ts`) — matches §21.22's own recommendation verbatim:
+
+```
+activateFirstRound({ ownerId, circleId }): Promise<ActivateFirstRoundResult>
+advanceRound({ ownerId, circleId, roundId }): Promise<AdvanceRoundResult>
+```
+
+Neither `closeRound` nor `activateNextRound` is exposed independently —
+`advanceRound` performs both (close `roundId`, activate its derived
+successor if one exists) inside one transaction, so no caller can ever
+observe or produce a state where the current round is `CLOSED` and its
+successor remains `UPCOMING`.
+
+**Return shape** — one deliberate, documented deviation from §21.22's own
+suggested literal-status shape, in favor of truthfulness (this document's
+own repeated standard): `LifecycleRoundResult.status` is typed
+`"ACTIVE" | "CLOSED"` rather than a fixed literal per field, because a
+replay can truthfully observe a round that has progressed further than
+the specific transition being reported (e.g. `activateFirstRound`
+replaying after round 1 has since also been `CLOSED`, or `advanceRound`
+replaying round N's own closure after round N+1 has since *also* closed)
+— the result always reports the round's true current status, never a
+value implied only by which operation was called.
+
+**assertActivatedRotationIntegrity evolution** (`circle.service.ts`) —
+split exactly as §21.3/ticket-section-6 required, not merely renamed:
+`assertActivatedRotationStructureIntegrity` keeps every IMMUTABLE
+activation-time check byte-for-byte as strict as before (cohort/round/
+obligation counts, roundNumber↔payoutOrder↔recipient mapping, due-date
+recurrence, each obligation's frozen amount/currency/dueDate) MINUS the
+four round-lifecycle-state checks and the obligation-status-forever-OPEN
+assumption; the round-lifecycle-state shape itself is delegated to the
+new shared, pure `assertRoundLifecycleStateIntegrity`
+(`src/domain/round-lifecycle.ts`) — the SAME function
+`round-lifecycle.service.ts` calls for its own preconditions, so the two
+callers cannot silently drift into different definitions of "a coherent
+lifecycle state." `assertActivatedRotationIntegrity` itself keeps its
+exact external contract (always throws `CircleActivationIntegrityError`,
+same two call sites, same signature) — verified by a live regression test
+that activates a circle, starts round 1, financially completes and
+advances it, then calls `activateCircle` again and confirms the replay
+succeeds without resetting any round/obligation row, and that a genuinely
+corrupted obligation still correctly throws `CircleActivationIntegrityError`.
+One additional, previously-unnoticed bug this same evolution fixed:
+`activateCircle`'s own `serializeActivationResult` used to hard-code
+every returned round's status as the literal `"UPCOMING"` — harmless
+before any lifecycle writer existed, but a live lie the moment one did;
+it now reports each round's true persisted status.
+
+**Financial closure predicate implementation**: contribution readiness
+re-derives each obligation's true fulfillment from the confirmed-payment
+ledger (`isObligationFulfilled`, reused unchanged from
+`contribution-accounting.ts`) rather than trusting
+`ContributionObligation.status` — a persisted status that disagrees with
+the ledger it is supposed to project is refused as
+`RoundLifecycleIntegrityError`, never repaired. Payout readiness reuses
+`computeExpectedPayoutAmount`/`amountMatchesExpectedPayout`
+(`payout-accounting.ts`) against the round's frozen obligations, exactly
+as `payout-owner-read.service.ts`/`payout-member-read.service.ts` already
+do — no third, independently-reimplemented money-equality rule anywhere
+in this codebase.
+
+**Timestamp policy**: one authoritative `new Date()` per lifecycle
+operation. For a non-final `advanceRound`, the closed round's `closedAt`
+and the activated successor's `activatedAt` share the exact same
+timestamp value — both halves are one atomic owner decision, not two
+independently-clocked facts (verified live).
+
+**Replay/idempotency**: no `clientOperationId` — natural idempotency from
+persisted round identity/state, exactly as §21.21 froze, including the
+"stale replay after further progression remains valid, but a successor
+stuck `UPCOMING` behind an already-`CLOSED` current round is corruption"
+distinction (both directions verified live).
+
+**Concurrency evidence, all real PostgreSQL**: two concurrent
+`activateFirstRound` calls on the same circle resolve to exactly one
+physical transition; two concurrent `advanceRound` calls on the same
+financially-complete round (both non-final and final) resolve to exactly
+one physical close(+activate); `advanceRound` racing a late contribution
+confirmation, a payout confirmation, and a payout dispute each resolve
+safely in either lock-acquisition order, with the financial mutation
+itself always succeeding and `advanceRound` never succeeding against a
+payout that was not yet `CONFIRMED` at the moment either contender began;
+and `advanceRound` for one round does not block or interfere with an
+unrelated, legitimate financial writer for a different round.
+
+**Lock order**: `round-lifecycle.service.ts` uses the identical,
+unmodified `lockSavingsCircleForUpdate` primitive as all seven
+pre-existing writers — no new lock primitive, no new deadlock ordering
+risk (§21.19's own required consistency, verified by source inspection).
+
+**No hidden side effects**: verified both structurally (the service's own
+source contains no reference to `ContributionPayment`/`ContributionObligation`/
+`Payout` writes, `CircleMember` writes, or any `SavingsCircle` field
+including `completedAt`/`completedById`) and live (a full row/field
+snapshot of every unrelated table before and after `activateFirstRound`
+is byte-identical).
+
+### 21.29 7K.14 implementation note
+
+**Status: implemented and tested.** Server Actions now exist for both
+7K.13 operations, in the same testable-core + thin-`"use server"`-wrapper
+shape as every other financial action in this codebase (`record-payout.ts`
+/ `payout.actions.ts` is the closest precedent):
+
+```
+src/actions/activate-first-round.ts   -- runActivateFirstRoundAction (core)
+src/actions/advance-round.ts          -- runAdvanceRoundAction (core)
+src/actions/round-lifecycle.actions.ts -- activateFirstRoundAction / advanceRoundAction ("use server")
+src/actions/round-lifecycle.state.ts  -- initialActivateFirstRoundState / initialAdvanceRoundState
+src/validations/round-lifecycle.schema.ts -- advanceRoundSchema (roundId only)
+```
+
+**Auth**: both actions authenticate exclusively via `requireUser()`
+(owner identity), deferred via dynamic `import()` exactly like
+`record-payout.ts`/`activate-circle.ts` — never `requireCircleMember`.
+`ownerId` comes only from that call; a forged `ownerId` field in the form
+is never read.
+
+**Input whitelist**: `activateFirstRound` accepts only `circleId` (raw,
+non-empty-after-trim check, no schema — mirrors `activate-circle.ts`'s own
+single-field handling). `advanceRound` accepts `circleId` (same raw check)
+plus `roundId` (validated through `advanceRoundSchema`, an exact copy of
+`payout.schema.ts`'s own roundId primitive per this codebase's established
+"small per-domain copy over cross-domain import" convention). Verified
+live by hostile-FormData tests: every forged lifecycle/financial field
+(`status`, `activatedAt`, `activatedById`, `closedAt`, `closedById`,
+`nextRoundId`, `isFinalRound`, `memberId`, `recipientId`, `payoutOrder`,
+`startDate`, `dueDate`) is captured and asserted absent from what actually
+reaches the service.
+
+**Replay truthfulness**: a service-reported `replayed: true` always
+surfaces as `status: "success"`, reporting the round's true current state
+— never downgraded to an error, for any of `activateFirstRound`'s or
+`advanceRound`'s replay shapes (including a final-round replay and a
+replay after further progression).
+
+**Error mapping** — "not ready" (ordinary, waitable) kept strictly
+distinct from "integrity failure" (never waitable/fixable), exactly as
+this ticket required:
+
+| Error | Copy |
+|---|---|
+| `RoundLifecycleCircleNotFoundError` / `RoundLifecycleAuthorizationError` | "We could not find this circle." (collapsed, existing privacy pattern) |
+| `RoundLifecycleRoundNotFoundError` | "We could not find this payout round." |
+| `RoundLifecycleNotCurrentError` | "Only the circle's current round can be advanced." |
+| `RoundLifecycleCircleNotActiveError` (first-round) | "This circle cannot start its rounds right now." |
+| `RoundLifecycleCircleNotActiveError` (advance) | "This circle is not active, so its rounds cannot be advanced right now." |
+| `RoundLifecycleContributionsIncompleteError` | "All contributions for this round must be confirmed before it can be closed." |
+| `RoundLifecyclePayoutMissingError` | "The payout must be recorded and confirmed before this round can be closed." |
+| `RoundLifecyclePayoutNotConfirmedError` | "The recipient still needs to confirm the payout." |
+| `RoundLifecyclePayoutDisputedError` | "This payout was disputed, so this round cannot advance in NIA." (never "fix"/"retry"/"resolve" — verified by a live forbidden-word test) |
+| `RoundLifecycleIntegrityError` / `PayoutAccountingIntegrityError` | "We couldn't safely {start/advance} this round because its saved records are inconsistent." (`error.message` itself is never surfaced — unlike some payout actions, since this ticket specified exact alternate copy) |
+
+**Success wording**: `"Round <n> is active."` (first round, `<n>` always
+derived from the service's own result, not hardcoded), `"Round <n> is now
+active."` (non-final advance), `"The final round is closed."` (final
+advance) — none ever say "circle complete"/"SUSU completed"/"savings
+circle finished"; `isFinalRound` is exposed as a fact about sequencing
+only. Verified by a live test asserting the final-closure message
+contains none of those forbidden words.
+
+**Revalidation scope (audited, not guessed)**: both actions revalidate
+**both** `/circles/${circleId}` (owner) **and** `/member/circles/${circleId}`
+(member) on success — a deliberate difference from `recordPayoutAction`'s
+owner-route-only precedent. Rationale: `circle-member-dashboard.service.ts`
+calls `selectCurrentAndNextRound` against live `PayoutRound.status`, so a
+round-lifecycle transition changes what every member's own dashboard
+resolves as its current/next round (before `activateFirstRound`, no round
+is current at all; each `advanceRound` moves which round is current and
+whose obligation is open) — this is member-visible state, not only an
+owner-facing one, so revalidating only the owner route would leave members
+looking at a stale round.
+
+**No UI**: no owner or member page/component was touched. A structural
+test (`round-lifecycle-ui-isolation.test.ts`) asserts none of
+`page.tsx`/`active-circle-summary.tsx`/`contribution-desk.tsx`/
+`payout-desk.tsx` (owner) or `page.tsx`/`member-dashboard.tsx`/
+`member-payout-card.tsx` (member) reference any new action/state
+identifier.
+
+**No schema change, no completion logic**: verified structurally (no
+Prisma import, no `round-lifecycle.repository`/`circle-lock.repository`
+import, no `requireCircleMember`, no `completedAt`/`completedById`
+reference) in both the two testable cores and the thin wrapper.
+
+### 21.30 7K.15 implementation note
+
+**Status: implemented and tested.** The owner-facing round-lifecycle READ
+model now exists:
+
+```
+getOwnerRoundLifecycle({ ownerId, circleId }): Promise<OwnerRoundLifecycleResult>
+```
+
+(`src/services/round-lifecycle-owner-read.service.ts`). Pure read: no
+lock, no write, no call into `activateFirstRound`/`advanceRound` "to
+check" — a dry-run-by-catching-errors approach would risk mutating on
+success, which this ticket explicitly forbade.
+
+**Lifecycle scope decision (ticket section 5, stated explicitly)**:
+**ACTIVE-only.** This is narrower than `getOwnerCirclePayouts`'s own
+ACTIVE/COMPLETED/ARCHIVED scope, deliberately: that read answers "what
+permanently happened" (true forever), while this read answers "what
+transition may happen next" (meaningless once a circle can no longer
+transition). Mirrors `getActiveCircleSummaryForOwner`'s own ACTIVE-only
+scope instead. DRAFT/CANCELLED are rejected the same way every other
+owner read rejects them (no `PayoutRound` rows exist pre-activation);
+COMPLETED/ARCHIVED are rejected with the same
+`OwnerRoundLifecycleCircleNotEligibleError`.
+
+**7K.13 reuse, not duplication (ticket section 21)** — the central
+architectural decision of this ticket. Two pure predicates that used to
+live only inside `round-lifecycle.service.ts`'s own private
+`assertContributionsReadyToClose`/`assertPayoutReadyToClose` were
+extracted, unchanged in substance, into `src/domain/round-lifecycle.ts`:
+
+- `assessContributionClosureReadiness(obligations): "READY" | "INCOMPLETE"`
+- `assessPayoutClosureReadiness(payout, recipientId, expected): "MISSING" | "NOT_CONFIRMED" | "DISPUTED" | "READY"`
+
+Both throw the new `RoundLifecycleFinancialIntegrityError` for a
+corruption case (a persisted status disagreeing with its own ledger, a
+CONFIRMED payout with drifted amount/currency/provenance, an empty
+obligation set, an unrecognized payout status), and return a plain
+classification for every ordinary "not ready yet" business state.
+`round-lifecycle.service.ts` was refactored to call these two functions
+and re-wrap their thrown error as its own `RoundLifecycleIntegrityError`
+(exactly the same pattern it already used for
+`RoundLifecycleStateIntegrityError`) and to translate each classification
+into its own specific thrown error — its own external contract
+(exception types, ordering, messages) is byte-for-byte unchanged, verified
+by rerunning `round-lifecycle.service.test.ts` (56 tests) unmodified
+after the refactor: all 56 still pass. `round-lifecycle-owner-read
+.service.ts` calls the exact same two functions to CLASSIFY (never
+throw-to-decide) the current round's progression for display. Neither
+module reimplements the other's rule.
+
+Read-side repository reuse is similarly direct, not duplicated:
+`findCircleForRoundLifecycle`, `findObligationsForLifecycleRound`,
+`findConfirmedPaymentSumsForLifecycle`, and `findPayoutForLifecycleRound`
+(all from `round-lifecycle.repository.ts`, 7K.13) are called as-is,
+passing the bare `prisma` client (no lock needed for a read). The only
+genuinely new repository function is
+`findRoundsForOwnerRoundLifecycle` (`round-lifecycle-owner-read
+.repository.ts`) — the write side's own round select has no reason to
+carry the recipient's owner-facing display fields (`displayName`,
+`memberCode`) this read needs, per this codebase's established
+per-consumer-select discipline.
+
+**Phase model** — `NOT_STARTED` (every round `UPCOMING`, `nextRound` =
+persisted round 1, `START_FIRST_ROUND`), `IN_PROGRESS` (exactly one
+`ACTIVE` round, `currentRound`/`nextRound` derived solely from persisted
+`roundNumber`/`status`, never date/payoutOrder), `ALL_ROUNDS_CLOSED`
+(every round `CLOSED`, `circle.status` still reads `"ACTIVE"`,
+`transitionKind: "AWAIT_CIRCLE_COMPLETION"` — never reported as
+`COMPLETED`/"circle complete," preserving §21.13's own frozen boundary).
+
+**Blocker precedence** (ticket section 10, verified against the actual
+7K.13 order): contribution readiness is checked before payout readiness,
+exactly matching `advanceRound`'s own call order
+(`assertContributionsReadyToClose` before `assertPayoutReadyToClose`).
+
+**Corruption is never a blocker** (ticket section 11): every one of the 11
+manufactured-corruption tests (multiple `ACTIVE` rounds, invalid
+`roundNumber` sequence, out-of-order `CLOSED`, `ACTIVE` predecessor not
+`CLOSED`, missing `closedAt`/`closedById`/`activatedAt`/`activatedById`,
+invalid `UPCOMING` provenance, `FULFILLED`-without-ledger-support,
+`OPEN`-despite-confirmed-payment, `CONFIRMED`-payout amount/currency/
+recipient/timestamp/dispute-provenance drift) throws
+`OwnerRoundLifecycleIntegrityError`, never a `progression.blocker` value.
+One case from the ticket's own list — a `Payout.recordedById` of empty
+string — is DB-unreachable and untestable live: `recordedById` carries a
+real foreign key to `User`, so Postgres itself rejects an empty value;
+`round-lifecycle.service.test.ts` (7K.13) never exercises this branch
+live either, for the identical reason. The defensive check remains in the
+shared domain predicate as dead-but-harmless code, matching the existing
+service's own posture.
+
+**Transition kind** (ticket section 14): frozen as "describe the eventual
+legal transition even when blocked" — `ADVANCE_TO_NEXT_ROUND` for a
+non-final current round, `CLOSE_FINAL_ROUND` for a final one, regardless
+of `canAdvanceCurrentRound`, so a future UI can label the correct action
+without reconstructing final-round logic itself.
+
+**Historical/date authority**: `currentRound`/`nextRound` recipient
+identity comes only from `PayoutRound.recipientId`'s own persisted
+relation — verified live by scrambling every member's `payoutOrder` after
+activation and confirming the reported recipient is unchanged.
+`dueDate`/`startDate` (past or future) are returned for display only and
+never gate `canStartFirstRound`/`canAdvanceCurrentRound`/`blocker` —
+verified live with a dueDate of `2099-01-01` on a financially-incomplete
+round still reporting `CONTRIBUTIONS_INCOMPLETE`, and again reporting
+`canAdvanceCurrentRound: true` once genuinely fulfilled despite the same
+far-future date.
+
+**Query count** (ticket section 19): 2 queries (`circle`, `rounds`) for
+`NOT_STARTED`/`ALL_ROUNDS_CLOSED`; at most 5 for `IN_PROGRESS` (+
+obligations, confirmed-payment sums, payout — all scoped to the ONE
+current round, never any other round). Verified structurally (each of the
+five read functions has exactly one call site in the service's own
+source, and no loop calls any of them) and live (an 8-member circle
+resolves with the identical shape/correctness as a 3-member one).
+
+**7K.13 alignment regression** (ticket section 38, the most important
+cross-layer evidence): five paired live tests assert the read model's
+`progression.blocker`/`canAdvanceCurrentRound` for a given persisted state
+agrees exactly with what `advanceRound` itself does against the identical
+state — `CONTRIBUTIONS_INCOMPLETE` ↔ `RoundLifecycleContributionsIncompleteError`,
+`PAYOUT_MISSING` ↔ `RoundLifecyclePayoutMissingError`,
+`PAYOUT_NOT_CONFIRMED` ↔ `RoundLifecyclePayoutNotConfirmedError`,
+`PAYOUT_DISPUTED` ↔ `RoundLifecyclePayoutDisputedError`, and
+`canAdvanceCurrentRound: true` ↔ a genuine `advanceRound` success. The
+read projection cannot drift from the mutation contract without one of
+these five tests failing.
+
+**Privacy/safe shape**: explicit Prisma selects only; a live test asserts
+the full serialized JSON never contains `pinHash`, `credentialVersion`,
+`failedPinAttempts`, `lockedUntil`, `session`, `tokenHash`,
+`clientOperationId`, `recordedById`, `confirmedByMemberId`,
+`disputedByMemberId`, or `payoutOrder`; an exact-`Object.keys` test locks
+the top-level/`progression`/round/recipient shape.
+
+**No UI, no mutation**: no owner or member page/component was touched (no
+`app/` file appears in this ticket's diff at all); structurally verified
+that this service contains no `prisma.*.create/update/updateMany/delete/
+upsert`, no transaction, and no reference to
+`activateFirstRound`/`advanceRound`/any Server Action.
 
 ## Verification
 
@@ -1924,3 +2294,37 @@ ticket's own diff. One schema gap was found and its resolution frozen
 (§21.15: `closedById` recommended before implementation) — this is a
 decision, not a blocker; 7K.11 itself creates no migration, per its own
 explicit instruction.
+
+**TICKET 7K.12 — ROUND CLOSURE PROVENANCE PERSISTENCE: COMPLETE** — see
+§21.15's own implementation note. `PayoutRound.closedById` now exists
+(migration `20260910152621_add_payout_round_closed_by_provenance`,
+purely additive, no backfill needed or attempted — verified live, zero
+historical `CLOSED` rows). No round-lifecycle runtime behavior was
+implemented; `assertActivatedRotationIntegrity` was deliberately left
+unchanged, per this ticket's own explicit instruction.
+
+**TICKET 7K.13 — ROUND LIFECYCLE SERVICES: COMPLETE** — see §21.28's own
+implementation note. `activateFirstRound`/`advanceRound` now exist and
+are fully tested, including real-PostgreSQL concurrency evidence for six
+distinct races. No Server Action, UI, or schema change; circle completion
+remains a separate, unimplemented future operation, exactly as §21.13/
+§21.25 froze.
+
+**TICKET 7K.14 — ROUND LIFECYCLE SERVER ACTIONS: COMPLETE** — see
+§21.29's own implementation note. `activateFirstRoundAction`/
+`advanceRoundAction` now exist, owner-authenticated, input-whitelisted,
+and fully tested (behavioral tests for both cores, structural tests for
+the thin wrapper and for UI isolation). No UI, schema, or completion logic
+was added; circle completion remains a separate, unimplemented future
+operation, exactly as §21.13/§21.25 froze.
+
+**TICKET 7K.15 — OWNER ROUND LIFECYCLE READ MODEL: COMPLETE** — see
+§21.30's own implementation note. `getOwnerRoundLifecycle` now exists,
+ACTIVE-only, reusing (never duplicating) 7K.13's own repository reads and
+two newly-extracted shared domain predicates
+(`assessContributionClosureReadiness`/`assessPayoutClosureReadiness`,
+`src/domain/round-lifecycle.ts`). `round-lifecycle.service.ts` itself was
+refactored to call those same two functions with its 56-test external
+contract verified unchanged. No UI, Server Action, schema, or mutation was
+added; circle completion remains a separate, unimplemented future
+operation, exactly as §21.13/§21.25 froze.

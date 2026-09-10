@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { Prisma } from "@prisma/client";
+
 import {
   assertRotationSequenceIntegrity,
   assertRoundLifecycleStateIntegrity,
+  assessContributionClosureReadiness,
+  assessPayoutClosureReadiness,
+  RoundLifecycleFinancialIntegrityError,
   RoundLifecycleStateIntegrityError,
+  type ContributionClosureObligation,
+  type PayoutClosurePayout,
   type RoundLifecycleRoundRecord,
 } from "./round-lifecycle";
+
+const d = (value: string) => new Prisma.Decimal(value);
+
+const EXPECTED = { amount: d("100.00"), currency: "USD" };
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -190,5 +201,180 @@ test("rejects an UPCOMING round carrying unexpected closure provenance", () => {
   assert.throws(
     () => assertRoundLifecycleStateIntegrity([{ ...upcoming(1), closedAt: now, closedById: "owner-1" }]),
     RoundLifecycleStateIntegrityError,
+  );
+});
+
+// -------------------------------------------------------------------
+// assessContributionClosureReadiness (7K.15 extraction)
+// -------------------------------------------------------------------
+
+function fulfilledObligation(confirmedAmount = d("100.00")): ContributionClosureObligation {
+  return { expectedAmount: d("100.00"), status: "FULFILLED", fulfilledAt: now, confirmedAmount };
+}
+
+function openObligation(confirmedAmount = d("0.00")): ContributionClosureObligation {
+  return { expectedAmount: d("100.00"), status: "OPEN", fulfilledAt: null, confirmedAmount };
+}
+
+test("READY when every obligation is fulfilled and ledger-coherent", () => {
+  assert.equal(
+    assessContributionClosureReadiness([fulfilledObligation(), fulfilledObligation()]),
+    "READY",
+  );
+});
+
+test("INCOMPLETE when at least one obligation is genuinely OPEN with no confirmed ledger support", () => {
+  assert.equal(
+    assessContributionClosureReadiness([fulfilledObligation(), openObligation()]),
+    "INCOMPLETE",
+  );
+});
+
+test("rejects an empty obligation set as an integrity failure, not as ordinary incompleteness", () => {
+  assert.throws(() => assessContributionClosureReadiness([]), RoundLifecycleFinancialIntegrityError);
+});
+
+test("rejects FULFILLED status with no coherent confirmed ledger support (corruption, not incompleteness)", () => {
+  assert.throws(
+    () => assessContributionClosureReadiness([fulfilledObligation(d("0.00"))]),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects OPEN status despite a coherent confirmed payment already covering it (corruption, not readiness)", () => {
+  assert.throws(
+    () => assessContributionClosureReadiness([openObligation(d("100.00"))]),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a FULFILLED obligation missing its fulfilledAt timestamp", () => {
+  assert.throws(
+    () => assessContributionClosureReadiness([{ ...fulfilledObligation(), fulfilledAt: null }]),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects an OPEN obligation that carries a fulfilledAt timestamp it should not have", () => {
+  assert.throws(
+    () => assessContributionClosureReadiness([{ ...openObligation(), fulfilledAt: now }]),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("a rejected historical payment attempt alongside a coherent confirmed one is still READY (only CONFIRMED sums are ever passed in)", () => {
+  // The caller (repository-level sum) already excludes REJECTED attempts
+  // from confirmedAmount -- this function only ever sees the final
+  // confirmed total, so a fulfilled obligation whose confirmedAmount
+  // reflects "one rejected + one confirmed" is indistinguishable here from
+  // "one confirmed," and correctly reads READY.
+  assert.equal(assessContributionClosureReadiness([fulfilledObligation(d("100.00"))]), "READY");
+});
+
+// -------------------------------------------------------------------
+// assessPayoutClosureReadiness (7K.15 extraction)
+// -------------------------------------------------------------------
+
+const RECIPIENT_ID = "member-1";
+
+function confirmedPayout(overrides: Partial<PayoutClosurePayout> = {}): PayoutClosurePayout {
+  return {
+    status: "CONFIRMED",
+    currency: "USD",
+    amount: d("100.00"),
+    recordedById: "owner-1",
+    confirmedAt: now,
+    confirmedByMemberId: RECIPIENT_ID,
+    disputedAt: null,
+    disputedByMemberId: null,
+    disputeReason: null,
+    ...overrides,
+  };
+}
+
+test("MISSING when no payout has been recorded", () => {
+  assert.equal(assessPayoutClosureReadiness(null, RECIPIENT_ID, EXPECTED), "MISSING");
+});
+
+test("NOT_CONFIRMED for a RECORDED-only payout", () => {
+  const payout: PayoutClosurePayout = {
+    status: "RECORDED",
+    currency: "USD",
+    amount: d("100.00"),
+    recordedById: "owner-1",
+    confirmedAt: null,
+    confirmedByMemberId: null,
+    disputedAt: null,
+    disputedByMemberId: null,
+    disputeReason: null,
+  };
+  assert.equal(assessPayoutClosureReadiness(payout, RECIPIENT_ID, EXPECTED), "NOT_CONFIRMED");
+});
+
+test("DISPUTED is a valid terminal classification, never treated as corruption", () => {
+  const payout: PayoutClosurePayout = {
+    status: "DISPUTED",
+    currency: "USD",
+    amount: d("100.00"),
+    recordedById: "owner-1",
+    confirmedAt: null,
+    confirmedByMemberId: null,
+    disputedAt: now,
+    disputedByMemberId: RECIPIENT_ID,
+    disputeReason: "wrong amount",
+  };
+  assert.equal(assessPayoutClosureReadiness(payout, RECIPIENT_ID, EXPECTED), "DISPUTED");
+});
+
+test("READY for a coherent CONFIRMED payout", () => {
+  assert.equal(assessPayoutClosureReadiness(confirmedPayout(), RECIPIENT_ID, EXPECTED), "READY");
+});
+
+test("rejects an amount drift on a CONFIRMED payout", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ amount: d("99.99") }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a currency drift on a CONFIRMED payout", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ currency: "EUR" }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a CONFIRMED payout whose confirmedByMemberId does not match the round's recipient", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ confirmedByMemberId: "someone-else" }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a CONFIRMED payout missing its confirmedAt timestamp", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ confirmedAt: null }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a CONFIRMED payout that also carries dispute provenance", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ disputedAt: now }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a CONFIRMED payout with an empty recordedById", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ recordedById: "" }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("rejects a payout with an unrecognized status", () => {
+  assert.throws(
+    () => assessPayoutClosureReadiness(confirmedPayout({ status: "SOMETHING_ELSE" }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
   );
 });

@@ -1,3 +1,8 @@
+import { Prisma } from "@prisma/client";
+
+import { isObligationFulfilled } from "@/src/domain/contribution-accounting";
+import { amountMatchesExpectedPayout, type ExpectedPayoutAmount } from "@/src/domain/payout-accounting";
+
 // Pure, framework-free round-lifecycle-STATE integrity for the SUSU
 // PayoutRound state machine (7K.13, implementing the frozen 7K.11
 // contract, docs/product/susu-payout-workflow-audit.md §21.6/§21.8) --
@@ -19,11 +24,32 @@
 // `assertActivatedRotationIntegrity` calls into this module (see that
 // file's own comment) rather than duplicating this logic, and
 // round-lifecycle.service.ts uses it directly for its own preconditions.
+//
+// 7K.15 extraction: assessContributionClosureReadiness/
+// assessPayoutClosureReadiness (below) are the SAME per-obligation/
+// per-payout financial-closure predicate round-lifecycle.service.ts's own
+// assertContributionsReadyToClose/assertPayoutReadyToClose used to inline
+// directly -- extracted here, unchanged in substance, so
+// round-lifecycle-owner-read.service.ts (7K.15) can classify the exact
+// same "ready / ordinary blocker / corruption" outcome for DISPLAY that
+// round-lifecycle.service.ts uses to decide whether advanceRound may
+// WRITE, without either module reimplementing the other's rule or the
+// read model calling the mutation service "to check." Both callers wrap
+// this module's own `RoundLifecycleFinancialIntegrityError` in their own
+// named integrity error, exactly like they already each wrap
+// `RoundLifecycleStateIntegrityError`.
 
 export class RoundLifecycleStateIntegrityError extends Error {
   constructor(message = "This circle's persisted round lifecycle state is inconsistent.") {
     super(message);
     this.name = "RoundLifecycleStateIntegrityError";
+  }
+}
+
+export class RoundLifecycleFinancialIntegrityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RoundLifecycleFinancialIntegrityError";
   }
 }
 
@@ -141,4 +167,112 @@ export function assertRoundLifecycleStateIntegrity(
       );
     }
   }
+}
+
+export type ContributionClosureObligation = {
+  readonly expectedAmount: Prisma.Decimal;
+  readonly status: string;
+  readonly fulfilledAt: Date | null;
+  readonly confirmedAmount: Prisma.Decimal;
+};
+
+/**
+ * The round-closure contribution-readiness predicate (7K.13 section 12,
+ * extracted 7K.15): re-derives each obligation's TRUE fulfillment from its
+ * caller-supplied confirmed-payment ledger total (isObligationFulfilled,
+ * contribution-accounting.ts) -- ContributionObligation.status is never
+ * trusted as sole payment truth -- but refuses outright, as a genuine
+ * integrity failure rather than ordinary incompleteness, whenever the
+ * persisted status/fulfilledAt DISAGREES with the ledger it is supposed to
+ * project. The caller is responsible for fetching every obligation for the
+ * round and its own confirmed-payment sum (this function has no database
+ * access of its own); an empty obligation set is itself a failure (a
+ * validly activated round always has at least one obligation per member),
+ * never treated as "nothing to confirm."
+ *
+ * Returns "READY" only once every obligation is both status-coherent AND
+ * ledger-fulfilled; "INCOMPLETE" is an ordinary, waitable business state,
+ * never conflated with the thrown integrity failure.
+ */
+export function assessContributionClosureReadiness(
+  obligations: readonly ContributionClosureObligation[],
+): "READY" | "INCOMPLETE" {
+  if (obligations.length === 0) {
+    throw new RoundLifecycleFinancialIntegrityError(
+      "No contribution obligations exist for this round; closure readiness cannot be determined.",
+    );
+  }
+
+  let allFulfilled = true;
+  for (const obligation of obligations) {
+    const ledgerFulfilled = isObligationFulfilled(obligation.confirmedAmount, obligation.expectedAmount);
+    const statusFulfilled = obligation.status === "FULFILLED";
+
+    if (statusFulfilled !== ledgerFulfilled) {
+      throw new RoundLifecycleFinancialIntegrityError(
+        "A contribution obligation's persisted status disagrees with its confirmed-payment ledger.",
+      );
+    }
+    if (statusFulfilled && obligation.fulfilledAt === null) {
+      throw new RoundLifecycleFinancialIntegrityError("A FULFILLED obligation must carry a fulfilledAt timestamp.");
+    }
+    if (!statusFulfilled && obligation.fulfilledAt !== null) {
+      throw new RoundLifecycleFinancialIntegrityError("An OPEN obligation must carry no fulfilledAt timestamp.");
+    }
+
+    if (!ledgerFulfilled) allFulfilled = false;
+  }
+
+  return allFulfilled ? "READY" : "INCOMPLETE";
+}
+
+export type PayoutClosurePayout = {
+  readonly status: string;
+  readonly currency: string;
+  readonly amount: Prisma.Decimal;
+  readonly recordedById: string;
+  readonly confirmedAt: Date | null;
+  readonly confirmedByMemberId: string | null;
+  readonly disputedAt: Date | null;
+  readonly disputedByMemberId: string | null;
+  readonly disputeReason: string | null;
+};
+
+/**
+ * The round-closure payout-readiness predicate (7K.13 section 13,
+ * extracted 7K.15): a missing or non-CONFIRMED payout is ordinary
+ * incompleteness (a specific, distinct classification per status); a
+ * CONFIRMED payout is re-verified against the round's own frozen
+ * recipient/expected amount -- any incoherence there is refused as a
+ * genuine integrity failure, never silently downgraded to "not ready."
+ * DISPUTED is always a valid persisted terminal business state, never
+ * treated as corruption.
+ */
+export function assessPayoutClosureReadiness(
+  payout: PayoutClosurePayout | null,
+  recipientId: string,
+  expected: ExpectedPayoutAmount,
+): "MISSING" | "NOT_CONFIRMED" | "DISPUTED" | "READY" {
+  if (!payout) return "MISSING";
+  if (payout.status === "RECORDED") return "NOT_CONFIRMED";
+  if (payout.status === "DISPUTED") return "DISPUTED";
+  if (payout.status !== "CONFIRMED") {
+    throw new RoundLifecycleFinancialIntegrityError("A round's persisted payout has an unrecognized status.");
+  }
+
+  if (
+    payout.currency !== expected.currency
+    || !amountMatchesExpectedPayout(payout.amount, expected.amount)
+    || payout.recordedById.length === 0
+    || payout.confirmedAt === null
+    || payout.confirmedByMemberId === null
+    || payout.confirmedByMemberId !== recipientId
+    || payout.disputedAt !== null
+    || payout.disputedByMemberId !== null
+    || payout.disputeReason !== null
+  ) {
+    throw new RoundLifecycleFinancialIntegrityError("A CONFIRMED payout's persisted fields are internally inconsistent.");
+  }
+
+  return "READY";
 }
