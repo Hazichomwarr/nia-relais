@@ -1108,14 +1108,797 @@ Mirroring the contribution workflow's own narrow-ticket precedent
   `expectedPayout`, filtered at the database layer by
   `circleId AND recipientId = memberId`. See §14's own 7K.8
   implementation note.
-- **7K.9** — Owner payout-recording UI.
-- **7K.10** — Recipient confirm/dispute UI.
-- **7K.11** — Live concurrency verification (§11), mirroring 7J.9's own
-  dedicated concurrency-guard ticket for contributions.
-- **Separately, not part of this sequence** — round-lifecycle
-  transitions (§12) and circle completion (§13), confirmed by 7K.1 as
-  their own future lifecycle slice, deliberately not a prerequisite for
-  any 7K payout-writer ticket.
+- **7K.9** — ✅ **COMPLETE.** Owner payout-recording UI: `payout-desk.tsx`
+  wired into the ACTIVE owner workspace alongside `ContributionDesk`,
+  rendering `getOwnerCirclePayouts` (7K.7) and a `RecordPayoutForm` bound
+  to `recordPayoutAction` (7K.6). No owner confirm/dispute control; no
+  round-lifecycle mutation.
+- **7K.10** — ✅ **COMPLETE.** Recipient confirm/dispute UI: `member-payout
+  -card.tsx` additively wired into the member dashboard (`getCircleMember
+  Dashboard` itself untouched), rendering `getCircleMemberPayouts` (7K.8)
+  and `member-payout-controls.tsx` (confirm + dispute) bound to `confirm
+  PayoutAction`/`disputePayoutAction` (7K.6). Decision controls appear
+  only for a RECORDED payout, never gated on `round.status`.
+- **7K.11** — ✅ **COMPLETE, this document's own new §21.** Round
+  lifecycle audit & V1 contract for `UPCOMING → ACTIVE → CLOSED`.
+  **Renumbered from this list's original plan**: the sequence originally
+  drafted here called 7K.11 "live concurrency verification" (mirroring
+  7J.9) — that work was never separately ticketed and is superseded by
+  this entry; live concurrency coverage for payout confirm/dispute
+  already shipped as part of 7K.4/7K.5 themselves (see those sections'
+  own real-race tests), so no separate concurrency-only ticket was ever
+  needed. Documentation/architecture only — no service, repository,
+  action, UI, or schema change. See §21 for the full contract.
+- **Round-lifecycle implementation and circle completion** — confirmed by
+  7K.1 as their own future lifecycle slice, deliberately not a
+  prerequisite for any 7K payout-writer ticket. §21 (7K.11) freezes the
+  contract those future tickets implement against; neither is
+  implemented yet.
+
+## 21. Round Lifecycle V1 Contract — 7K.11 (Audit & Freeze)
+
+**Status: audit and contract only. No runtime lifecycle behavior exists
+yet.** Every claim below is sourced from direct reads of
+`prisma/schema.prisma`, `src/repositories/circle.repository.ts`,
+`src/services/circle.service.ts` (`activateCircle` and
+`assertActivatedRotationIntegrity`), `src/domain/circle-rotation-
+schedule.ts`, `src/domain/circle-round-selection.ts`, every payout/
+contribution service under `src/services/`, and a codebase-wide grep for
+every runtime write to `PayoutRound` — not assumed from this document's
+own earlier sections or from ticket text.
+
+### 21.1 The historical question
+
+**"What historical information must round progression preserve so the
+state of a SUSU circle can still be understood correctly years later?"**
+
+- **Which round was ACTIVE, when, and why.** `PayoutRound.activatedAt`/
+  `activatedById` — once a lifecycle writer exists, these must record the
+  real actor and instant a round's collection period began, never
+  reconstructed from "whichever round currently has the lowest
+  roundNumber."
+- **Which round was CLOSED, and when.** `PayoutRound.closedAt` — see
+  §21.15 for whether `closedById` must also exist.
+- **That closure depended on specific, already-frozen financial facts**
+  (§21.9) — not re-derivable after the fact from `PayoutRound` alone; the
+  historical authority for "were obligations fulfilled" and "was the
+  payout confirmed" remains `ContributionObligation`/`ContributionPayment`
+  /`Payout`, exactly as already frozen (§§4–10 of this document). Round
+  lifecycle never duplicates that data onto `PayoutRound` itself.
+- **Which member was the authoritative recipient of each round** —
+  already frozen: `PayoutRound.recipientId`, immutable since activation
+  (§1). Lifecycle progression reads this, never re-derives it from
+  current `payoutOrder`.
+- **How next-round progression is reconstructed historically** — the
+  answer this section freezes: purely from `PayoutRound.roundNumber`
+  (persisted, frozen at activation) plus each round's own `status`/
+  `activatedAt`/`closedAt` — never from `CircleMember.payoutOrder`, never
+  from today's date, never from `SavingsCircle.frequency`.
+
+**Rule, restated:** everything on `PayoutRound` once created (identity,
+`recipientId`, `dueDate`, `roundNumber`) remains immutable; only `status`
+and its two corresponding provenance groups (`activatedAt`/`activatedById`,
+`closedAt`[/`closedById`, see §21.15]) are ever written after creation,
+each exactly once, on the one permitted transition into that state. This
+mirrors `Payout`'s own immutability rule (§4) exactly.
+
+### 21.2 Current persistence — confirmed field-by-field
+
+`SavingsCircle` (`prisma/schema.prisma:207-238`): `status`
+(`CircleStatus`: DRAFT/ACTIVE/COMPLETED/CANCELLED/ARCHIVED), `startDate`,
+`activatedAt`/`activatedById`, `completedAt`/`completedById`,
+`archivedAt`/`archivedById` — all three lifecycle transitions already
+have full actor+timestamp provenance columns, even though only
+`activatedAt`/`activatedById` currently have a writer (`activateCircle`).
+`completedAt`/`completedById`/`archivedAt`/`archivedById` exist in schema
+today with **zero runtime writer anywhere** (confirmed by the same
+codebase-wide grep methodology as §1's own "zero runtime writer" finding
+for `Payout`) — circle completion and archival are schema-ready but
+unimplemented, exactly like payout recording once was.
+
+`PayoutRound` (`prisma/schema.prisma:319-346`): `status`
+(`PayoutRoundStatus`: UPCOMING/ACTIVE/CLOSED, `@default(UPCOMING)`),
+`roundNumber`, `recipientId` (compound FK to `CircleMember(id, circleId)`),
+`dueDate`, `activatedAt`, `activatedById` (FK to `User`), `closedAt`.
+**Confirmed: no `closedById` field exists in the schema today** — `closedAt`
+has no actor-provenance counterpart, unlike every other terminal-ish
+transition in this system (`recordedById`, `confirmedByMemberId`,
+`disputedByMemberId`, `activatedById`, `completedById`, `archivedById`).
+See §21.15 for the decision this asymmetry now requires.
+`@@unique([circleId, roundNumber])`, `@@unique([circleId, recipientId])`,
+`@@unique([id, circleId])`, `@@index([circleId, status, roundNumber])` —
+no unique constraint of any kind exists on `status` itself (see §21.8).
+
+`ContributionObligation`/`ContributionPayment`/`Payout`/`CircleMember`:
+unchanged from §§2 and prior contribution-workflow audits; not restated
+here except where a specific lifecycle predicate depends on an exact
+field (§21.9).
+
+### 21.3 Current round writers — confirmed: exactly one, at creation only
+
+A codebase-wide grep for every call to `.payoutRound.update`,
+`.updateMany`, `.upsert`, or `.delete` returns **zero results**. The
+**only** write to `PayoutRound` anywhere in runtime code is
+`createCircleActivationRounds` (`circle.repository.ts:262-282`), called
+from `activateCircle` (`circle.service.ts:597-604`), which creates one
+row per ACTIVE member with:
+
+```
+status: "UPCOMING", activatedAt: null, activatedById: null, closedAt: null
+```
+
+**Confirmed: no runtime code activates or closes a round today.** No
+contribution writer (`recordContribution`/`confirmContribution`/
+`rejectContribution`), no payout writer (`recordPayout`/`confirmPayout`/
+`disputePayout`), and no read model reads-then-writes `PayoutRound.status`
+as a side effect — every one of those six services was independently
+audited (payout services in this document's own §§7–11; contribution
+services carry the identical, already-frozen guarantee from the 7J
+audit/freeze) and none references `payoutRound.update*` anywhere in its
+own source. This document's own earlier §1 finding ("no round is ever
+created ACTIVE... nothing writes `PayoutRound.status`") is reconfirmed,
+not merely repeated from memory.
+
+**A load-bearing finding for the next implementation ticket, discovered
+by this audit:** `assertActivatedRotationIntegrity`
+(`circle.service.ts:289-356`) — the defensive re-verification function
+`activateCircle` runs both on a fresh activation and on every **replay**
+of an already-ACTIVE circle's activation call — currently hard-asserts,
+for **every** persisted round, that `round.status !== "UPCOMING"` is a
+disqualifying integrity failure (alongside `activatedAt !== null`,
+`activatedById !== null`, and `closedAt !== null`, each also disqualifying).
+In plain terms: **this function today assumes every round remains
+UPCOMING forever**, and will throw `CircleActivationIntegrityError` for a
+circle whose rounds have legitimately progressed once a lifecycle writer
+exists.
+
+This is **not** a current bug (no lifecycle writer exists yet, so this
+branch is unreachable today) and does **not** block freezing this
+contract. But it **is** a concrete, required code change for whichever
+ticket implements round lifecycle: `activateCircle`'s own replay branch
+(`circle.service.ts:572-583`, reached only when a caller resubmits an
+activation request for a circle that is already ACTIVE — e.g. a retried
+form submission) must stop treating "a round is no longer UPCOMING" as
+corruption. The narrowest correct fix is to relax
+`assertActivatedRotationIntegrity`'s four disqualifying checks to their
+activation-time invariants only (`roundNumber`/`recipientId`/`dueDate`
+match, obligations intact) and drop the `status`/`activatedAt`/
+`activatedById`/`closedAt` checks entirely from this function — round
+lifecycle's own future integrity checks (§21.20) become the authority for
+those fields instead, exactly as this document's own established
+discipline already separates "activation-time shape integrity" from
+"payout/dispute provenance integrity" into different functions rather
+than one function trying to own both. **Flagged as a required, scoped
+implementation-ticket task — not implemented here, per this ticket's own
+explicit "documentation only" instruction.**
+
+### 21.4 Current display/read assumptions — confirmed, already compatible
+
+`selectCurrentAndNextRound` (`src/domain/circle-round-selection.ts`),
+shared unchanged by `circle-active-owner.service.ts` (owner) and
+`circle-member-dashboard.service.ts` (member):
+
+- Exactly one `ACTIVE` round → that round is `currentRound`, `nextRound`
+  is `null`.
+- Zero `ACTIVE` rounds, circle status `ACTIVE` → the lowest-`roundNumber`
+  round that is not `CLOSED` becomes `nextRound` (never `currentRound`);
+  if every round is `CLOSED`, both are `null`.
+- Zero `ACTIVE` rounds, circle status not `ACTIVE` → both `null`
+  (reachable in practice only for COMPLETED/ARCHIVED, since `requireCircleMember`
+  excludes DRAFT/CANCELLED from ever reaching a dashboard read).
+- **Not explicitly handled: more than one `ACTIVE` round.** The
+  `activeRounds.length === 1` check simply falls through when the count is
+  ≠ 1 (0 or ≥2 alike), landing on the "lowest non-CLOSED round" branch
+  either way — a genuine multi-ACTIVE corruption would silently render as
+  "no current round, next round = the lowest non-closed one," **never**
+  surfacing as an error to the owner or member. This is unreachable today
+  (no writer can produce it) and is not a defect in the read layer's
+  existing contract (it was never asked to detect write-side corruption),
+  but it means **the read layer provides no safety net** — §21.8/§21.20
+  therefore places the entire burden of preventing a multi-ACTIVE state on
+  the future lifecycle writer's own CAS/lock discipline, not on defensive
+  reads. A future ticket may choose to harden the read helper to detect
+  and explicitly flag `activeRounds.length > 1` as an integrity error, but
+  this is not required for 7K.11's own contract to be sound, and is not
+  decided here.
+
+`payout-desk.tsx` (owner) and `member-payout-card.tsx`/`member-dashboard
+.tsx` (member) render **every** persisted round's own `status` verbatim
+(via `getRoundStatusBadge`/`getRoundStatusPresentation`) and never
+introduce a second "current round" concept of their own — `payout-desk
+.tsx` in particular has no current/next distinction at all, listing every
+round unconditionally. **No existing UI/read-model code assumes anything
+beyond**: "zero or one round may be ACTIVE at a time" is treated as the
+only two expected states, and a `CLOSED` count (`closedRoundCount` in the
+owner summary) is displayed as a plain progress figure, never used to
+gate any read or write.
+
+**Reassuring finding, not merely neutral:** because `selectCurrentAndNextRound`
+already gracefully renders "next round = round 1, still UPCOMING" (the
+exact shape a circle is in immediately after activation, before any
+lifecycle writer exists) and "no current or next round" (the exact shape
+once every round is CLOSED, before circle completion exists), **the
+already-shipped display layer requires zero changes** to correctly render
+either of the two legitimate zero-ACTIVE states this contract freezes in
+§21.8 — both were, whether by design or fortunate convergence, already
+anticipated by the 7H.2/7I.6 read models built before any lifecycle
+writer existed.
+
+### 21.5 Round status purpose — frozen
+
+**`PayoutRound.status` is an operational/progression marker. It is NOT,
+and never becomes, financial mutation authorization.** This document's
+own frozen contract already established the inverse direction of this
+rule for payouts (7K.1 item 3: payout recording is never gated by round
+status) and for contributions (7J.1 decision #1, restated at §1/§7 of
+this document); this section extends the SAME rule to state it applies
+in **both** directions and is not narrowed by round lifecycle's own
+future existence:
+
+- Contribution recording/confirmation/rejection remain governed **only**
+  by the already-frozen 7J rules. A late contribution for round 1 may
+  still be recorded and confirmed while round 3 is the current ACTIVE
+  round, exactly as today.
+- Payout recording/confirmation/dispute remain governed **only** by the
+  already-frozen 7K rules (this document, §§7–11). `ACTIVE` is never
+  reinterpreted as "the only round whose financial records may change."
+- **Verified compatible, not merely asserted:** every one of the six
+  existing financial writers (`recordContribution`, `confirmContribution`,
+  `rejectContribution`, `recordPayout`, `confirmPayout`, `disputePayout`)
+  was independently confirmed, by direct source read, to contain **no**
+  reference to `PayoutRound.status` at all — round lifecycle can be
+  implemented without touching, and without needing to touch, any of
+  those six functions.
+
+### 21.6 V1 state machine — frozen
+
+```
+UPCOMING → ACTIVE → CLOSED
+```
+
+Forbidden, absolutely, in V1: `CLOSED → ACTIVE`, `CLOSED → UPCOMING`,
+`ACTIVE → UPCOMING`, `UPCOMING → CLOSED` directly (skipping ACTIVE). No
+reopening. No round-level cancellation state (schema has none — adding
+one is out of scope, §21.26). No skipped rounds (§21.11). No replacement
+recipient, no reassignment after activation (already immutable, §1/§21.1).
+
+**Schema support: fully sufficient, no migration required for the state
+machine itself.** `PayoutRoundStatus` already has exactly the three
+values this machine needs; nothing about the transition rules above
+requires a new enum value, a new column, or a new table. (§21.15 covers
+the one, narrower, provenance-column question — not the state machine.)
+
+### 21.7 First-round activation — DECISION: Option B, frozen
+
+**Frozen: circle activation leaves every round `UPCOMING`
+(`activatedAt`/`activatedById` both `null`) — exactly `activateCircle`'s
+own already-shipped, already-frozen (7I.5) behavior, confirmed unchanged
+by direct read in §21.3. Round 1's activation is a distinct, explicit,
+separately-ticketed owner action, not a side effect of `activateCircle`.**
+
+Evaluated against every criterion this ticket names:
+
+- **No amendment to a frozen contract required.** Option A would require
+  changing `activateCircle` itself — an already-shipped, already-frozen
+  (7I.5) implementation contract — to additionally decide "and round 1
+  becomes ACTIVE" inside the same atomic write. Option B requires
+  **zero** change to `activateCircle`; it is already exactly this. Per
+  this ticket's own instruction ("state explicitly that it would amend an
+  earlier frozen contract and why that is worth doing"): no such
+  justification was found strong enough to outweigh leaving a
+  already-correct, already-tested function untouched.
+- **Auditability / user mental model.** Activating a circle ("the cohort
+  and rotation are now locked in") and starting round 1's collection
+  period ("the clock on round 1 has begun") are two conceptually distinct
+  facts an owner may reasonably want to confirm as two deliberate
+  moments, not one bundled click. This mirrors the already-frozen
+  reasoning for why payout recording and payout confirmation are separate
+  actor-attributed events rather than one bundled write.
+- **circle.startDate semantics.** §21.17 concludes `startDate` is a
+  schedule/display anchor for due-date computation, not an activation
+  trigger — Option A would have had to either ignore `startDate` (an
+  odd inconsistency) or silently treat it as an implicit "auto-start"
+  condition, reopening exactly the ambiguity Option C is rejected for.
+  Option B requires no interpretation of `startDate` as anything other
+  than what it already is.
+- **No background scheduler exists, and Option C is rejected outright.**
+  A codebase-wide grep for `cron`/`scheduler`/`setInterval` confirms this
+  application has **no** background job infrastructure of any kind. Option
+  C (auto-activate round 1 based on `startDate`/current date) would
+  require inventing net-new infrastructure this codebase has never had,
+  purely to save one owner click — and would make "why did round 1
+  become ACTIVE" unanswerable from any single request/actor, violating
+  §21.1's own historical-authority requirement (`activatedById` would
+  have no honest value to record). **Rejected, without qualification.**
+- **Race safety.** A tie between Option A and B — round 1's identity is
+  deterministic (`roundNumber = 1`) either way, and whichever operation
+  performs the write still does so under the shared `SavingsCircle` lock
+  (§21.18). Not a deciding factor.
+- **Future mobile/API behavior.** Option B is strictly more flexible: a
+  future non-web client gains one more explicit, individually-callable
+  operation (`activateFirstRound`) rather than an implicit side effect
+  buried inside circle activation's own response shape.
+
+**Legitimate consequence, made explicit:** a circle may remain `ACTIVE`
+with **zero `ACTIVE` rounds** indefinitely, for as long as the owner has
+not yet explicitly started round 1. This is not a corrupted or
+transient state — it is the expected, normal shape of a freshly-activated
+circle in V1, and (per §21.4) the existing display layer already renders
+it correctly today with zero changes required.
+
+### 21.8 Exactly-one-ACTIVE invariant — frozen
+
+**At most one `ACTIVE` round, always. Exactly one `ACTIVE` round while
+progression is "in flight" (round 1 has been explicitly started and not
+every round is yet `CLOSED`).** Legitimate zero-`ACTIVE` states,
+enumerated exhaustively:
+
+1. **Pre-round-1-start** (§21.7) — may persist indefinitely.
+2. **Post-final-round-closure, pre-circle-completion** — every round
+   `CLOSED`, circle still `ACTIVE`; a valid, expected pre-completion state
+   (§21.13/§21.25).
+3. **Corrupted state only** — anything else with zero `ACTIVE` rounds
+   mid-rotation (some `CLOSED`, some `UPCOMING`, none `ACTIVE`, with the
+   rotation not yet complete) is **not** legitimate and must be refused as
+   a lifecycle integrity error by any future write attempt that discovers
+   it (§21.20) — it means progression got stuck without an `ACTIVE`
+   round, which no correctly-serialized writer can produce on its own.
+
+**Schema constraint: not required for V1.** No unique index on `status`
+exists today (§21.2), and none is recommended. Reasoning: exactly one
+service will ever write `PayoutRound.status` (the future lifecycle
+service), every write happens under the shared `SavingsCircle` row lock
+(§21.18), and each transition is a single, CAS-guarded, single-writer
+operation performed inside one transaction — there is no code path, now
+or reachable in V1, through which two different rounds could be set
+`ACTIVE` by two different uncoordinated writers, unlike `Payout`'s own
+`@@unique([roundId])` (which defends against a *distinct future writer*
+retrying a already-occupied slot — a scenario that genuinely can and does
+happen for payout recording, §6). A DB-level partial unique index
+(`WHERE status = 'ACTIVE'`, scoped per `circleId`) would be pure
+defense-in-depth against a hypothetical future bug in a writer that does
+not yet exist, not a correctness requirement — consistent with this
+ticket's own "prefer no migration unless a genuine integrity hole
+requires one." **Decision: no migration for this invariant.** The future
+lifecycle service's own test suite must instead prove this invariant
+holds under real concurrency (mirroring 7K.5's own real confirm-vs-dispute
+race test) as its actual defense.
+
+### 21.9 Round closure financial predicate — frozen, precisely
+
+A round may close only when **all three** hold:
+
+1. Every persisted `ContributionObligation` for that round is `FULFILLED`.
+2. The round has a `Payout` row (guaranteed at most one, by
+   `@@unique([roundId])`, §6).
+3. That `Payout.status === "CONFIRMED"`.
+
+Therefore: no payout → cannot close. `RECORDED` payout → cannot close.
+`DISPUTED` payout → cannot close (§21.10). Any `OPEN` obligation → cannot
+close. **Never required**: `dueDate` having arrived, the round being the
+current calendar period, every `ContributionPayment` attempt being
+non-`REJECTED`, or the absence of historical rejected attempts — a
+rejected-then-successfully-recorded-and-confirmed contribution history is
+exactly as eligible as a first-attempt success (already the frozen 7J
+rule; round closure does not narrow it).
+
+**Projection-integrity question, answered: closure must re-derive
+obligation fulfillment from the confirmed-payment ledger, never trust
+`ContributionObligation.status` alone.** `ContributionObligation.status`
+**is** written (`fulfillOpenObligation`, atomically alongside payment
+confirmation) — it is not a purely-derived display field — but this
+document's own repeatedly-cited discipline (§1, and the 7H/7J audits
+before it) holds that `.status` must never be trusted as *sole* payment
+truth by any consumer. Round closure is a consumer. **Recommended
+implementation boundary**: reuse `isObligationFulfilled`/
+`amountMatchesObligation` (`src/domain/contribution-accounting.ts`,
+already-proven, already-shared by `contribution-owner-read.service.ts`
+and `circle-member-dashboard.service.ts`) against a fresh, lock-held
+confirmed-payment-sum read (the same `findConfirmedPaymentSums`-shaped
+query those services already use) — **not** a new validation concept,
+the exact same one, called one more time. Symmetrically, the payout leg
+of the predicate should reuse `computeExpectedPayoutAmount`/
+`amountMatchesExpectedPayout` (`src/domain/payout-accounting.ts`) against
+the round's frozen obligations, exactly as `payout-owner-read.service.ts`
+/`payout-member-read.service.ts` already do (§21's own sibling read
+models) — never a third, independently-reimplemented amount check.
+
+### 21.10 Disputed payout effect — frozen
+
+**A `DISPUTED` payout permanently blocks that round's closure in V1.**
+Because V1 has no payout reversal, no replacement payout, no owner
+override, and no dispute adjudication (already frozen, §6/this document's
+own non-goals), a disputed round has no path back to a closeable state —
+it may remain `ACTIVE` and unclosed indefinitely. **This is intentional,
+not a lifecycle bug**, restated from this document's own earlier language
+(§6) and now extended explicitly to round progression.
+
+**Frozen consequence for later rounds: YES — a dispute in round N
+permanently prevents round N+1 (and every round after it) from becoming
+`ACTIVE`.** This is not an independent rule requiring its own enforcement
+mechanism; it falls out directly, as a corollary, from §21.9 (round N
+cannot close while disputed) combined with §21.11 (round N+1 cannot
+activate until round N closes). A circle progresses strictly in rotation
+order and does not advance past an unresolved round.
+
+### 21.11 Sequential round order — frozen
+
+Progression **must** strictly follow `roundNumber` order: round 1 → round
+2 → … → round N. Round N cannot activate until round N−1 is `CLOSED`;
+round N+1 is the **only** legal successor to round N; no skipping, no
+activating an arbitrary `UPCOMING` round out of order, no multiple future
+rounds activated at once. **Sequence authority is exclusively
+`PayoutRound.roundNumber`** (persisted, frozen at activation, §1) — never
+inferred from current `CircleMember.payoutOrder` (which cannot diverge
+from `roundNumber` today, since post-activation membership is immutable,
+§1, but is never the authority regardless, per this document's own
+repeated discipline).
+
+### 21.12 Close + next-activation atomicity — frozen
+
+**For a non-final round, closing round N and activating round N+1 happen
+atomically, in the same transaction, under the same `SavingsCircle` row
+lock.** There must never be a successful partial state where N is
+`CLOSED` and N+1 remains `UPCOMING` — no deliberate architectural reason
+was found to justify one, and allowing it would reintroduce exactly the
+"legitimate zero-ACTIVE-round mid-rotation" ambiguity §21.8 explicitly
+rules out as corruption-only. **For the final round, closing it is the
+entire operation** — `ACTIVE → CLOSED` with no successor activation,
+since none exists. Both shapes are one atomic write (or write-pair) inside
+one `prisma.$transaction`, matching every existing financial writer's own
+proven "acquire lock → re-read fresh → CAS → roll back the whole
+transaction on any failure" shape (§21.18).
+
+### 21.13 Final round / circle-completion boundary — frozen
+
+**Round lifecycle and circle completion remain conceptually and
+operationally separate.** The lifecycle service closes the final round
+and leaves `SavingsCircle.status` at `ACTIVE`; a separate, future
+circle-completion service independently verifies every round `CLOSED`
+and transitions `ACTIVE → COMPLETED`. Reasons, confirmed sound by this
+audit: clean entity/state responsibility (a round-lifecycle writer never
+touches `SavingsCircle.status`, exactly as every existing financial
+writer already never does, §21.5); explicit, separately-attributable
+circle-completion provenance (`completedAt`/`completedById` already exist
+in schema, §21.2, ready for that future writer); no hidden circle
+mutation as a side effect of what is, structurally, a `PayoutRound`-only
+write.
+
+**The temporary state this creates — `SavingsCircle.status === "ACTIVE"`
+with every `PayoutRound.status === "CLOSED"` — is explicitly a valid,
+expected pre-completion state**, not an error, not a state any read model
+needs to guard against, and not one that requires urgent remediation by
+any automatic process (none exists, and none is proposed, §21.14).
+
+### 21.14 Who may advance a round — frozen
+
+**Only the circle owner may initiate round-lifecycle progression, via an
+explicit action.** Evaluated:
+
+- **(A) Explicit owner "Advance round" action — frozen as the V1 rule.**
+- **(B) Automatic closure the instant the financial predicate becomes
+  true — rejected.** This would give `confirmPayout` (or, transitively,
+  `confirmContribution` fulfilling a round's last obligation) a hidden
+  `PayoutRound`-lifecycle side effect — directly contradicting this
+  document's own already-frozen, already-shipped guarantee (7K.4/7K.5,
+  reverified by direct source read in §21.5) that those services touch no
+  round-lifecycle state at all. Adopting (B) now would require reopening
+  and amending two already-frozen, already-shipped service contracts;
+  (A) requires amending neither.
+- **(C) Automatic system lifecycle based on reads/time — rejected**, for
+  the identical reasons Option C is rejected in §21.7 (no scheduler
+  exists; unanswerable actor provenance).
+
+**Member authority: unchanged from what is already shipped** —
+confirm/dispute their own payout only (7K.4/7K.5/7K.10); never round
+lifecycle. **System authority: none** — the financial predicate becoming
+true is a necessary condition for advancement to be *permitted*, never a
+sufficient condition that *triggers* it on its own.
+
+### 21.15 Actor provenance — SCHEMA GAP: migration recommended before implementation
+
+**Decision: SCHEMA GAP — a migration adding `PayoutRound.closedById`
+(nullable `String`, FK to `User`, identical shape to the existing
+`activatedById`) is recommended before the lifecycle-implementation
+ticket begins.** This reverses the earlier, more tentative framing in
+§12 of this document (written before round lifecycle's own actor model
+was frozen), which speculated the `activatedById`/no-`closedById`
+asymmetry might reflect closure being "a derived, computed consequence"
+with "no distinct actor decision to attribute." §21.14, frozen in this
+same audit, settles that speculation the other way: **closure is now an
+explicit, owner-triggered action** (Option A), not a passive derived
+fact — so the same historical-accountability argument that justifies
+`activatedById` applies equally to closure.
+
+The gap is **not merely cosmetic** for one specific, real case: for a
+**non-final** round, the actor who closed round N is always recoverable
+without `closedById`, because §21.12 freezes close-N and activate-(N+1)
+as the *same* atomic operation by the *same* actor at the *same*
+instant — round (N+1)'s own `activatedById`/`activatedAt` already
+carries that provenance, making a separate `closedById` on round N
+redundant information for every non-final round. **But the final round
+has no successor to activate, and therefore no other row anywhere that
+could ever carry the identity of who closed it.** Without `closedById`,
+the actor who closed a circle's last round becomes **permanently
+unrecoverable** the moment that transaction commits — a genuine,
+irreversible historical-fact loss, not a hypothetical one, and precisely
+the kind of question this ticket's own instructions say must be settled
+now rather than deferred "to save a ticket."
+
+**Not decided here**: the exact migration SQL, and whether it should be
+bundled with the lifecycle-implementation ticket's own PR or landed
+narrowly beforehand as its own migration-only change (mirroring how prior
+schema work in this codebase has been sequenced). Either is compatible
+with this contract; 7K.11 itself creates no migration, per its own
+explicit instruction.
+
+### 21.16 dueDate semantics — frozen
+
+**`PayoutRound.dueDate` is historical/scheduling information only. It
+gates nothing.** Confirmed by a codebase-wide grep for `new Date()`/
+`Date.now()` across every domain/service module: no code anywhere
+compares a round's `dueDate` (or `SavingsCircle.startDate`) against the
+current date for any gating purpose, today or as part of this frozen
+contract. `dueDate` may drive display (already does, throughout the
+owner/member UI), and may drive reminders/lateness semantics in a future,
+explicitly out-of-V1 feature (§21.26) — it does not gate contributions,
+payouts, round closure, or round activation. An owner may legitimately
+finish a round early, the instant all financial facts are complete, with
+no dependency on whether `dueDate` has been reached — consistent with the
+already-frozen 7J/7K recording rules this section extends rather than
+narrows.
+
+### 21.17 startDate semantics — frozen (explicit V1 product decision)
+
+Current code leaves the relationship between `SavingsCircle.startDate`
+and round activation **implicit** — no comment or contract anywhere
+previously stated it outright. This audit makes it explicit: **`startDate`
+is a schedule anchor used exclusively by `roundDueDate`
+(`circle-rotation-schedule.ts`) to compute every round's `dueDate` at
+activation time** (round 1's `dueDate` equals `startDate` exactly, by
+construction — `roundDueDate` with `roundNumber = 1` has zero elapsed
+intervals). **It is not an activation gate, and does not mean "round 1
+auto-starts on this date"** — consistent with §21.7's rejection of
+Option C and §21.16's finding that no date-comparison gating exists
+anywhere in this codebase.
+
+### 21.18 Concurrency model — frozen
+
+All future lifecycle writers must: acquire the shared `SavingsCircle`
+`FOR UPDATE` lock first (via the existing, unmodified
+`lockSavingsCircleForUpdate`, §21.19); re-read every piece of
+authoritative state (circle, round(s), obligations, payout) freshly under
+that lock; validate the financial closure predicate (§21.9) under the
+lock; CAS the round transition(s); never trust any pre-lock read as
+current by the time the write happens. This is not a new discipline —
+it is the identical shape every one of the seven existing financial/
+structural writers (`activateCircle` plus the three contribution and
+three payout writers) already independently implements.
+
+Required race outcomes, audited explicitly:
+
+| # | Race | Required outcome |
+|---|---|---|
+| 1 | Two concurrent attempts to advance the same round | Both resolve safely to the identical terminal state; exactly one fresh transition (first to acquire the lock); the second observes the already-CLOSED round + already-ACTIVE successor under its own lock acquisition and resolves as a safe replay (§21.21) |
+| 2 | Advance current round vs. a late contribution confirmation for that round's last obligation | Whichever transaction acquires the lock first is authoritative; if the confirmation commits first, a subsequent advance attempt may then succeed (predicate now true); if advance acquires the lock first and finds an `OPEN` obligation, it fails safely (predicate incomplete) — no retry-and-wait, no partial write |
+| 3 | Advance current round vs. payout confirmation | Same lock-order reasoning as #2; advance either succeeds (payout already CONFIRMED when it re-reads) or fails safely (payout still RECORDED) |
+| 4 | Advance vs. payout dispute | If the round's payout is merely RECORDED, advance already fails on the predicate alone (RECORDED ≠ CONFIRMED) regardless of whether a concurrent dispute is also in flight — there is no window in which advance could succeed against a payout that is about to become DISPUTED; once DISPUTED commits, every future advance attempt fails safely and permanently (§21.10) |
+| 5 | Advance vs. a future circle-completion call | Symmetric to #1 — both serialize through the same lock; whichever commits first is authoritative; the completion service must re-verify "every round CLOSED" fresh under its own lock acquisition, exactly as this section requires of every future writer |
+| 6 | First-round activation attempted concurrently twice | Same shape as #1 — first commits; second observes round 1 already ACTIVE with consistent provenance under its own lock acquisition and resolves as a safe replay |
+
+**No partial transitions, in any race**: because close-N/activate-(N+1)
+(or activate-round-1) is one `prisma.$transaction` callback, any failed
+check anywhere inside it rolls back every write already attempted inside
+the same callback — there is no code shape by which N could end up
+`CLOSED` while N+1 fails to activate, or vice versa.
+
+### 21.19 Cross-service lock order — confirmed, no deviation found
+
+All seven existing writers (`activateCircle`,
+`recordContribution`/`confirmContribution`/`rejectContribution`,
+`recordPayout`/`confirmPayout`/`disputePayout`) were directly re-confirmed,
+by source grep, to call `lockSavingsCircleForUpdate` as their first
+substantive step inside their own transaction, with **zero** deviation.
+There is exactly one lock resource in this schema (the `SavingsCircle`
+row) and every writer acquires it in the same, single order — no writer
+ever holds two different circles' locks simultaneously, so no cross-circle
+deadlock ordering concern applies either. **The future lifecycle service
+must use the identical, unmodified `lockSavingsCircleForUpdate` primitive
+from `circle-lock.repository.ts`** — no new lock table, no new lock
+primitive, no per-round lock. Doing otherwise would be the one change
+capable of introducing a genuine split-brain/deadlock risk this audit
+found no other basis for.
+
+### 21.20 Integrity / corruption-handling contract — frozen
+
+**Preferred, uniform rule: fail with an explicit lifecycle integrity
+error. Never repair silently, regenerate rounds, rewrite historical
+financial rows, skip a corrupted round, or infer missing history** —
+identical posture to every existing payout/contribution integrity check
+in this document. Specific corruption classes a future lifecycle service
+must detect and refuse, rather than paper over:
+
+- Multiple `ACTIVE` rounds (§21.4/§21.8 — the read layer will not catch
+  this; the write layer must never produce it and must refuse to operate
+  if it ever finds it already persisted).
+- No `ACTIVE` round where progression has begun but is incomplete
+  (§21.8's corruption-only case #3).
+- Duplicate or missing `roundNumber` values, or a missing successor round
+  where §21.11 expects one to exist.
+- A successor round already `ACTIVE`/`CLOSED` when the lifecycle service
+  is about to activate it (a stale/corrupted precondition, not a replay —
+  distinguished per §21.21).
+- A recipient relation that fails to resolve (structurally near-
+  impossible given the compound FK, §2, but never assumed away).
+- Zero `ContributionObligation` rows for a round being evaluated for
+  closure (mirrors `PayoutAccountingIntegrityError`'s own "empty
+  obligation set" refusal, §5/§21.9 — never treated as vacuously
+  fulfilled).
+- A `FULFILLED` obligation whose ledger-derived confirmed-payment state
+  disagrees with that status (§21.9's own projection-integrity check).
+- A `CONFIRMED` payout with broken/incoherent provenance, or whose
+  amount/currency no longer matches the round's frozen obligations
+  (§21.9 — reusing `payout-owner-read.service.ts`'s own
+  `assertPayoutIntegrity` check pattern, not a new one).
+
+**Boundary between lifecycle service and existing accounting/read
+helpers**: the lifecycle service **reuses** the existing domain functions
+(`isObligationFulfilled`, `amountMatchesObligation`,
+`computeExpectedPayoutAmount`, `amountMatchesExpectedPayout`) and the
+existing repository query shapes (confirmed-payment sums, round
+obligations) — it does not reimplement financial validation, only adds
+the round-status CAS and the lifecycle-specific structural checks listed
+above (round sequencing, successor state, ACTIVE-count) that no existing
+service has any reason to already contain.
+
+### 21.21 Idempotency / replay contract — frozen, no clientOperationId
+
+**No `clientOperationId` is warranted.** Unlike payout/contribution
+recording (which needs to distinguish "the same submission, retried" from
+"a different financial intent" — an amount, an obligation, a reason —
+that could genuinely vary between two calls), a round-lifecycle
+transition has no variable intent to disambiguate: the operation's target
+and outcome are fully determined by persisted round identity and
+sequence. **Persisted round state itself provides sufficient natural
+idempotency**, frozen as:
+
+For `activateFirstRound({ ownerId, circleId })`:
+- Round 1 already `ACTIVE`, with consistent provenance → safe, zero-write
+  replay (return current state).
+- Round 1 already `CLOSED` (progression has since continued normally) →
+  **also** a safe, zero-write replay — the original intent ("round 1
+  starts") was genuinely satisfied in the past; returning the round's
+  true current (now historical) state is truthful, not an error.
+- Any other observed state (e.g. round 2 `ACTIVE` while round 1 is still
+  `UPCOMING`) → integrity conflict (§21.20), never guessed at.
+
+For `advanceRound({ ownerId, circleId, roundId })`:
+- `roundId` currently `ACTIVE`, predicate satisfied → fresh transition.
+- `roundId` already `CLOSED` and its immediate successor is `ACTIVE` (or,
+  for the final round, nothing else is `ACTIVE`) → **safe replay**
+  (ticket's own explicit example, confirmed).
+- `roundId` already `CLOSED` **and its successor is also `CLOSED`**
+  (progression has moved further than this specific call's own moment) →
+  **also a safe, zero-write replay of the historical fact "yes, `roundId`
+  is closed"** — distinguished from an error precisely because the
+  originally-requested transition did happen, just earlier than this
+  particular stale call learned about it.
+- `roundId` `CLOSED` but successor state inconsistent with either of the
+  above (missing, still `UPCOMING` when it should be `ACTIVE`, etc.) →
+  **integrity conflict, not replay** (ticket's own explicit example,
+  confirmed).
+- `roundId` is not the legitimate current round to advance at all (an
+  arbitrary/out-of-sequence `roundId`, never having been `ACTIVE`) →
+  **rejected outright as a sequence violation**, never silently treated
+  as a replay of anything — this is the distinction this ticket asks for
+  between "stale replay of a real past operation" and "invalid arbitrary
+  transition."
+
+### 21.22 Recommended API shape — not implemented
+
+```
+activateFirstRound({ ownerId, circleId }): AdvanceRoundResult
+advanceRound({ ownerId, circleId, roundId }): AdvanceRoundResult
+```
+
+Two public operations, not three. `activateFirstRound` is justified as
+its own operation (not folded into `advanceRound`) because it has a
+structurally different shape — activate-only, no round to close — and
+forcing it through `advanceRound`'s own signature would need an awkward
+"no round to advance yet" case. `closeRound`/`activateNextRound` are
+**explicitly not** exposed as two independent public operations — per
+§21.12's own atomicity freeze, `advanceRound` performs both internally
+(close `roundId`, then activate its successor if one exists) inside one
+transaction, so no caller can ever invoke one half without the other.
+`roundId` in `advanceRound` names the round being **closed** (the
+currently-ACTIVE round the owner is choosing to advance past), not the
+round being activated — its successor is derived, never separately
+supplied, consistent with §21.11's own "successor is never caller-chosen"
+rule.
+
+### 21.23 Owner UI implication — contract only, not built
+
+- No round `ACTIVE` and round 1 may start → "Start first round."
+- Current round's financial predicate incomplete → show plainly why
+  progression is blocked (which obligations remain `OPEN`, or that the
+  payout is not yet `CONFIRMED`/is `DISPUTED`); never a fake success.
+- Current round complete, non-final → "Close round & start next" (one
+  control, matching the one atomic operation, §21.12/§21.22).
+- Final round complete → "Close final round."
+- Every round `CLOSED` → a future, separate "Complete circle" control
+  (§21.13/§21.25) — not built by whichever ticket implements round
+  lifecycle either, unless explicitly scoped to do so.
+
+Status advancement must never become automatic merely because a page
+renders — every transition above requires an explicit, intentional owner
+click, per §21.14.
+
+### 21.24 Member UI implication — confirmed compatible, unchanged
+
+Members remain strictly read-only for round lifecycle: current round,
+next round, closed rounds may be displayed (already are, §21.4), but no
+lifecycle mutation control is ever shown to a member — already true today
+(no such control exists, §21.10 of the 7K.10 deliverable independently
+confirmed this structurally) and unaffected by anything this contract
+freezes. The existing member dashboard's own current/next-round framing
+(§21.4) remains fully compatible with every state this contract
+introduces, including the two legitimate zero-ACTIVE states (§21.8),
+without any code change.
+
+### 21.25 Circle-completion contract handoff
+
+**"Every persisted `PayoutRound.status === CLOSED`" is sufficient domain
+authority for `SavingsCircle` `ACTIVE → COMPLETED`.** Because round
+closure itself already requires (§21.9) every obligation `FULFILLED` and
+the round's payout `CONFIRMED`, and because a `DISPUTED` payout
+permanently prevents its own round's closure (§21.10) — "every round
+CLOSED" already transitively implies "every obligation FULFILLED
+circle-wide," "every payout CONFIRMED circle-wide," and "no unresolved
+dispute anywhere." This reaffirms, rather than merely repeats, this
+document's own earlier §13 conclusion, now with the full round-lifecycle
+contract behind it rather than speculation ahead of it. A future
+completion service **may** still perform a lightweight defense-in-depth
+re-check (consistent with this codebase's universal "never blindly trust
+one predicate status without re-verifying at the boundary" discipline),
+but is **not required** to independently re-derive the full financial
+predicate from scratch — round closure's own guarantees already establish
+it. **Not implemented in 7K.11 or any ticket before it.**
+
+### 21.26 V1 non-goals — reaffirmed, none introduced by this contract
+
+Explicitly not introduced by this audit, matching the ticket's own list
+verbatim: skipped rounds, paused rounds, reopened rounds, cancelled
+rounds, replacement recipients, member default replacement, payout
+correction, dispute resolution, grace periods, penalties, loans,
+interest, partial payouts, partial obligations, automatic bank/mobile-
+money execution, a scheduler or any background progression, notifications/
+reminders. All remain future features, entirely outside this contract.
+
+### 21.27 The 15 required decisions — summary
+
+| # | Question | Frozen answer |
+|---|---|---|
+| 1 | First-round activation rule | **Option B** — activation leaves every round UPCOMING (unchanged); round 1's activation is a separate, explicit owner action (§21.7) |
+| 2 | Exactly one ACTIVE round required? | At most one, always; exactly one only while progression is in flight; two enumerated legitimate zero-ACTIVE states (§21.8) |
+| 3 | Who may advance lifecycle? | Owner only, explicit action; never automatic on financial-predicate completion, never time-driven (§21.14) |
+| 4 | Exact facts that permit closing a round | Every obligation FULFILLED (ledger-re-derived) + payout CONFIRMED (accounting-re-verified); never dueDate, never REJECTED-attempt history (§21.9) |
+| 5 | Does DISPUTED permanently block progression? | Yes — for its own round, and (as a corollary) for every round after it (§21.10) |
+| 6 | Must progression be sequential by roundNumber? | Yes, strictly; roundNumber is the sole sequence authority (§21.11) |
+| 7 | Are close-current + activate-next atomic? | Yes, one transaction, one lock acquisition; no exposed partial API (§21.12/§21.22) |
+| 8 | What happens on the final round? | Close only, no successor activation (§21.12) |
+| 9 | Is circle completion a separate operation? | Yes, explicitly deferred; "all rounds CLOSED" is sufficient authority for it (§21.13/§21.25) |
+| 10 | Does dueDate gate anything? | No — display/scheduling only (§21.16) |
+| 11 | Is startDate a mutation gate or schedule anchor? | Schedule anchor only, made explicit by this audit (§21.17) |
+| 12 | Does the schema need closedById or another migration? | **Yes — `closedById` recommended before implementation** (§21.15) |
+| 13 | Replay/idempotency contract | Natural idempotency from persisted round state; no clientOperationId (§21.21) |
+| 14 | Lock/concurrency model required | Shared `SavingsCircle` lock, identical to all seven existing writers; six races audited explicitly (§21.18/§21.19) |
+| 15 | Is "all rounds CLOSED" enough for eventual circle completion? | Yes, sufficient domain authority; an optional defense-in-depth re-check is permitted, not required (§21.25) |
+
+**No unresolved P0/P1 architectural ambiguity remains.** The one
+concrete action item this audit surfaces for the implementation ticket
+(distinct from the frozen contract itself) is §21.3's
+`assertActivatedRotationIntegrity` relaxation — required, scoped, and
+not a design ambiguity.
 
 ## Verification
 
@@ -1132,3 +1915,12 @@ Mirroring the contribution workflow's own narrow-ticket precedent
 **TICKET 7K — SUSU PAYOUT WORKFLOW DOMAIN AUDIT: COMPLETE**
 
 **TICKET 7K.1 — PAYOUT V1 CONTRACT SIGN-OFF: COMPLETE**
+
+**TICKET 7K.11 — ROUND LIFECYCLE AUDIT & V1 CONTRACT: READY FOR
+IMPLEMENTATION** — see §21. Documentation/architecture only; no schema,
+service, repository, action, UI, or test was changed to produce this
+section, verified by `git status` showing only this file for this
+ticket's own diff. One schema gap was found and its resolution frozen
+(§21.15: `closedById` recommended before implementation) — this is a
+decision, not a blocker; 7K.11 itself creates no migration, per its own
+explicit instruction.
