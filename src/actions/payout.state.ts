@@ -1,9 +1,12 @@
-import type { RecordPayoutActionState } from "@/src/actions/payout.actions";
+import type {
+  ConfirmPayoutActionState,
+  DisputePayoutActionState,
+  RecordPayoutActionState,
+} from "@/src/actions/payout.actions";
 
 // Mirrors circle.state.ts / deposit.state.ts's own per-domain
-// initial-action-state convention exactly. Only the owner's
-// record-payout form exists yet (7K.9) -- confirmPayoutAction/
-// disputePayoutAction have no UI to initialize a state for until the
-// recipient confirm/dispute UI (7K.10) is built.
+// initial-action-state convention exactly.
 
 export const initialRecordPayoutState: RecordPayoutActionState = {};
+export const initialConfirmPayoutState: ConfirmPayoutActionState = {};
+export const initialDisputePayoutState: DisputePayoutActionState = {};

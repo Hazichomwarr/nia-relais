@@ -126,3 +126,16 @@ test("internal read-model integrity errors redirect to /member/login rather than
   assert.match(pageSource, /CircleMemberDashboardMemberNotActiveError/);
   assert.match(pageSource, /redirect\(\s*["']\/member\/login["']\s*\)/);
 });
+
+// --- 7K.10: MemberDashboard gained an additive children slot only ---
+
+test("MemberDashboard accepts an optional children slot, rendered after every existing card -- getCircleMemberDashboard itself is not touched", () => {
+  assert.match(componentSource, /children\?: React\.ReactNode/);
+  // {children} must appear strictly after the last existing card
+  // (RotationScheduleCard) so the new payout card (7K.10) is additive,
+  // never inserted between or in place of an existing one.
+  const rotationIndex = componentSource.indexOf("<RotationScheduleCard");
+  const childrenIndex = componentSource.indexOf("{children}");
+  assert.ok(rotationIndex >= 0 && childrenIndex > rotationIndex);
+  assert.doesNotMatch(componentSource, /getCircleMemberPayouts/, "the dashboard component itself must not fetch the 7K.8 read model");
+});

@@ -21,7 +21,21 @@ import {
 // computed with Decimal arithmetic; nothing here re-parses or
 // recalculates one.
 
-export function MemberDashboard({ dashboard }: { dashboard: MemberDashboardResult }) {
+export function MemberDashboard({
+  dashboard,
+  children,
+}: {
+  dashboard: MemberDashboardResult;
+  // Additive slot only (7K.10): the richer recipient payout card
+  // (member-payout-card.tsx, backed by getCircleMemberPayouts, 7K.8) is
+  // composed in here by the page rather than this component reaching out
+  // to fetch or import it itself -- this file's own data dependency
+  // remains exactly MemberDashboardResult, unchanged. Rendered after
+  // every existing card, never in place of MyPayoutCard below (which is
+  // left completely unmodified, per 7K.10's own "additive, not a
+  // rewrite" instruction).
+  children?: React.ReactNode;
+}) {
   const roundHeading = selectRoundHeading(dashboard);
 
   return (
@@ -42,6 +56,7 @@ export function MemberDashboard({ dashboard }: { dashboard: MemberDashboardResul
         <MyContributionsCard dashboard={dashboard} />
         <MyPayoutCard dashboard={dashboard} />
         <RotationScheduleCard dashboard={dashboard} />
+        {children}
       </div>
     </main>
   );
