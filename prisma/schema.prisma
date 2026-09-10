@@ -98,6 +98,7 @@ model User {
   addedCircleMembers            CircleMember[]        @relation("CircleMemberAdder")
   removedCircleMembers          CircleMember[]        @relation("CircleMemberRemover")
   activatedPayoutRounds         PayoutRound[]         @relation("PayoutRoundActivator")
+  closedPayoutRounds            PayoutRound[]         @relation("PayoutRoundCloser")
   recordedContributionPayments  ContributionPayment[] @relation("ContributionPaymentRecorder")
   confirmedContributionPayments ContributionPayment[] @relation("ContributionPaymentConfirmer")
   rejectedContributionPayments  ContributionPayment[] @relation("ContributionPaymentRejector")
@@ -333,6 +334,8 @@ model PayoutRound {
   activatedById String?
   activatedBy   User?     @relation("PayoutRoundActivator", fields: [activatedById], references: [id], onDelete: Restrict)
   closedAt      DateTime?
+  closedById    String?
+  closedBy      User?     @relation("PayoutRoundCloser", fields: [closedById], references: [id], onDelete: Restrict)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
