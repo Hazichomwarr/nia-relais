@@ -25,6 +25,13 @@ import {
   OwnerContributionsCircleNotFoundError,
   type OwnerCircleContributionsResult,
 } from "@/src/services/contribution-owner-read.service";
+import {
+  getOwnerCirclePayouts,
+  OwnerPayoutsAuthorizationError,
+  OwnerPayoutsCircleNotEligibleError,
+  OwnerPayoutsCircleNotFoundError,
+  type OwnerCirclePayoutsResult,
+} from "@/src/services/payout-owner-read.service";
 import type { DraftCircleActivationReviewResult } from "@/src/domain/circle-activation-review";
 
 import { getFrequencyLabel } from "../new/new-circle-form-display";
@@ -33,6 +40,7 @@ import { ActivationReviewSection } from "./activation-review-section";
 import { AddMemberForm } from "./add-member-form";
 import { ContributionDesk } from "./contribution-desk";
 import { MemberList } from "./member-list";
+import { PayoutDesk } from "./payout-desk";
 import { PayoutOrderForm } from "./payout-order-form";
 
 export const metadata: Metadata = {
@@ -50,6 +58,7 @@ type ActiveSummaryData = {
   readonly kind: "active";
   readonly summary: ActiveCircleOwnerSummaryResult;
   readonly contributions: OwnerCircleContributionsResult;
+  readonly payouts: OwnerCirclePayoutsResult;
 };
 
 // All data fetching (and the try/catch it needs) happens below, before any
@@ -103,15 +112,18 @@ async function loadWorkspaceOrSummary(
     // real COMPLETED/ARCHIVED owner summary does not exist yet and would
     // need its own read model when that lifecycle work begins.
     try {
-      // Fetched in parallel: two independent, lock-free reads of the same
+      // Fetched in parallel: three independent, lock-free reads of the same
       // ACTIVE circle -- getOwnerCircleContributions (7J.5) is the read
-      // model this route's contribution desk (7J.7) renders; it is never
-      // queried directly against Prisma from a component.
-      const [summary, contributions] = await Promise.all([
+      // model the contribution desk (7J.7) renders, and getOwnerCirclePayouts
+      // (7K.7) is the read model the payout desk (7K.9) renders. Neither is
+      // ever queried directly against Prisma from a component, and no
+      // per-round/per-payout fetch happens anywhere else on this page.
+      const [summary, contributions, payouts] = await Promise.all([
         getActiveCircleSummaryForOwner({ ownerId, circleId }),
         getOwnerCircleContributions({ ownerId, circleId }),
+        getOwnerCirclePayouts({ ownerId, circleId }),
       ]);
-      return { kind: "active", summary, contributions };
+      return { kind: "active", summary, contributions, payouts };
     } catch (activeReadError) {
       if (
         activeReadError instanceof ActiveCircleOwnerReadNotFoundError
@@ -120,6 +132,9 @@ async function loadWorkspaceOrSummary(
         || activeReadError instanceof OwnerContributionsCircleNotFoundError
         || activeReadError instanceof OwnerContributionsAuthorizationError
         || activeReadError instanceof OwnerContributionsCircleNotActiveError
+        || activeReadError instanceof OwnerPayoutsCircleNotFoundError
+        || activeReadError instanceof OwnerPayoutsAuthorizationError
+        || activeReadError instanceof OwnerPayoutsCircleNotEligibleError
       ) {
         notFound();
       }
@@ -162,6 +177,7 @@ export default async function OwnerCirclePage({
       <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
         <ActiveCircleSummary summary={data.summary} />
         <ContributionDesk circleId={circleId} contributions={data.contributions} />
+        <PayoutDesk circleId={circleId} payouts={data.payouts} />
       </main>
     );
   }

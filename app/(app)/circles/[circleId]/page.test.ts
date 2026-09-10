@@ -70,6 +70,14 @@ test("the ACTIVE fallback also fetches getOwnerCircleContributions, in parallel 
   );
 });
 
+test("the ACTIVE fallback also fetches getOwnerCirclePayouts (7K.7), in the SAME Promise.all as the summary/contributions reads -- not a fourth sequential round trip", () => {
+  assert.match(dataLoaderSource, /getOwnerCirclePayouts\(\{\s*ownerId,\s*circleId\s*\}\)/);
+  assert.match(
+    dataLoaderSource,
+    /Promise\.all\(\[\s*getActiveCircleSummaryForOwner\([\s\S]*?getOwnerCircleContributions\([\s\S]*?getOwnerCirclePayouts\([\s\S]*?\]\)/,
+  );
+});
+
 test("every ActiveCircleOwnerRead* and OwnerContributions* failure in the fallback also collapses to notFound()", () => {
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadNotFoundError/);
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadAuthorizationError/);
@@ -77,6 +85,17 @@ test("every ActiveCircleOwnerRead* and OwnerContributions* failure in the fallba
   assert.match(dataLoaderSource, /OwnerContributionsCircleNotFoundError/);
   assert.match(dataLoaderSource, /OwnerContributionsAuthorizationError/);
   assert.match(dataLoaderSource, /OwnerContributionsCircleNotActiveError/);
+});
+
+test("every OwnerPayouts* not-found/authorization/not-eligible failure also collapses to notFound() -- but NOT an integrity error", () => {
+  assert.match(dataLoaderSource, /OwnerPayoutsCircleNotFoundError/);
+  assert.match(dataLoaderSource, /OwnerPayoutsAuthorizationError/);
+  assert.match(dataLoaderSource, /OwnerPayoutsCircleNotEligibleError/);
+  // A genuine persisted-integrity corruption must never be silently
+  // misrepresented as a 404 -- it is deliberately left to propagate to
+  // Next's own error boundary, exactly like any other truly unexpected
+  // error this data loader doesn't recognize.
+  assert.doesNotMatch(dataLoaderSource, /OwnerPayoutsIntegrityError/);
 });
 
 test("the page renders circle name, a DRAFT badge, contribution terms, the add-member form, the member list, the payout-order form, and the activation review", () => {
@@ -88,7 +107,7 @@ test("the page renders circle name, a DRAFT badge, contribution terms, the add-m
   assert.match(source, /<ActivationReviewSection circleId=\{circleId\} review=\{review\} \/>/);
 });
 
-test("the ACTIVE branch renders ActiveCircleSummary and ContributionDesk -- no draft-only forms or controls", () => {
+test("the ACTIVE branch renders ActiveCircleSummary, ContributionDesk, and PayoutDesk -- no draft-only forms or controls", () => {
   const activeBranchIndex = source.indexOf('data.kind === "active"');
   const draftDestructureIndex = source.indexOf("const { circle, members, review } = data;");
   assert.ok(activeBranchIndex >= 0 && draftDestructureIndex > activeBranchIndex);
@@ -96,10 +115,18 @@ test("the ACTIVE branch renders ActiveCircleSummary and ContributionDesk -- no d
 
   assert.match(activeBranch, /<ActiveCircleSummary summary=\{data\.summary\} \/>/);
   assert.match(activeBranch, /<ContributionDesk circleId=\{circleId\} contributions=\{data\.contributions\} \/>/);
+  assert.match(activeBranch, /<PayoutDesk circleId=\{circleId\} payouts=\{data\.payouts\} \/>/);
   assert.doesNotMatch(activeBranch, /<MemberList/);
   assert.doesNotMatch(activeBranch, /<PayoutOrderForm/);
   assert.doesNotMatch(activeBranch, /<AddMemberForm/);
   assert.doesNotMatch(activeBranch, /<ActivationReviewSection/);
+});
+
+test("the DRAFT branch never renders PayoutDesk", () => {
+  const activeBranchIndex = source.indexOf('data.kind === "active"');
+  const draftBranch = source.slice(source.indexOf("const { circle, members, review } = data;"));
+  assert.doesNotMatch(draftBranch, /<PayoutDesk/);
+  assert.ok(activeBranchIndex >= 0);
 });
 
 test("COMPLETED/ARCHIVED handling is documented in the file itself as a future lifecycle dependency, not silently misrepresented", () => {
