@@ -106,6 +106,7 @@ const activationRoundSelect = {
   activatedAt: true,
   activatedById: true,
   closedAt: true,
+  closedById: true,
 } satisfies Prisma.PayoutRoundSelect;
 
 export type CircleActivationRoundRecord = Prisma.PayoutRoundGetPayload<{
@@ -276,6 +277,7 @@ export function createCircleActivationRounds(
       activatedAt: null,
       activatedById: null,
       closedAt: null,
+      closedById: null,
     },
     select: activationRoundSelect,
   })));

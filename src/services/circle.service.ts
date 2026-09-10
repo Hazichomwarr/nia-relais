@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 
 import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
 import { roundDueDate } from "@/src/domain/circle-rotation-schedule";
+import { assertRoundLifecycleStateIntegrity, RoundLifecycleStateIntegrityError } from "@/src/domain/round-lifecycle";
 import { lockSavingsCircleForUpdate } from "@/src/repositories/circle-lock.repository";
 import {
   createDraftCircleMember,
@@ -142,7 +143,12 @@ export type CircleActivationResult = {
     roundNumber: number;
     recipientId: string;
     dueDate: string;
-    status: "UPCOMING";
+    // Not narrowed to "UPCOMING": a replay of an already-ACTIVE circle
+    // (this function's other call site) may observe rounds that have
+    // since legitimately progressed via round-lifecycle.service.ts
+    // (7K.13) -- this must report each round's true persisted status,
+    // never hard-code the fresh-activation value for a replay.
+    status: "UPCOMING" | "ACTIVE" | "CLOSED";
   }>;
 };
 
@@ -281,12 +287,31 @@ function serializeActivationResult(
         roundNumber: round.roundNumber,
         recipientId: round.recipientId,
         dueDate: round.dueDate.toISOString(),
-        status: "UPCOMING" as const,
+        status: round.status,
       })),
   };
 }
 
-function assertActivatedRotationIntegrity(
+/**
+ * The IMMUTABLE, activation-time shape of a circle's rotation --
+ * cohort/round/obligation counts, roundNumber<->payoutOrder<->recipient
+ * mapping, due-date recurrence, and each obligation's frozen
+ * amount/currency/dueDate. None of these facts ever change once a
+ * circle is ACTIVE, with or without round-lifecycle progression (7K.13,
+ * evolving the 7K.11 §21.3 finding) -- this is deliberately the half of
+ * the original `assertActivatedRotationIntegrity` that stays exactly as
+ * strict as before. The one relaxation here versus the pre-7K.13 version:
+ * an obligation's `status`/`fulfilledAt` pair is checked only for its own
+ * internal coherence (FULFILLED implies a `fulfilledAt`, OPEN implies
+ * none), never asserted to be OPEN forever -- contribution confirmation
+ * (7J.3) can fulfill any obligation at any time, entirely independently
+ * of round lifecycle, so "every obligation is still OPEN" was never a
+ * true activation-time invariant to begin with; the mutable, ledger-
+ * derived truth of *whether* an obligation is fulfilled is a round-
+ * lifecycle CLOSURE question (round-lifecycle.service.ts), not an
+ * activation-replay STRUCTURE question.
+ */
+function assertActivatedRotationStructureIntegrity(
   circle: CircleActivationRecord,
   members: DraftCirclePayoutMemberRecord[],
   rounds: CircleActivationRoundRecord[],
@@ -330,10 +355,6 @@ function assertActivatedRotationIntegrity(
       !recipient
       || recipient.payoutOrder !== round.roundNumber
       || round.roundNumber < 1
-      || round.status !== "UPCOMING"
-      || round.activatedAt !== null
-      || round.activatedById !== null
-      || round.closedAt !== null
       || round.dueDate.getTime() !== expectedDueDate.getTime()
       || roundObligations.length !== members.length
       || obligatedMembers.size !== members.length
@@ -342,16 +363,47 @@ function assertActivatedRotationIntegrity(
     }
 
     for (const obligation of roundObligations) {
+      const fulfilledCoherent = (obligation.status === "FULFILLED") === (obligation.fulfilledAt !== null);
       if (
         !obligation.expectedAmount.equals(circle.contributionAmount)
         || obligation.currency !== circle.currency
         || obligation.dueDate.getTime() !== round.dueDate.getTime()
-        || obligation.status !== "OPEN"
-        || obligation.fulfilledAt !== null
+        || !fulfilledCoherent
       ) {
         throw new CircleActivationIntegrityError();
       }
     }
+  }
+}
+
+/**
+ * The full activation-replay integrity check `activateCircle` calls at
+ * both its own call sites (fresh activation, and replay against an
+ * already-ACTIVE circle) -- unchanged in name/signature/external
+ * behavior (always throws `CircleActivationIntegrityError`) from before
+ * 7K.13, but now composed of two independently-scoped checks (7K.11
+ * §21.3's own required evolution): the immutable structure above, plus
+ * the MUTABLE round-lifecycle-state shape (`assertRoundLifecycleStateIntegrity`,
+ * `src/domain/round-lifecycle.ts`) -- which round-lifecycle.service.ts's
+ * own `activateFirstRound`/`advanceRound` also call directly, so the two
+ * callers can never silently drift into different definitions of "a
+ * coherent round-lifecycle state." A circle whose rounds have legitimately
+ * progressed (some CLOSED, at most one ACTIVE, the rest UPCOMING) no
+ * longer fails this check merely because progression has begun -- only a
+ * genuinely impossible ordering does, exactly as 7K.11 required.
+ */
+function assertActivatedRotationIntegrity(
+  circle: CircleActivationRecord,
+  members: DraftCirclePayoutMemberRecord[],
+  rounds: CircleActivationRoundRecord[],
+  obligations: CircleActivationObligationRecord[],
+) {
+  assertActivatedRotationStructureIntegrity(circle, members, rounds, obligations);
+  try {
+    assertRoundLifecycleStateIntegrity(rounds);
+  } catch (error) {
+    if (error instanceof RoundLifecycleStateIntegrityError) throw new CircleActivationIntegrityError();
+    throw error;
   }
 }
 
