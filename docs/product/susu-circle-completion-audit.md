@@ -1124,3 +1124,132 @@ this ticket never edited), and no notification/scheduler/admin/payment-
 execution code anywhere in the two new source files.
 
 **TICKET 7L.1 — SUSU CIRCLE COMPLETION SERVICE: COMPLETE**
+
+## 36. 7L.2 implementation note
+
+**Status: implemented and tested.** This section records what 7L.2
+actually built against the frozen 7L.1 service above — it does not
+reopen or amend §1–35; it exposes `completeCircle` through one Server
+Action, following the established testable-core/thin-wrapper shape
+7K.14 already set for round lifecycle.
+
+**Files added** (no existing file was modified except this doc):
+`src/actions/complete-circle.ts` (testable core — `runCompleteCircleAction`),
+`src/actions/circle-completion.actions.ts` (thin `"use server"` wrapper —
+`completeCircleAction`), `src/actions/circle-completion.state.ts`
+(`initialCompleteCircleState`), and three test files:
+`complete-circle.test.ts` (behavioral, 17 tests), `circle-completion
+.actions.test.ts` (structural, 9 tests), `circle-completion-isolation
+.test.ts` (structural boundary guard, 32 tests).
+
+**Action API**: `completeCircleAction(previousState, formData)`. The
+only accepted business field is `circleId` — verified by a test
+submitting `ownerId`, `completedAt`, `completedById`, `status`,
+`archive`, `archivedAt`, `archivedById`, `roundId`, `memberId`,
+`payoutId`, `operationId`, and `clientOperationId` all at once and
+asserting `completeCircle` receives exactly `{ ownerId, circleId }`.
+
+**Authority**: `requireUser()` runs first, before any input is read;
+`ownerId` is exclusively `user.id`, never read from `FormData` (verified
+by a forged-`ownerId` test). No `requireCircleMember`, member session, or
+recipient identity is referenced anywhere in either new action file
+(verified structurally).
+
+**Service wiring**: calls only `completeCircle({ ownerId, circleId })` —
+the action reads no round/obligation/payment/payout data, computes no
+date, and inspects no circle status of its own; every eligibility rule
+remains exclusively inside the 7L.1 service.
+
+**Success/replay**: both a fresh completion and a legitimate replay
+return the identical `{ status: "success", message: "The circle is
+complete." }` — the frozen §30 product copy, verbatim. The action state
+never exposes `completedById`, `completedAt`, or any raw service field
+(verified: the success state's own keys are exactly `status`/`message`).
+No client-visible distinction between fresh and replay is made, since no
+existing action convention in this codebase requires one.
+
+**Error mapping**: `CircleCompletionNotFoundError`/
+`CircleCompletionAuthorizationError` collapse to the same generic "We
+could not find this circle." (matching every other owner action's
+identical convention); `CircleCompletionNotActiveError` → "This circle
+cannot be completed right now."; `CircleCompletionRoundsIncompleteError`
+→ "Every round in this circle's rotation must be closed before it can be
+completed."; `CircleCompletionIntegrityError`/`PayoutAccountingIntegrityError`
+→ "We couldn't safely complete this circle because its saved records are
+inconsistent." A dedicated test proves the rounds-incomplete and
+integrity outcomes are never collapsed into each other. An unexpected
+error logs its name (`console.error`) and returns a generic failure
+message, never the raw error.
+
+**Revalidation**: both `/circles/${circleId}` and
+`/member/circles/${circleId}` are revalidated after a genuine success,
+mirroring `round-lifecycle.actions.ts`'s own two-route precedent — not
+copied blindly. Verified by direct inspection: `app/member/circles
+/[circleId]/member-dashboard.tsx` already renders `circle.status`
+directly (a `"COMPLETED"` badge, `member-dashboard-display.ts`'s own
+dedicated `"COMPLETED"`/`"ARCHIVED"` copy branch), so a member's cached
+render is genuinely stale the instant their circle becomes `COMPLETED`
+— the identical reasoning that already justified the same two-route
+revalidation for `activateFirstRoundAction`/`advanceRoundAction`. No
+other route was found to depend on circle status (no owner "circle
+list" page exists yet, per §29). **No redirect** — the owner route does
+not yet understand `COMPLETED` (§14/§21/§27's own P1); this action is
+never wired to send the owner anywhere, so it stays testable
+independent of that future fix.
+
+**Action-state design**: `{ status?: "success"; formError?: string;
+message?: string }` — no optimistic lifecycle state, matching
+`ActivateFirstRoundActionState`'s own shape exactly. The future 7L.3 UI
+will rely on server revalidation and an authoritative re-read after
+success, not on any state this action invents.
+
+**Isolation/security evidence**: a dedicated new structural guard
+(`circle-completion-isolation.test.ts`) asserts, file-by-file: every
+existing owner UI file (`page.tsx`, `active-circle-summary.tsx`,
+`contribution-desk.tsx`, `payout-desk.tsx`, the round-lifecycle
+card/controls/display files, the contribution/payout form controls) and
+every existing member UI file reference no completion identifier at
+all; every other Server Action file in `src/actions/` (16 files,
+including `round-lifecycle.actions.ts` and `circle.actions.ts`)
+references no completion identifier; and `round-lifecycle.service.ts`
+itself (the only writer of `PayoutRound.status`) references none either
+— proving `advanceRound` cannot have been wired to auto-trigger
+completion. A separate test proves neither new action file contains an
+`archive`-related identifier.
+
+**Test methodology**: 58 new tests total. `complete-circle.test.ts` (17)
+is behavioral, dependency-injected (mocked `requireUser`/`completeCircle`,
+no live database) — the same shape `activate-first-round.test.ts` already
+established, plus one structural source-regex assertion within the same
+file (mirroring `round-lifecycle.service.test.ts`'s own precedent of
+combining fixture and structural tests in one file). `circle-completion
+.actions.test.ts` (9) and `circle-completion-isolation.test.ts` (32) are
+entirely structural/source-regex tests, explicitly labeled as such in
+their own file-header comments — never described as runtime behavior.
+
+**Focused verification** (per this ticket's own instruction, the full
+`pnpm test` was deliberately NOT run): the 58 new tests, plus the
+directly relevant existing suites (`round-lifecycle.actions.test.ts`,
+`round-lifecycle-ui-isolation.test.ts`, `activate-first-round.test.ts`,
+`advance-round.test.ts`, `circle.actions.test.ts`, `circle.state.test.ts`,
+`payout.actions.test.ts` — 89 tests) all pass, 0 failures. `pnpm lint`:
+clean. `pnpm build`: succeeds, same 13 routes as before (no route added
+or changed). `npx tsc --noEmit`: same 9 known pre-existing errors,
+unchanged. `git diff --check`: clean. No persistence/schema file
+changed — verified by `git status` (only this doc plus seven new
+`src/actions`/`src/repositories`/`src/services` files). `pnpm prisma
+validate`/`migrate status` were not re-run, per this ticket's own
+instruction, since nothing persistence-related changed.
+
+**No UI shipped**: `app/(app)/circles/[circleId]/page.tsx`,
+`round-lifecycle-card.tsx`, `round-lifecycle-controls.tsx`, and every
+member circle file are byte-unchanged. No "Complete circle" button
+exists anywhere in the product yet.
+
+**P1 owner-route gap** (§14/§21/§27): unchanged, still outstanding.
+`/circles/[circleId]` still 404s once a circle is `COMPLETED`. This
+ticket does not fix it, deliberately — 7L.3 will fix the owner
+workspace and add the UI control together, so a "Complete circle"
+button is never shipped that sends its own owner into a 404.
+
+**TICKET 7L.2 — SUSU CIRCLE COMPLETION SERVER ACTION: COMPLETE**
