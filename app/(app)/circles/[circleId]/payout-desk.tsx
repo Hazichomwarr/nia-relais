@@ -120,7 +120,7 @@ export function PayoutDesk({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <Card title="Payout desk">
+      <Card title="Payouts">
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly
             ? "This circle is complete. The payout history below is a permanent record and can no longer be changed."

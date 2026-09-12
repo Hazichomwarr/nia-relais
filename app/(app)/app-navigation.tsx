@@ -24,7 +24,7 @@ export function AppNavigation({ userName }: AppNavigationProps) {
       label: "Trusted person",
       isActive: pathname === "/custodian" || pathname.startsWith("/custodian/"),
     },
-    { href: "/circles/new", label: "SUSU circles", isActive: isCirclesRoute },
+    { href: "/circles", label: "SUSU circles", isActive: isCirclesRoute },
   ];
 
   return (

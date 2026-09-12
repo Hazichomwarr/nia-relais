@@ -69,7 +69,7 @@ export function RoundLifecycleCard({
   const { phase, totalRounds, closedRounds, currentRound, nextRound, progression } = lifecycle;
 
   return (
-    <Card title="Round lifecycle">
+    <Card title="Next round action">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">
         {closedRounds} / {totalRounds} rounds closed
       </p>

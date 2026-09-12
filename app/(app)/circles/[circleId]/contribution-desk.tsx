@@ -174,7 +174,7 @@ export function ContributionDesk({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <Card title="Contribution desk">
+      <Card title="Contributions">
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly
             ? "This circle is complete. The contribution history below is a permanent record and can no longer be changed."

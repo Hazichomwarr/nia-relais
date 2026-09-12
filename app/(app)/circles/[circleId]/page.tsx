@@ -49,10 +49,12 @@ import {
 import type { DraftCircleActivationReviewResult } from "@/src/domain/circle-activation-review";
 
 import { getFrequencyLabel } from "../new/new-circle-form-display";
-import { ActiveCircleSummary } from "./active-circle-summary";
 import { ActivationReviewSection } from "./activation-review-section";
 import { AddMemberForm } from "./add-member-form";
-import { CompletedCircleSummary } from "./completed-circle-summary";
+import { CircleMemberReadList } from "./circle-member-read-list";
+import { CircleSchedule } from "./circle-schedule";
+import { CircleWorkspaceNavigation, getCircleWorkspaceSection, type CircleWorkspaceSection } from "./circle-workspace-navigation";
+import { ActiveCircleWorkspaceOverview, CompletedCircleWorkspaceOverview } from "./circle-workspace-overview";
 import { ContributionDesk } from "./contribution-desk";
 import { MemberList } from "./member-list";
 import { PayoutDesk } from "./payout-desk";
@@ -220,82 +222,90 @@ async function loadWorkspaceOrSummary(
 // page displayed a moment earlier.
 export default async function OwnerCirclePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ circleId: string }>;
+  searchParams: Promise<{ section?: string }>;
 }) {
   const { circleId } = await params;
+  const { section: requestedSection } = await searchParams;
+  const section = getCircleWorkspaceSection(requestedSection);
   const user = await requireUser();
 
   const data = await loadWorkspaceOrSummary(user.id, circleId);
 
   if (data.kind === "active") {
+    const activeSections: readonly CircleWorkspaceSection[] = ["overview", "contributions", "payouts", "members", "schedule"];
     return (
-      <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
-        <ActiveCircleSummary summary={data.summary} />
-        <RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} />
-        <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} />
-        <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} />
+      <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+        <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
+          <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={activeSections} />
+          <div className="min-w-0">
+            {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} /> : null}
+            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} /> : null}
+            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} /> : null}
+            {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
+            {section === "schedule" ? <div className="flex max-w-3xl flex-col gap-6"><CircleSchedule rounds={data.summary.rounds} /><RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} /></div> : null}
+          </div>
+        </div>
       </main>
     );
   }
 
   if (data.kind === "completed") {
+    const completedSections: readonly CircleWorkspaceSection[] = ["overview", "contributions", "payouts", "members", "schedule"];
     return (
-      <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
-        <CompletedCircleSummary summary={data.summary} />
-        <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly />
-        <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly />
+      <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+        <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
+          <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={completedSections} />
+          <div className="min-w-0">
+            {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} /> : null}
+            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly /> : null}
+            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly /> : null}
+            {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
+            {section === "schedule" ? <CircleSchedule rounds={data.payouts.rounds} /> : null}
+          </div>
+        </div>
       </main>
     );
   }
 
   const { circle, members, review } = data;
+  const draftSections: readonly CircleWorkspaceSection[] = ["overview", "members", "schedule"];
 
   return (
-    <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circles</p>
-          <span className="mt-3 inline-flex w-fit rounded-full bg-[#fff0d9] px-3 py-1 text-sm font-semibold text-[#8a5b27]">
-            DRAFT
-          </span>
-          <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{circle.name}</h1>
-          <p className="mt-4 max-w-xl leading-7 text-[#587066]">
-            Each member will contribute {circle.currency} {circle.contributionAmount}{" "}
-            {getFrequencyLabel(circle.frequency)}.
-          </p>
-        </section>
-
-        <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-          <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Add a member</h2>
-          <p className="mt-2 text-sm leading-6 text-[#587066]">
-            Add someone you trust and will share their member code and PIN with, privately.
-          </p>
-          <div className="mt-5">
-            <AddMemberForm circleId={circleId} />
-          </div>
-        </section>
-
-        <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-          <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Members</h2>
-          <div className="mt-5">
-            <MemberList circleId={circleId} members={members} />
-          </div>
-        </section>
-
-        <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-          <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Payout order</h2>
-          <div className="mt-5">
-            <PayoutOrderForm circleId={circleId} members={members} />
-          </div>
-        </section>
-
-        <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-          <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Review &amp; activate</h2>
-          <div className="mt-5">
-            <ActivationReviewSection circleId={circleId} review={review} />
-          </div>
-        </section>
+    <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
+        <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={draftSections} />
+        <div className="min-w-0">
+          {section === "overview" ? (
+            <div className="max-w-3xl">
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
+                <span className="mt-3 inline-flex w-fit rounded-full bg-[#fff0d9] px-3 py-1 text-sm font-semibold text-[#8a5b27]">DRAFT</span>
+                <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{circle.name}</h1>
+                <p className="mt-4 max-w-xl leading-7 text-[#587066]">Each member will contribute {circle.currency} {circle.contributionAmount} {getFrequencyLabel(circle.frequency)}.</p>
+                <p className="mt-5 text-sm leading-6 text-[#587066]">Set up your circle in order: add members, choose the payout order, then review and activate when everything is ready.</p>
+              </section>
+            </div>
+          ) : null}
+          {section === "members" ? (
+            <div className="flex max-w-3xl flex-col gap-6">
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
+                <h1 className="font-serif text-3xl tracking-tight">Members</h1>
+                <p className="mt-2 text-sm leading-6 text-[#587066]">Add someone you trust and share their member code and PIN privately.</p>
+                <div className="mt-5"><AddMemberForm circleId={circleId} /></div>
+              </section>
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><MemberList circleId={circleId} members={members} /></section>
+            </div>
+          ) : null}
+          {section === "schedule" ? (
+            <div className="flex max-w-3xl flex-col gap-6">
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h1 className="font-serif text-3xl tracking-tight">Payout order</h1><div className="mt-5"><PayoutOrderForm circleId={circleId} members={members} /></div></section>
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Review &amp; activate</h2><div className="mt-5"><ActivationReviewSection circleId={circleId} review={review} /></div></section>
+            </div>
+          ) : null}
+        </div>
       </div>
     </main>
   );
