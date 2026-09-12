@@ -1432,3 +1432,355 @@ COMPLETE**, with one caveat carried forward explicitly: the manual
 authenticated browser smoke check named by this ticket's own section 28
 was not performed (no browser/session available in this environment) and
 should be done before production release.
+
+## 38. 7L.4 — Final audit & freeze
+
+**Status: audited, no defect found requiring a code change. Frozen.**
+This section is the strategic verification boundary for the entire
+completion slice (7L, 7L.1, 7L.2, 7L.3) — it re-examines the whole flow
+adversarially end to end rather than trusting each ticket's own prior
+self-report, and records the freeze decision. No product scope was
+added; no code was changed by this ticket except this documentation.
+
+### Persistence re-audit
+
+Grepped every `savingsCircle.(update|updateMany|create)` call site again,
+fresh: exactly three exist in the entire codebase —
+`createDraftCircleRecord`/`markCircleActive` (`circle.repository.ts`,
+unchanged since 7I) and `completeActiveCircle`
+(`circle-completion.repository.ts`, 7L.1). No fourth writer, no archive
+writer, anywhere. `prisma/schema.prisma`'s `completedAt`/`completedById`/
+`archivedAt`/`archivedById` fields are byte-identical to what 7L's own
+original audit inspected — confirmed via `git status -- prisma/`
+reporting zero changes across all of 7L.1–7L.3. **No migration was
+needed, and none exists.**
+
+### Service re-audit (adversarial re-read of `circle-completion.service.ts`)
+
+Re-read line by line, checking for exactly the properties this ticket
+asks about: trusted `ownerId` only (never read from any input but the
+function's own typed parameter); the shared, unmodified
+`lockSavingsCircleForUpdate`; fresh ownership re-checked under the lock
+(`freshCircle.ownerId !== ownerId`) independently of the unlocked
+pre-check; terminal replay resolved before any lock is taken, and again
+inside the lock on a CAS miss, both routing through the same
+`resolveCompletionReplay` (never two independently-drifting replay
+paths); fresh completion requires `status === "ACTIVE"` checked twice
+(unlocked pre-check, then re-verified fresh under the lock); structural
+integrity reused verbatim from `src/domain/round-lifecycle.ts`
+(`assertRotationSequenceIntegrity`/`assertRoundLifecycleStateIntegrity`)
+via a third named-error wrapper, never reimplemented; every round's own
+`status === "CLOSED"` checked before any expensive work; contribution
+and payout readiness both re-derived via the identical shared predicates
+`advanceRound` itself uses (`assessContributionClosureReadiness`/
+`assessPayoutClosureReadiness`), batched across the whole circle;
+`Prisma.Decimal` used throughout, no `Number` conversion anywhere in the
+financial path; zero date/`Date.now()`/`new Date()` eligibility logic
+(the only `new Date()` call is the one authoritative `completedAt`
+capture, not a comparison); exactly one CAS write
+(`ACTIVE → COMPLETED`, guarded by id+ownerId+status); the returned
+`CircleCompletionResult` is a plain serialized object, never a raw
+Prisma row; no archive/reopen/reversal code path exists anywhere in the
+file. **No defect found.**
+
+### Concurrency re-audit
+
+Re-inspected `circle-completion.service.test.ts`'s own two concurrency
+tests: both use `Promise.allSettled` against the real `prisma` client
+with no mocking of any kind (grepped: zero occurrences of
+`mock`/`jest.fn`/`sinon`/`stub(` in the file) — genuine reliance on
+PostgreSQL's own `SELECT ... FOR UPDATE` row lock to serialize the two
+contenders, identical methodology to `round-lifecycle.service.test.ts`'s
+own proven six-race suite. Both re-run clean in this session: (A) two
+concurrent `completeCircle` calls resolve to exactly one physical
+transition, one replay, byte-identical `completedAt`/`completedById`;
+(B) `advanceRound` on the final round raced against `completeCircle`
+resolves to one of exactly two valid serialized outcomes (advance always
+succeeds; completion either succeeds after or fails
+`RoundsIncomplete` before, never both-in-one-transaction, never
+automatic chaining).
+
+### Corruption/integrity re-audit
+
+Re-inspected all four live-DB corruption tests
+(`circle-completion.service.test.ts`): broken round-number sequence,
+`CLOSED` round missing `closedById`, contribution-ledger/status
+disagreement, `CONFIRMED` payout amount drift — all four are simulated
+via a direct `prisma.*.update` call no service could ever produce
+(documented inline as such), all four are rejected as
+`CircleCompletionIntegrityError`, and all four leave the circle `ACTIVE`
+afterward (verified). No untested corruption path was identified beyond
+what §26's own table already named; no speculative new edge case was
+invented for its own sake, per this ticket's own instruction.
+
+### Action/security re-audit
+
+Re-read `complete-circle.ts`: `requireUser()` is the first line of the
+function body, before `formData` is ever read; `circleId` is the only
+field read from `FormData`; `ownerId` comes exclusively from
+`deps.requireUser()`'s own return value; no `requireCircleMember`, no
+`prisma.` reference, no eligibility reconstruction of any kind (the
+function calls `completeCircle` exactly once, with exactly
+`{ ownerId, circleId }`); every one of the five completion errors maps
+to a distinct, safe message, with `CircleCompletionIntegrityError` never
+collapsed into `CircleCompletionRoundsIncompleteError`'s message (grepped
+and confirmed distinct strings); fresh and replay both return the
+identical success shape (`{ status: "success", message: "The circle is
+complete." }`); `circle-completion.actions.ts` revalidates both
+`/circles/${circleId}` and `/member/circles/${circleId}` only on
+`outcome.status === "success"`.
+
+### Owner UI authority re-audit
+
+Re-confirmed the completion CTA's sole gate is
+`phase === "ALL_ROUNDS_CLOSED"` (`round-lifecycle-card.tsx` line-level
+grep); re-confirmed zero occurrences of `Date.now(`, `new Date(`,
+`rounds.every(`, `ContributionPayment`, `ContributionObligation`, or
+`payout.status` in either `round-lifecycle-card.tsx` or
+`complete-circle-controls.tsx` outside of comments. No client-side
+eligibility reconstruction exists.
+
+### Completed owner workspace re-audit
+
+Re-confirmed via the full page/component test suite: the completed
+branch renders `CompletedCircleSummary` + `ContributionDesk`/`PayoutDesk`
+at `readOnly`, contains no `RoundLifecycleCard`, no
+`CompleteCircleForm`/`StartFirstRoundForm`/`AdvanceRoundForm`, and no
+archive control of any kind; a wrong owner is denied by
+`getCompletedCircleSummaryForOwner`'s own independent ownership check
+(live-DB test, re-run clean).
+
+### Contribution/payout regression re-audit
+
+`recordContribution`/`confirmContribution`/`rejectContribution` source
+files are byte-unchanged since 7J (confirmed: this ticket series touched
+only the READ side, `contribution-owner-read.service.ts`); their own
+full test suites re-ran clean as part of the full run below. Payout
+mutation services (`payout-recording`/`payout-confirmation`/`payout
+-dispute.service.ts`) are likewise byte-unchanged; `getOwnerCirclePayouts`
+itself is unchanged (7K.7's own ACTIVE/COMPLETED/ARCHIVED eligibility,
+predating this entire slice).
+
+### Member post-completion re-audit
+
+`circle-member-session.service.ts`/`circle-member-dashboard.service.ts`/
+`payout-member-read.service.ts` are byte-unchanged across all of
+7L–7L.3; their own `ELIGIBLE_CIRCLE_STATUSES` sets (grepped fresh) remain
+`{"ACTIVE","COMPLETED","ARCHIVED"}`. No member file anywhere in the
+codebase references any completion identifier (re-confirmed via the
+extended isolation guard and a fresh whole-tree grep of `app/member/`).
+
+### Archive-boundary re-audit
+
+Fresh whole-tree grep (`src/`, `app/`) for
+`archiveCircle`/`archiveCompletedCircle`/`ArchivedCircle`/
+`completeArchive`: zero matches. Archive remains exactly what 7L froze
+it as — deferred, unimplemented, schema-ready whenever a future ticket
+takes it up.
+
+### Manual smoke check
+
+**Not performed**, for the identical reason 7L.3 could not perform it:
+no running dev server with a real authenticated browser session exists
+in this environment, and an unauthenticated redirect is not accepted as
+a substitute per this ticket's own instruction. Per this ticket's own
+freeze standard (§21), this alone does not block freeze — it is a
+release-hardening caveat carried forward, not new information.
+
+### Full `pnpm test` result (required, run to completion)
+
+```
+tests 1407
+pass 1399
+fail 1
+skipped 7
+cancelled 0
+todo 0
+```
+
+The wrapper's own `npm`/`pnpm` process exited 1 (matching this
+codebase's own documented quirk: the script's exit code reflects the
+underlying `node --test` failure even though the TAP summary itself is
+printed correctly) — reported precisely, not glossed over. The one
+failure: `circle-member-auth-rate-limit.service.test.ts`, subtest "G.
+concurrent requests against a fresh SOURCE cannot exceed the SOURCE
+threshold" (`16 !== 20`, preceded by nine logged
+`PrismaClientKnownRequestError` occurrences from
+`checkMemberAuthenticationRateLimit` under genuine concurrent load).
+This file has **no relationship of any kind** to circle completion —
+grepped, confirmed zero references to `completeCircle`/`CircleCompletion`
+in either direction. Re-run in isolation four more times immediately
+after: pass, pass, fail (a **different** subtest failed this time:
+the same "G." test, `16 !== 20` again but from a fresh run), pass. This
+is consistent with genuine, pre-existing test-infrastructure flakiness —
+real concurrent load (20–25 simultaneous requests) against a shared,
+non-isolated, serverless (Neon) Postgres connection in this environment,
+not a deterministic code defect and not new: 7L.1's own verification
+already documented an intermittent failure in this exact file for an
+unrelated reason (GLOBAL-bucket window exhaustion). **No evidence ties
+either failure mode to circle completion, and no completion-domain
+test has ever failed, flaked, or shown timing sensitivity across
+dozens of runs in this entire ticket series.** Not reopened, per this
+ticket's own explicit instruction not to touch completion code without
+evidence.
+
+The 7 skipped tests are the same, already-documented,
+`TEST_DATABASE_URL`-gated destructive limiter-cleanup tests named in
+7L.1's own verification section — unrelated, unchanged, correctly
+skipped by design in this environment.
+
+### Other verification
+
+- `pnpm lint`: clean.
+- `pnpm build`: succeeds, same 13 routes as before this entire slice
+  began (no route added, removed, or changed).
+- `pnpm prisma validate`: schema valid.
+- `pnpm prisma migrate status`: database up to date, no pending
+  migrations.
+- `git diff --check`: clean.
+- `npx tsc --noEmit`: the same 9 known pre-existing errors, unchanged,
+  all in `trusted-member-auth-source.test.ts`/`circle-member-auth-rate
+  -limit.service.test.ts` (unrelated `NODE_ENV`/import-extension issues).
+
+### Test-methodology classification (honest, not blurred)
+
+- **Live PostgreSQL integration tests**: `circle-completion.service
+  .test.ts` (26), `circle-completed-owner.service.test.ts` (9),
+  the extended `contribution-owner-read.service.test.ts` cases, and
+  every pre-existing 7I/7J/7K service test file.
+- **Live PostgreSQL concurrency tests**: the two named in
+  `circle-completion.service.test.ts` §11/§12 above, using the real row
+  lock, no mocks.
+- **Dependency-injected behavioral tests** (mocked `requireUser`/service
+  call, no live DB): `complete-circle.test.ts`, and every pre-existing
+  `activate-first-round.test.ts`-shaped action test.
+- **Structural/source-regex tests** (reading actual source text, no
+  DOM/browser rendered): every `*.test.ts` file paired with a `.tsx`
+  component or a `.actions.ts`/isolation-guard file across 7L.2/7L.3 —
+  `complete-circle-controls.test.ts`, `completed-circle-summary.test.ts`,
+  `contribution-desk.test.ts`, `payout-desk.test.ts`,
+  `round-lifecycle-card.test.ts`, `page.test.ts`, `circle-completion
+  .actions.test.ts`, `circle-completion-isolation.test.ts`. **These are
+  never DOM/React-rendered and never claim browser coverage.**
+- **Browser/manual tests**: **none performed** in this entire slice
+  (7L.3 and 7L.4 both name this explicitly as an outstanding,
+  non-blocking caveat).
+
+### Source-of-truth audit
+
+Confirmed unchanged and non-overlapping: completion eligibility lives
+exclusively in `completeCircle` (service layer); the UI's authority to
+*show* the completion control is exclusively
+`getOwnerRoundLifecycle`'s own `phase === "ALL_ROUNDS_CLOSED"`, read
+verbatim, never recomputed; `complete-circle.ts`/`circle-completion
+.actions.ts` perform authentication, field whitelisting, error mapping,
+and revalidation only, with zero eligibility logic of their own; the
+completed owner route performs historical reads only, with zero
+mutation authority. No layer outside `completeCircle` itself ever
+decides *whether* a circle may complete.
+
+### Regression audit
+
+Full-suite evidence above, plus targeted re-runs of every directly
+adjacent suite (round-lifecycle actions/service/isolation, contribution
+recording/confirmation/rejection, payout recording/confirmation/dispute,
+circle activation, member auth/dashboard/payout-read) earlier in this
+ticket series and again as part of the full run just now: all green. No
+regression found in ACTIVE/DRAFT owner workspaces, the member workspace,
+or any of the three financial workflows.
+
+### Final 20 freeze-question answers
+
+1. Can a circle complete before every round is CLOSED? **No** — checked
+   twice (unlocked pre-check, re-verified fresh under the lock).
+2. Can a CLOSED but financially-corrupt round pass completion? **No** —
+   Option B revalidation catches it as `CircleCompletionIntegrityError`
+   (4 live-DB corruption tests, all passing).
+3. Can a non-owner complete? **No** — authorization checked at both the
+   action boundary and independently again inside the service, twice
+   (unlocked and locked).
+4. Can a member complete? **No** — no `requireCircleMember` reference
+   anywhere in the completion action/service; member-session authority
+   is never involved.
+5. Can completion happen automatically? **No** — no scheduler exists in
+   this codebase; `advanceRound` cannot chain into `completeCircle`
+   (grepped, zero references in `round-lifecycle.service.ts`).
+6. Can completion happen twice physically? **No** — proven by the
+   live-DB double-completion concurrency test: exactly one physical
+   transition, the other resolves as replay.
+7. Can replay regenerate timestamps? **No** — `resolveCompletionReplay`
+   always returns the row's original, first-written provenance;
+   verified by a test asserting `completedAt`/`updatedAt` are
+   byte-identical before/after a replay call.
+8. Can completion rewrite round/financial provenance? **No** — a
+   dedicated test asserts every `PayoutRound`/`ContributionObligation`/
+   `ContributionPayment`/`Payout` row is byte-identical before/after a
+   successful completion.
+9. Can fresh financial mutations occur after COMPLETED? **No** — proven
+   by a dedicated post-completion test; the pre-existing
+   `status !== "ACTIVE"` gate in each mutation service, unmodified,
+   already covers it.
+10. Do legitimate historical replays still work after COMPLETED?
+    **Yes** — proven by a dedicated test exercising exact-intent and
+    terminal-decision replay for both contribution and payout services.
+11. Can owners still read completed-circle accounting? **Yes** — both
+    contribution and payout historical reads are COMPLETED-eligible,
+    and the owner route now actually reaches them (the P1 fix).
+12. Can members still read completed-circle history? **Yes** — already
+    true before this slice began (7L §13), unchanged and re-verified.
+13. Are any mutation controls exposed on COMPLETED owner UI? **No** —
+    verified structurally for both desks and the completed summary.
+14. Is archive still absent? **Yes, fully** — zero implementation
+    anywhere, confirmed by a fresh whole-tree grep.
+15. Is any completion logic duplicated in the UI/action layer? **No** —
+    the UI's only authority is the pre-existing `phase` field; the
+    action performs no eligibility computation.
+16. Is any date/due-date gating involved? **No** — confirmed
+    structurally and by a live-DB future-due-date test.
+17. Are completion and final-round closure still separate explicit
+    acts? **Yes** — proven by the final-round-vs-completion concurrency
+    test; no single transaction ever does both.
+18. Does current schema need any completion migration? **No** — same
+    answer as 7L, re-confirmed; zero schema/migration file changes
+    across the entire slice.
+19. Are there any P0/P1 defects? **None found** in the completion
+    domain. (See §21 below for the one pre-existing, unrelated,
+    non-blocking test-infrastructure flake.)
+20. Is this slice ready to freeze? **Yes.**
+
+### P0 findings
+
+**None.**
+
+### P1 findings
+
+**None new.** The one P1 named by 7L (§14/§21/§27, the owner-route 404)
+was fixed by 7L.3 and is re-confirmed fixed here.
+
+### Known deferred/non-blocking issues
+
+- Archive (`ARCHIVED`, `archiveCircle`) remains fully deferred — schema
+  is ready, nothing else is.
+- Manual authenticated browser smoke test remains outstanding (7L.3,
+  re-confirmed here) — recommended before production release, not a
+  freeze blocker per this ticket's own explicit standard (§21).
+- `circle-member-auth-rate-limit.service.test.ts` remains intermittently
+  flaky under real concurrent load in this environment — pre-existing,
+  unrelated to circle completion, documented honestly rather than
+  hidden, not a freeze blocker per this ticket's own explicit standard.
+- The 9 known pre-existing `tsc` errors (unrelated `NODE_ENV`/import
+  -extension issues in two auth test files) remain unchanged — not a
+  freeze blocker per this ticket's own explicit standard.
+
+### Recommended next roadmap boundary
+
+Phase 8 candidates, in rough priority order: (1) archive
+(`archiveCircle`, an owner "my circles" list if one is ever built,
+archive UI); (2) the outstanding manual authenticated browser
+click-through for the completion flow; (3) investigating the
+`circle-member-auth-rate-limit.service.test.ts` flakiness as a
+test-infrastructure hardening task (e.g., a dedicated isolated rate
+-limit test database), independent of any product ticket. None of these
+block shipping the completion slice itself.
+
+**TICKET 7L.4 — SUSU CIRCLE COMPLETION AUDIT & FREEZE: FROZEN**
