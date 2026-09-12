@@ -975,3 +975,152 @@ implemented correctly — it blocks only the *UI* from correctly surfacing
 the result. No P0 finding exists. No contradiction with 7K.11–7K.16 was
 found; every "frozen" item above either confirms, extends, or exercises
 an already-existing contract rather than reopening one.
+
+## 35. 7L.1 implementation note
+
+**Status: implemented and tested.** This section records what 7L.1
+actually built against the frozen contract above — it does not reopen or
+amend any "frozen" decision in §1–34; every choice below either directly
+implements one of those decisions or was a genuinely new implementation
+detail (query batching, error re-export shape) consistent with them.
+
+**Files added** (no existing file was modified):
+`src/repositories/circle-completion.repository.ts` (the one CAS write —
+`completeActiveCircle`, guarded by `id`+`ownerId`+`status: "ACTIVE"` in
+one `updateMany`, mirroring `completeActivePersonalGoal`'s own
+ownerId+status CAS guard — plus read-only queries batched across the
+whole circle: one query for every obligation, one for every obligation's
+confirmed-payment ledger sum, one for every payout — never one
+round-trip per round, per §5's own required query shape),
+`src/services/circle-completion.service.ts` (the one public operation,
+`completeCircle({ ownerId, circleId })`), and
+`src/services/circle-completion.service.test.ts` (26 live-Postgres
+fixture tests, 0 mocks).
+
+**Reused, never reimplemented**: `assertRotationSequenceIntegrity` and
+`assertRoundLifecycleStateIntegrity` (`src/domain/round-lifecycle.ts`),
+wrapped in this service's own `CircleCompletionIntegrityError`, exactly
+the same wrap-the-shared-validator idiom `circle.service.ts`'s
+`assertActivatedRotationIntegrity` and `round-lifecycle.service.ts`'s
+`assertLifecycleStateIntegrity` each already use (§6/§7) — a third
+wrapper, not a fourth drifting copy. `assessContributionClosureReadiness`/
+`assessPayoutClosureReadiness` (same file) are re-run, per round, for the
+frozen §5 Option B defense-in-depth revalidation — any outcome other than
+`READY` for an already-`CLOSED` round is reported as
+`CircleCompletionIntegrityError`, never `CircleCompletionRoundsIncompleteError`
+(§9/§20, verified by dedicated corruption tests below).
+`computeExpectedPayoutAmount`/`PayoutAccountingIntegrityError`
+(`src/domain/payout-accounting.ts`) are used/re-exported identically to
+`round-lifecycle.service.ts`'s own existing pattern — imported without a
+local binding and only re-exported, since (like that file) this service
+never catches it directly.
+
+**Locking**: the unmodified `lockSavingsCircleForUpdate`
+(`circle-lock.repository.ts`), acquired inside `prisma.$transaction`,
+same lock order as every other SUSU writer (§21) — verified by a
+dedicated structural test asserting the import and at least one call
+site, and that no `$queryRaw`/second lock mechanism exists in this
+service.
+
+**Shape**: mirrors `activateFirstRound`/`advanceRound` exactly — an
+unlocked pre-check (not-found → authorization → terminal replay
+short-circuit → cheap "every round CLOSED" structural check, all without
+the lock) followed by a locked, re-verified-from-scratch transaction that
+only then runs the expensive per-round financial revalidation and the
+CAS write, with a re-read-and-resolve (never assume) path on a CAS miss.
+
+**Replay**: same-owner-only, exactly as frozen (§9) — ownership is
+checked before the `COMPLETED` branch is ever reached, so a non-owner
+observing an already-`COMPLETED` circle is denied
+(`CircleCompletionAuthorizationError`), never treated as replay (verified
+by a dedicated test). A same-owner replay performs zero writes and never
+regenerates `completedAt`/`completedById` (verified: `updatedAt` and
+`completedAt` are byte-identical before/after the second call).
+
+**Provenance/timestamp**: writes exactly `status`/`completedAt`/
+`completedById` — a dedicated test asserts `activatedAt`/`activatedById`/
+`archivedAt`/`archivedById` and every `PayoutRound`/
+`ContributionObligation`/`ContributionPayment`/`Payout` row are
+byte-identical before and after a successful completion. A separate test
+asserts `completedAt` postdates the final round's own `closedAt` (never
+derived from it), and a future-due-date fixture (`startDate` in 2099)
+proves no date gates eligibility.
+
+**Concurrency evidence, both real Postgres, no mocks**:
+- Two concurrent `completeCircle` calls (same owner, same circle):
+  exactly one resolves `replayed: false`, the other `replayed: true`,
+  both report byte-identical `completedAt`/`completedById`, and the
+  persisted row shows exactly one `COMPLETED` transition.
+- `advanceRound` on the final round raced against `completeCircle`: the
+  advance always succeeds regardless of order; the final round is
+  `CLOSED` either way; completion either succeeds (advance won the lock
+  first) or fails `CircleCompletionRoundsIncompleteError` while the
+  circle remains `ACTIVE` (completion won the lock first) — never a
+  partial or automatically-chained transition, matching §22 exactly.
+
+**Corruption tests** (all live-DB, via a direct `prisma.*.update` call
+that no service in this codebase could ever produce — each documented
+inline in the test as such): a broken round-number sequence (gap, not a
+duplicate — the unique index already makes duplicates impossible); a
+`CLOSED` round missing `closedById`; a `CLOSED` round's confirmed-payment
+ledger silently disagreeing with its `FULFILLED` obligation status; a
+`CLOSED` round's `CONFIRMED` payout amount drifted from the frozen
+expected total. All four are rejected as `CircleCompletionIntegrityError`
+and leave the circle `ACTIVE` (§26, all four rows of that table's
+corruption examples now have live-DB test coverage, not just analysis).
+
+**Post-completion financial behavior**: one test proves exact-intent
+`recordContribution`/`recordPayout` replay (same `clientOperationId`)
+and terminal-decision `confirmContribution`/`confirmPayout` replay both
+remain valid after completion, unmodified; a second test proves a
+genuinely fresh `recordContribution`/`recordPayout` call (a new
+`clientOperationId`) is rejected — as `ContributionRecordingCircleNotActiveError`/
+`PayoutRecordingCircleNotActiveError` respectively — because the circle
+is no longer `ACTIVE`, with no new completion-specific gate added to
+either service (§11/§12/§19, confirmed rather than merely asserted).
+
+**No UI, no Server Action**: neither exists for this ticket, by design
+(§22) — `completeCircle` cannot yet be triggered through the product.
+The P1 owner-route gap (§14/§21/§27: `/circles/[circleId]` 404s once a
+circle is `COMPLETED`, because `getActiveCircleSummaryForOwner`/
+`getOwnerCircleContributions` remain `ACTIVE`-only) is unchanged and
+remains outstanding, exactly as this audit already flagged — it is a
+follow-up for the ticket that adds the Server Action/UI, not something
+7L.1 could or should fix.
+
+**Test methodology, stated precisely**: all 26 new tests are live
+PostgreSQL integration tests (real `activateCircle`/`activateFirstRound`/
+`advanceRound`/`recordContribution`/`confirmContribution`/`recordPayout`/
+`confirmPayout` service calls to build fixtures; no mocks, no stubs);
+three are structural/source-regex tests (asserting import/call-site
+text, not runtime behavior) clearly labeled as such; two are genuine
+concurrency tests using `Promise.allSettled` against the real shared row
+lock (no synthetic delay or mocked race). No test was skipped or hidden;
+the full suite ran to its final summary.
+
+**Verification**: `pnpm lint` clean; `pnpm build` succeeds; `pnpm prisma
+validate` schema valid; `pnpm prisma migrate status` up to date, no
+pending migrations (none expected, none made); `git diff --check`
+clean; `npx tsc --noEmit` shows the same 9 known pre-existing errors,
+unchanged, all in unrelated test files. `pnpm test` (full suite, 1301
+tests): 1298 passed, 7 skipped (pre-existing, require an unset
+`TEST_DATABASE_URL`), 1 failed on the first full run —
+`circle-member-auth-rate-limit.service.test.ts`'s own TARGET-scope test,
+in a file this ticket never touched. Re-run in isolation, it failed
+once more and then passed cleanly on the next run moments later; its own
+GLOBAL bucket is a real, shared, non-isolated 60-second-window row in
+the dev database (the file's own comments document this), and this
+session had just run the full suite repeatedly — consistent with
+transient cross-run GLOBAL-window exhaustion, not a regression from
+this ticket. Reported precisely rather than called either "clean" or
+"failed" without qualification, per this ticket's own instruction.
+
+**Boundary audit** (§27): `git status` shows exactly three new,
+untracked files and zero modified files. Grepped the new files and
+confirmed no Server Action (`"use server"`), no UI component, no
+archive writer, no reference to `completeCircle`/`COMPLETED`/
+`archivedAt`/`archivedById` inside `round-lifecycle.service.ts` (which
+this ticket never edited), and no notification/scheduler/admin/payment-
+execution code anywhere in the two new source files.
+
+**TICKET 7L.1 — SUSU CIRCLE COMPLETION SERVICE: COMPLETE**
