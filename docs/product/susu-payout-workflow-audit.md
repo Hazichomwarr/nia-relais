@@ -2429,3 +2429,16 @@ remain untouched and isolated by an extended structural guard. No
 circle-completion behavior was added; the circle remains ACTIVE (never
 rendered as completed) once all rounds are closed, exactly as §21.13/
 §21.25 froze.
+
+**TICKET 7L — SUSU CIRCLE COMPLETION AUDIT & V1 CONTRACT: READY FOR
+IMPLEMENTATION** — see the dedicated companion document
+`docs/product/susu-circle-completion-audit.md` (split out rather than
+further overloading §21). Confirms, without contradiction, 7K.1 item
+10's own predicted reduction ("every round CLOSED" already implies every
+financial predicate) against the actual 7K.13 implementation; freezes
+completion as an explicit, owner-only, defense-in-depth-revalidating
+mutation with no schema change needed. One P1 UI follow-up was found
+(the owner's own `/circles/[circleId]` route currently 404s once a
+circle reaches COMPLETED, since `getActiveCircleSummaryForOwner`/
+`getOwnerCircleContributions` remain ACTIVE-only) — it does not block
+implementing the completion service/action itself.
