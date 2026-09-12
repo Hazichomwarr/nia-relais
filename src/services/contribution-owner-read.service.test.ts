@@ -7,7 +7,7 @@ import test from "node:test";
 import { confirmContribution } from "@/src/services/contribution-confirmation.service";
 import {
   OwnerContributionsAuthorizationError,
-  OwnerContributionsCircleNotActiveError,
+  OwnerContributionsCircleNotEligibleError,
   OwnerContributionsCircleNotFoundError,
   OwnerContributionsRoundNotFoundError,
   getOwnerCircleContributions,
@@ -169,14 +169,39 @@ test("a nonexistent circle is rejected with OwnerContributionsCircleNotFoundErro
   );
 });
 
-test("a non-ACTIVE circle is rejected with OwnerContributionsCircleNotActiveError", async () => {
+test("a DRAFT circle is rejected with OwnerContributionsCircleNotEligibleError", async () => {
   const ownerId = await createOwner();
   const circleId = await createFixtureCircle(ownerId, "DRAFT", "10.00");
 
   await assert.rejects(
     () => getOwnerCircleContributions({ ownerId, circleId }),
-    OwnerContributionsCircleNotActiveError,
+    OwnerContributionsCircleNotEligibleError,
   );
+});
+
+for (const status of ["CANCELLED", "ARCHIVED"] as const) {
+  test(`a ${status} circle is rejected with OwnerContributionsCircleNotEligibleError`, async () => {
+    const ownerId = await createOwner();
+    const circleId = await createFixtureCircle(ownerId, status, "10.00");
+
+    await assert.rejects(
+      () => getOwnerCircleContributions({ ownerId, circleId }),
+      OwnerContributionsCircleNotEligibleError,
+    );
+  });
+}
+
+test("a COMPLETED circle is now eligible (7L.3 P1 fix) -- historical contribution data reads successfully", async () => {
+  const ownerId = await createOwner();
+  const circleId = await createFixtureCircle(ownerId, "ACTIVE", "10.00");
+  const memberA = await createFixtureMember(circleId, ownerId, "A", 1);
+  const roundId = await createFixtureRound(circleId, 1, memberA.id);
+  await createFixtureObligation(circleId, roundId, memberA.id, "10.00");
+  await prisma.savingsCircle.update({ where: { id: circleId }, data: { status: "COMPLETED", completedAt: new Date(), completedById: ownerId } });
+
+  const result = await getOwnerCircleContributions({ ownerId, circleId });
+  assert.equal(result.circle.status, "COMPLETED");
+  assert.equal(result.obligations.length, 1);
 });
 
 test("a foreign roundId (belonging to a different circle) is rejected with the same not-found error as a nonexistent one", async () => {

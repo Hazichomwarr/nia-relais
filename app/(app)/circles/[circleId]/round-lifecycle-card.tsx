@@ -1,6 +1,7 @@
 import type { OwnerRoundLifecycleResult } from "@/src/services/round-lifecycle-owner-read.service";
 
 import { formatOwnerDate, getRoundStatusBadge } from "./circle-workspace-display";
+import { CompleteCircleForm } from "./complete-circle-controls";
 import { getBlockerMessage } from "./round-lifecycle-display";
 import { AdvanceRoundForm, StartFirstRoundForm } from "./round-lifecycle-controls";
 
@@ -109,6 +110,7 @@ export function RoundLifecycleCard({
         <div className="mt-4">
           <p className="text-sm leading-6 text-[#587066]">All rotation rounds are closed.</p>
           <p className="mt-2 text-sm leading-6 text-[#587066]">The circle has not yet been marked complete in NIA.</p>
+          <CompleteCircleForm circleId={circleId} />
         </div>
       ) : null}
     </Card>

@@ -1253,3 +1253,182 @@ workspace and add the UI control together, so a "Complete circle"
 button is never shipped that sends its own owner into a 404.
 
 **TICKET 7L.2 — SUSU CIRCLE COMPLETION SERVER ACTION: COMPLETE**
+
+## 37. 7L.3 implementation note
+
+**Status: implemented and tested.** This section fixes the P1 named by
+§14/§21/§27 (and re-confirmed unresolved at the end of §35/§36):
+`/circles/[circleId]` used to 404 once a circle became `COMPLETED`. It
+does not reopen or amend any frozen §1–36 decision — completion's own
+service/action semantics (7L.1/7L.2) are unchanged, byte-for-byte.
+
+**Files changed**: `contribution-owner-read.service.ts` (eligibility
+extended `ACTIVE` → `ACTIVE`/`COMPLETED`; `OwnerContributionsCircleNotActiveError`
+renamed to `OwnerContributionsCircleNotEligibleError`, mirroring
+`OwnerPayoutsCircleNotEligibleError`'s own existing naming for the
+identical multi-status shape — grepped, exactly 4 call sites, all
+updated), `contribution-desk.tsx`/`payout-desk.tsx` (new required
+`readOnly` prop), `round-lifecycle-card.tsx` (renders `CompleteCircleForm`
+inside its own `ALL_ROUNDS_CLOSED` phase only), `page.tsx` (three-way
+branch: `draft`/`active`/`completed`), plus their test files.
+
+**Files added**: `src/repositories/circle-completed-owner.repository.ts` +
+`src/services/circle-completed-owner.service.ts`
+(`getCompletedCircleSummaryForOwner`, a dedicated historical read — not an
+extension of the ACTIVE-only `getActiveCircleSummaryForOwner`, whose own
+"this circle is active... can no longer be changed" semantics would be
+dishonest to reuse for a terminal state), `completed-circle-summary.tsx`
+(the COMPLETED render branch's own summary component), `complete-circle
+-controls.tsx` (`CompleteCircleForm`, the completion CTA, mirroring
+`round-lifecycle-controls.tsx`'s own `StartFirstRoundForm` shape exactly),
+and their test files.
+
+**Owner-route branching**: `loadWorkspaceOrSummary`'s not-draft branch now
+fetches `getOwnerCirclePayouts` FIRST (not last) — it already accepted
+`ACTIVE`/`COMPLETED`/`ARCHIVED` before this ticket and is required by
+BOTH branches regardless, so reading its own `circle.status` once decides
+which branch to take with no redundant read and no separate status probe.
+`ACTIVE` → fetch `getActiveCircleSummaryForOwner`/`getOwnerCircleContributions`/
+`getOwnerRoundLifecycle` in parallel. `COMPLETED` → fetch
+`getCompletedCircleSummaryForOwner`/`getOwnerCircleContributions` in
+parallel (no round-lifecycle read — see below). Any other status
+`getOwnerCirclePayouts` itself accepts but this route doesn't yet render
+(`ARCHIVED`, deferred) falls through to `notFound()`, never a guessed
+render. Every not-found/authorization/not-eligible error from any read in
+either branch still collapses to `notFound()`; every genuine integrity
+error still propagates to Next's own error boundary, unchanged from the
+pre-7L.3 discipline.
+
+**Completed owner read model**: `getCompletedCircleSummaryForOwner`
+returns circle identity/terms, `status: "COMPLETED"`, `completedAt`, the
+same ordered member list `getActiveCircleSummaryForOwner` already shows,
+and `memberCount`. No round schedule (already fully covered by
+`getOwnerCirclePayouts`'s own persisted rounds — not duplicated), no
+`completedById`/`activatedById` (verified: a dedicated test asserts the
+circle result's own key set contains no actor id).
+
+**Contribution historical-read change**: `getOwnerCircleContributions`'s
+eligibility is now `{"ACTIVE", "COMPLETED"}` (not `ARCHIVED` — no circle
+can reach that status yet). Purely a READ-side change: `recordContribution`/
+`confirmContribution`/`rejectContribution` were not touched and remain
+`ACTIVE`-only for fresh mutation, exactly as 7J froze — verified by a
+dedicated test (`recordContribution`/`confirmContribution` still function
+identically; no mutation test was changed).
+
+**Payout historical-read behavior**: unchanged — `getOwnerCirclePayouts`
+was already `ACTIVE`/`COMPLETED`/`ARCHIVED`-eligible before this ticket
+(7K.7); this ticket only makes the owner ROUTE actually reach it for a
+`COMPLETED` circle, which it now does via the probe-first design above.
+
+**Completion CTA authority** (7L.3 section 7, frozen as designed): the
+CTA's sole gate is `phase === "ALL_ROUNDS_CLOSED"`, read verbatim from
+`getOwnerRoundLifecycle`'s own already-existing, unmodified authority.
+`round-lifecycle-card.tsx` performs no independent readiness computation
+— verified by a dedicated test asserting the file contains no
+`ContributionPayment`/`ContributionObligation`/`payout.status`/`.every(`/
+`assessContributionClosureReadiness`/`assessPayoutClosureReadiness`/date
+logic, and that `CompleteCircleForm` is rendered ONLY inside the
+`ALL_ROUNDS_CLOSED` branch (never `NOT_STARTED`/`IN_PROGRESS`).
+`getOwnerRoundLifecycle` itself is unchanged and remains `ACTIVE`-only
+(7L.3 section 6, frozen) — a completed circle fetches no lifecycle read
+at all.
+
+**Completion control/action wiring**: `CompleteCircleForm` submits
+exactly `circleId` to the unmodified `completeCircleAction` (7L.2) via
+the unmodified `initialCompleteCircleState` — verified by a dedicated
+test asserting the form's only `name=` attribute is `circleId`, and that
+no `ownerId`/`status`/`completedAt`/`completedById`/`roundId`/`archive`
+field exists. Pending state disables the submit button
+(`disabled={pending}`); pending copy is "Completing circle…"; success/
+error render the action's own truthful `message`/`formError`, never a
+fabricated local string; no `useState` sets any optimistic status — the
+next server-rendered page (via `completeCircleAction`'s own existing
+`revalidatePath` calls, unchanged from 7L.2) is the sole source of the
+post-success page state.
+
+**Read-only enforcement** (7L.3 sections 13/14/23/24): `ContributionDesk`/
+`PayoutDesk` each take an explicit, required `readOnly: boolean` prop —
+never inferred from `canRecordFreshContribution`/`canRecordFreshPayout`/
+payment or payout status alone, even though those would already
+coincidentally evaluate to "no fresh mutation" for a genuinely completed
+circle. `page.tsx` passes `readOnly={false}` in the `ACTIVE` branch and
+`readOnly` (`true`) in the `COMPLETED` branch. When `true`,
+`RecordContributionForm`/`ContributionPaymentControls`/`RecordPayoutForm`
+are never rendered, regardless of what the underlying eligibility
+functions say — verified by dedicated tests for both components. The
+completed render branch itself renders no `CompleteCircleForm`/
+`StartFirstRoundForm`/`AdvanceRoundForm` at all (verified:
+`completed-circle-summary.tsx` and the completed branch of `page.tsx`
+both structurally contain none of those identifiers).
+
+**Circle-list/navigation behavior**: audited, unchanged, documented as a
+finding rather than a change — this codebase has no "my circles" index
+page anywhere yet (owners navigate to a specific circle by id); there is
+nothing to filter or discover, so nothing was implemented here.
+
+**Authorization/privacy evidence**: every new/changed read (
+`getCompletedCircleSummaryForOwner`, the extended
+`getOwnerCircleContributions`) independently re-verifies `circle.ownerId
+=== input.ownerId` before returning anything — verified by a dedicated
+"wrong owner is denied" test for each. `completeCircleAction`'s own
+authority (7L.2, unchanged) remains the only mutation path; no
+member-session (`requireCircleMember`) reference exists in any new file
+(verified structurally, including in the isolation guard below).
+
+**Isolation/security evidence**: `circle-completion-isolation.test.ts`
+(originally 7L.2's "no UI at all" guard) was extended, not replaced: it
+now explicitly documents that `page.tsx`/`round-lifecycle-card.tsx` are
+DELIBERATELY removed from its forbidden-identifier list (7L.3 wires them
+on purpose), while every OTHER owner UI file, every member UI file,
+every other Server Action module, and `round-lifecycle.service.ts` itself
+still assert zero completion references — plus a new assertion that
+`complete-circle-controls.tsx`/`CompleteCircleForm` is imported from
+nowhere except `round-lifecycle-card.tsx`.
+
+**Test methodology, stated precisely**: two new live-Postgres integration
+test files (`circle-completed-owner.service.test.ts`, and the added cases
+in `contribution-owner-read.service.test.ts`) — real fixtures, no mocks.
+Every UI-facing test (`contribution-desk.test.ts`, `payout-desk.test.ts`,
+`round-lifecycle-card.test.ts`, `complete-circle-controls.test.ts`,
+`completed-circle-summary.test.ts`, `page.test.ts`, `circle-completion
+-isolation.test.ts`) is structural/source-regex only, reading the actual
+`.tsx`/`.ts` source text — no React Testing Library, no jsdom, no real
+browser session was exercised for any component in this ticket.
+
+**Verification** (no full `pnpm test`, per this ticket's own instruction):
+every new test, plus every directly relevant existing suite (all five
+owner read-model test files — 130 tests; the four completion-action/
+isolation test files — 76 tests; `circle-completion.service.test.ts` —
+26 tests, unaffected) pass, 0 failures. `pnpm lint`: clean. `pnpm build`:
+succeeds, same 13 routes as before (no route added or changed — the
+COMPLETED branch is the same `/circles/[circleId]` URL, not a new one).
+`npx tsc --noEmit`: same 9 known pre-existing errors, unchanged.
+`git diff --check`: clean. No persistence/schema file changed — verified
+by `git status` (`prisma/`, `migrations/` untouched); `prisma validate`/
+`migrate status` were correctly not re-run.
+
+**Manual product smoke check**: **not performed.** This session has no
+running dev server with a real authenticated browser session, and per
+this ticket's own explicit instruction, an unauthenticated 307 redirect
+is not accepted as a substitute for that evidence — so none is offered
+here. In its place: the live-Postgres integration tests in
+`circle-completed-owner.service.test.ts` and the extended
+`contribution-owner-read.service.test.ts` exercise the real,
+non-mocked `getOwnerCirclePayouts` → branch → `getCompletedCircleSummaryForOwner`/
+`getOwnerCircleContributions` data path end-to-end against a real
+database (using circles genuinely driven through `activateCircle` →
+`activateFirstRound`/`advanceRound` → `completeCircle` in
+`circle-completion.service.test.ts`'s own fixtures), which is the
+strongest evidence available without a browser in this environment. A
+real authenticated browser click-through remains outstanding and should
+be performed before this ships to production.
+
+**Remaining deferred work**: `ARCHIVED` and any archive UI/action/service
+remain fully deferred (7L §16), untouched here — no button, route,
+copy, or schema change for it anywhere in this ticket.
+
+**TICKET 7L.3 — COMPLETED OWNER WORKSPACE + CIRCLE COMPLETION UI:
+COMPLETE**, with one caveat carried forward explicitly: the manual
+authenticated browser smoke check named by this ticket's own section 28
+was not performed (no browser/session available in this environment) and
+should be done before production release.

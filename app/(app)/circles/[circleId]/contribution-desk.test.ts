@@ -59,14 +59,27 @@ test("payment history items show amount, status, recorded/confirmed/rejected tim
   }
 });
 
-test("the record-contribution form is rendered only when canRecordFreshContribution allows it", () => {
-  assert.match(source, /const canRecord = canRecordFreshContribution\(obligation, payments\);/);
+test("the record-contribution form is rendered only when canRecordFreshContribution allows it AND readOnly is false", () => {
+  assert.match(source, /const canRecord = !readOnly && canRecordFreshContribution\(obligation, payments\);/);
   assert.match(source, /\{canRecord \? \(\s*<div className="mt-4">\s*<RecordContributionForm/);
 });
 
-test("confirm/reject controls are rendered only for a RECORDED payment", () => {
-  assert.match(source, /payment\.status === "RECORDED" \? \(/);
+test("confirm/reject controls are rendered only for a RECORDED payment AND readOnly is false", () => {
+  assert.match(source, /!readOnly && payment\.status === "RECORDED" \? \(/);
   assert.match(source, /<ContributionPaymentControls circleId=\{circleId\} paymentId=\{payment\.id\} \/>/);
+});
+
+test("readOnly is a required, explicit prop on ContributionDesk -- not inferred from data shape", () => {
+  assert.match(source, /export function ContributionDesk\(\{\s*circleId,\s*contributions,\s*readOnly,\s*\}: \{\s*circleId: string;\s*contributions: OwnerCircleContributionsResult;\s*readOnly: boolean;\s*\}\)/);
+});
+
+test("readOnly is threaded down to both ObligationCard and PaymentHistoryItem, not just checked once at the top", () => {
+  assert.match(source, /<ObligationCard\s*[\s\S]*?readOnly=\{readOnly\}/);
+  assert.match(source, /<PaymentHistoryItem key=\{payment\.id\} circleId=\{circleId\} payment=\{payment\} readOnly=\{readOnly\} \/>/);
+});
+
+test("readOnly copy explains the circle is complete and the history is permanent", () => {
+  assert.match(source, /This circle is complete\. The contribution history below is a permanent record/);
 });
 
 test("no PIN, pinHash, or other credential/session field is ever rendered", () => {

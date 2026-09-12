@@ -41,9 +41,21 @@ test("payout status is derived via getPayoutStatusPresentation from payout.statu
   assert.match(source, /getPayoutStatusPresentation\(round\.payout \? round\.payout\.status : null\)/);
 });
 
-test("the record-payout form is rendered only when canRecordFreshPayout allows it, and takes no round.status argument", () => {
-  assert.match(source, /const canRecord = canRecordFreshPayout\(round\.payout\);/);
+test("the record-payout form is rendered only when canRecordFreshPayout allows it AND readOnly is false, and takes no round.status argument", () => {
+  assert.match(source, /const canRecord = !readOnly && canRecordFreshPayout\(round\.payout\);/);
   assert.match(source, /\{canRecord \? \(\s*<div className="mt-4">\s*<RecordPayoutForm/);
+});
+
+test("readOnly is a required, explicit prop on PayoutDesk -- not inferred from data shape", () => {
+  assert.match(source, /export function PayoutDesk\(\{\s*circleId,\s*payouts,\s*readOnly,\s*\}: \{\s*circleId: string;\s*payouts: OwnerCirclePayoutsResult;\s*readOnly: boolean;\s*\}\)/);
+});
+
+test("readOnly is threaded down to RoundCard, not just checked once at the top", () => {
+  assert.match(source, /<RoundCard key=\{round\.id\} circleId=\{circleId\} round=\{round\} readOnly=\{readOnly\} \/>/);
+});
+
+test("readOnly copy explains the circle is complete and the history is permanent", () => {
+  assert.match(source, /This circle is complete\. The payout history below is a permanent record/);
 });
 
 test("a RECORDED/CONFIRMED/DISPUTED payout renders its amount, recorded date, and (when present) confirmed/disputed date and dispute reason", () => {

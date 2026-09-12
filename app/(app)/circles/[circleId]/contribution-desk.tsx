@@ -26,6 +26,19 @@ import { RecordContributionForm } from "./record-contribution-form";
 // (recordContributionAction/confirmContributionAction/rejectContributionAction)
 // via their own small client components -- this file only decides WHICH of
 // those to render, from the read model's own obligation/payment status.
+//
+// readOnly (7L.3): an explicit mode, not an incidental consequence of
+// persisted data shape. getOwnerCircleContributions is now eligible for
+// both ACTIVE and COMPLETED circles (the P1 fix); a COMPLETED circle's own
+// obligations/payments would already happen to make
+// canRecordFreshContribution false and every payment CONFIRMED (never
+// RECORDED) by construction of the completion predicate itself -- but this
+// component does not rely on that coincidence to decide whether to render
+// a mutation control. The owner circle page passes readOnly explicitly,
+// based on which branch (ACTIVE vs COMPLETED) it is rendering, and this
+// component suppresses RecordContributionForm/ContributionPaymentControls
+// unconditionally when it is true, regardless of what canRecordFreshContribution
+// or payment.status say.
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -40,7 +53,15 @@ function Badge({ label, className }: { label: string; className: string }) {
   return <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
 
-function PaymentHistoryItem({ circleId, payment }: { circleId: string; payment: OwnerContributionsPaymentResult }) {
+function PaymentHistoryItem({
+  circleId,
+  payment,
+  readOnly,
+}: {
+  circleId: string;
+  payment: OwnerContributionsPaymentResult;
+  readOnly: boolean;
+}) {
   const presentation = getPaymentStatusPresentation(payment.status);
 
   return (
@@ -61,7 +82,7 @@ function PaymentHistoryItem({ circleId, payment }: { circleId: string; payment: 
         <p className="mt-1 text-xs text-[#8d4f42]">Reason: {payment.rejectionReason}</p>
       ) : null}
 
-      {payment.status === "RECORDED" ? (
+      {!readOnly && payment.status === "RECORDED" ? (
         <div className="mt-3">
           <ContributionPaymentControls circleId={circleId} paymentId={payment.id} />
         </div>
@@ -74,12 +95,14 @@ function ObligationCard({
   circleId,
   obligation,
   payments,
+  readOnly,
 }: {
   circleId: string;
   obligation: OwnerContributionsObligationResult;
   payments: readonly OwnerContributionsPaymentResult[];
+  readOnly: boolean;
 }) {
-  const canRecord = canRecordFreshContribution(obligation, payments);
+  const canRecord = !readOnly && canRecordFreshContribution(obligation, payments);
   const history = sortPaymentsNewestFirst(payments);
   const statusPresentation = getObligationStatusPresentation(obligation.status);
 
@@ -127,7 +150,7 @@ function ObligationCard({
           <p className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Payment history</p>
           <ul className="mt-2 flex flex-col gap-2">
             {history.map((payment) => (
-              <PaymentHistoryItem key={payment.id} circleId={circleId} payment={payment} />
+              <PaymentHistoryItem key={payment.id} circleId={circleId} payment={payment} readOnly={readOnly} />
             ))}
           </ul>
         </div>
@@ -139,9 +162,11 @@ function ObligationCard({
 export function ContributionDesk({
   circleId,
   contributions,
+  readOnly,
 }: {
   circleId: string;
   contributions: OwnerCircleContributionsResult;
+  readOnly: boolean;
 }) {
   const { rounds, obligations, payments } = contributions;
   const obligationsByRoundId = groupObligationsByRoundId(obligations);
@@ -151,8 +176,9 @@ export function ContributionDesk({
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <Card title="Contribution desk">
         <p className="text-sm leading-6 text-[#587066]">
-          Record a contribution once a member has actually given it to you, and confirm it only after you have
-          verified you received it outside NIA. NIA tracks the circle; it does not hold or move the money.
+          {readOnly
+            ? "This circle is complete. The contribution history below is a permanent record and can no longer be changed."
+            : "Record a contribution once a member has actually given it to you, and confirm it only after you have verified you received it outside NIA. NIA tracks the circle; it does not hold or move the money."}
         </p>
       </Card>
 
@@ -182,6 +208,7 @@ export function ContributionDesk({
                       circleId={circleId}
                       obligation={obligation}
                       payments={paymentsByObligationId.get(obligation.id) ?? []}
+                      readOnly={readOnly}
                     />
                   ))}
                 </ul>

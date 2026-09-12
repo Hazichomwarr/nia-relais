@@ -9,6 +9,13 @@ import {
   getActiveCircleSummaryForOwner,
   type ActiveCircleOwnerSummaryResult,
 } from "@/src/services/circle-active-owner.service";
+import {
+  CompletedCircleOwnerReadAuthorizationError,
+  CompletedCircleOwnerReadNotCompletedError,
+  CompletedCircleOwnerReadNotFoundError,
+  getCompletedCircleSummaryForOwner,
+  type CompletedCircleOwnerSummaryResult,
+} from "@/src/services/circle-completed-owner.service";
 import { getDraftCircleActivationReview } from "@/src/services/circle-activation-review.service";
 import {
   DraftCircleOwnerReadAuthorizationError,
@@ -21,7 +28,7 @@ import {
 import {
   getOwnerCircleContributions,
   OwnerContributionsAuthorizationError,
-  OwnerContributionsCircleNotActiveError,
+  OwnerContributionsCircleNotEligibleError,
   OwnerContributionsCircleNotFoundError,
   type OwnerCircleContributionsResult,
 } from "@/src/services/contribution-owner-read.service";
@@ -45,6 +52,7 @@ import { getFrequencyLabel } from "../new/new-circle-form-display";
 import { ActiveCircleSummary } from "./active-circle-summary";
 import { ActivationReviewSection } from "./activation-review-section";
 import { AddMemberForm } from "./add-member-form";
+import { CompletedCircleSummary } from "./completed-circle-summary";
 import { ContributionDesk } from "./contribution-desk";
 import { MemberList } from "./member-list";
 import { PayoutDesk } from "./payout-desk";
@@ -70,17 +78,24 @@ type ActiveSummaryData = {
   readonly lifecycle: OwnerRoundLifecycleResult;
 };
 
+type CompletedSummaryData = {
+  readonly kind: "completed";
+  readonly summary: CompletedCircleOwnerSummaryResult;
+  readonly contributions: OwnerCircleContributionsResult;
+  readonly payouts: OwnerCirclePayoutsResult;
+};
+
 // All data fetching (and the try/catch it needs) happens below, before any
 // JSX is constructed -- react-hooks/error-boundaries flags JSX built
 // inside a try/catch (React errors surface during render/commit, not at
 // JSX-literal-construction time, so a try/catch around JSX doesn't
 // actually catch anything meaningful). Every await lives in this
-// data-only section; both return statements at the bottom are ordinary,
+// data-only section; every return statement at the bottom is ordinary,
 // unwrapped JSX.
 async function loadWorkspaceOrSummary(
   ownerId: string,
   circleId: string,
-): Promise<DraftWorkspaceData | ActiveSummaryData> {
+): Promise<DraftWorkspaceData | ActiveSummaryData | CompletedSummaryData> {
   try {
     const [{ circle, members }, review] = await Promise.all([
       getDraftCircleForOwner({ ownerId, circleId }),
@@ -105,61 +120,77 @@ async function loadWorkspaceOrSummary(
       throw error;
     }
 
-    // "Not a draft" for a circle this owner genuinely owns can only mean
-    // ACTIVE today -- nothing in this codebase transitions a circle to
-    // COMPLETED, ARCHIVED, or CANCELLED yet -- so fall back to the owner's
-    // active-circle summary instead of a 404. This is exactly the
-    // successful-activation destination activateCircleAction redirects to.
-    //
-    // Future lifecycle dependency (7I.6, section 6): getActiveCircleSummaryForOwner
-    // itself only accepts status === "ACTIVE" and throws
-    // ActiveCircleOwnerReadNotActiveError for anything else -- so IF a
-    // future ticket ever introduces a COMPLETED/ARCHIVED transition, a
-    // circle in one of those states would land here, fail this read too,
-    // and safely 404 rather than being misrepresented as ACTIVE. That is
-    // the correct behavior for now (those states aren't reachable), but a
-    // real COMPLETED/ARCHIVED owner summary does not exist yet and would
-    // need its own read model when that lifecycle work begins.
+    // "Not a draft" for a circle this owner genuinely owns means ACTIVE or
+    // COMPLETED (7L.3 fixes the former ACTIVE-only assumption here --
+    // docs/product/susu-circle-completion-audit.md §14/§21/§27's own named
+    // P1). getOwnerCirclePayouts is queried FIRST, not last: it already
+    // accepts ACTIVE/COMPLETED/ARCHIVED (7K.7) and is needed by BOTH
+    // branches below regardless, so reading its own circle.status once
+    // decides which branch to take without any redundant read or a
+    // separate "what status is this" probe. ARCHIVED remains out of scope
+    // (7L §16, deferred) -- falls through to notFound() below, exactly
+    // like every other status this route doesn't yet render a branch for.
     try {
-      // Fetched in parallel: four independent, lock-free reads of the same
-      // ACTIVE circle -- getOwnerCircleContributions (7J.5) is the read
-      // model the contribution desk (7J.7) renders, getOwnerCirclePayouts
-      // (7K.7) is the read model the payout desk (7K.9) renders, and
-      // getOwnerRoundLifecycle (7K.15) is the read model the round-lifecycle
-      // card (7K.16) renders. Neither is ever queried directly against
-      // Prisma from a component, and no per-round/per-payout/per-obligation
-      // fetch happens anywhere else on this page.
-      const [summary, contributions, payouts, lifecycle] = await Promise.all([
-        getActiveCircleSummaryForOwner({ ownerId, circleId }),
-        getOwnerCircleContributions({ ownerId, circleId }),
-        getOwnerCirclePayouts({ ownerId, circleId }),
-        getOwnerRoundLifecycle({ ownerId, circleId }),
-      ]);
-      return { kind: "active", summary, contributions, payouts, lifecycle };
-    } catch (activeReadError) {
+      const payouts = await getOwnerCirclePayouts({ ownerId, circleId });
+
+      if (payouts.circle.status === "ACTIVE") {
+        // Fetched in parallel: three independent, lock-free reads of the
+        // same ACTIVE circle -- getActiveCircleSummaryForOwner (7I.6),
+        // getOwnerCircleContributions (7J.5, the read model the
+        // contribution desk renders), and getOwnerRoundLifecycle (7K.15,
+        // the read model the round-lifecycle card renders, and the sole
+        // authority for whether that card's own completion CTA appears).
+        const [summary, contributions, lifecycle] = await Promise.all([
+          getActiveCircleSummaryForOwner({ ownerId, circleId }),
+          getOwnerCircleContributions({ ownerId, circleId }),
+          getOwnerRoundLifecycle({ ownerId, circleId }),
+        ]);
+        return { kind: "active", summary, contributions, payouts, lifecycle };
+      }
+
+      if (payouts.circle.status === "COMPLETED") {
+        // getOwnerRoundLifecycle is deliberately NOT fetched here -- it
+        // remains ACTIVE-only by design (7L.3 section 6: a completed
+        // circle has no lifecycle transition left to make, so there is
+        // nothing for that read to say). getCompletedCircleSummaryForOwner
+        // (7L.3) is the dedicated historical summary; contributions are
+        // fetched in parallel, now that 7L.3 extends their own eligibility
+        // to COMPLETED too.
+        const [summary, contributions] = await Promise.all([
+          getCompletedCircleSummaryForOwner({ ownerId, circleId }),
+          getOwnerCircleContributions({ ownerId, circleId }),
+        ]);
+        return { kind: "completed", summary, contributions, payouts };
+      }
+
+      notFound();
+    } catch (activeOrCompletedReadError) {
       if (
-        activeReadError instanceof ActiveCircleOwnerReadNotFoundError
-        || activeReadError instanceof ActiveCircleOwnerReadAuthorizationError
-        || activeReadError instanceof ActiveCircleOwnerReadNotActiveError
-        || activeReadError instanceof OwnerContributionsCircleNotFoundError
-        || activeReadError instanceof OwnerContributionsAuthorizationError
-        || activeReadError instanceof OwnerContributionsCircleNotActiveError
-        || activeReadError instanceof OwnerPayoutsCircleNotFoundError
-        || activeReadError instanceof OwnerPayoutsAuthorizationError
-        || activeReadError instanceof OwnerPayoutsCircleNotEligibleError
-        || activeReadError instanceof OwnerRoundLifecycleCircleNotFoundError
-        || activeReadError instanceof OwnerRoundLifecycleAuthorizationError
-        || activeReadError instanceof OwnerRoundLifecycleCircleNotEligibleError
+        activeOrCompletedReadError instanceof OwnerPayoutsCircleNotFoundError
+        || activeOrCompletedReadError instanceof OwnerPayoutsAuthorizationError
+        || activeOrCompletedReadError instanceof OwnerPayoutsCircleNotEligibleError
+        || activeOrCompletedReadError instanceof ActiveCircleOwnerReadNotFoundError
+        || activeOrCompletedReadError instanceof ActiveCircleOwnerReadAuthorizationError
+        || activeOrCompletedReadError instanceof ActiveCircleOwnerReadNotActiveError
+        || activeOrCompletedReadError instanceof OwnerContributionsCircleNotFoundError
+        || activeOrCompletedReadError instanceof OwnerContributionsAuthorizationError
+        || activeOrCompletedReadError instanceof OwnerContributionsCircleNotEligibleError
+        || activeOrCompletedReadError instanceof OwnerRoundLifecycleCircleNotFoundError
+        || activeOrCompletedReadError instanceof OwnerRoundLifecycleAuthorizationError
+        || activeOrCompletedReadError instanceof OwnerRoundLifecycleCircleNotEligibleError
+        || activeOrCompletedReadError instanceof CompletedCircleOwnerReadNotFoundError
+        || activeOrCompletedReadError instanceof CompletedCircleOwnerReadAuthorizationError
+        || activeOrCompletedReadError instanceof CompletedCircleOwnerReadNotCompletedError
       ) {
         notFound();
       }
-      // A genuine OwnerRoundLifecycleIntegrityError (or any other truly
-      // unexpected error) is deliberately left to propagate to Next's own
-      // error boundary here, exactly like OwnerPayoutsIntegrityError already
-      // does above (7K.16 section 23) -- corrupted persisted lifecycle
-      // history must never be silently disguised as an ordinary 404 or as
-      // "round not ready yet."
-      throw activeReadError;
+      // A genuine integrity error (OwnerPayoutsIntegrityError,
+      // OwnerRoundLifecycleIntegrityError, or any other truly unexpected
+      // error) is deliberately left to propagate to Next's own error
+      // boundary here (7K.16 section 23) -- corrupted persisted history
+      // must never be silently disguised as an ordinary 404 or as "round
+      // not ready yet."
+      throw activeOrCompletedReadError;
     }
   }
 }
@@ -169,20 +200,24 @@ async function loadWorkspaceOrSummary(
 // while the circle is DRAFT. Once activated, this same route renders the
 // owner's active-circle summary instead (7I.6): frozen terms, ordered
 // members, the full persisted rotation, and the current/next round
-// position. No contribution/payout recording, round open/close,
-// completion, or archive UI exists anywhere on this route -- read-only
-// throughout.
+// position, plus round-lifecycle progression (7K.16) and the explicit
+// circle-completion control once every round has closed (7L.3). Once the
+// owner explicitly completes the circle, this route renders a third,
+// historical branch (7L.3): the same permanent contribution/payout
+// records, read-only, with no lifecycle or completion control left to
+// show. No archive UI exists anywhere on this route yet (7L §16,
+// deferred).
 //
 // Protected by app/(app)/layout.tsx's requireUser() already; requireUser()
 // is called again here (not just trusted from the layout) because every
 // read below needs a concrete, trusted ownerId to scope its query by. Every
-// mutating Server Action (add/remove member, set payout order, activate)
-// independently re-authorizes through requireUser() and the same
-// owner-scoped domain services on every submission -- this page's own
-// authorization is not relied upon as sufficient protection for those
-// mutations, and activateCircle in particular re-reads and re-validates
-// fresh state under its own row lock regardless of what this page (or the
-// activation review) displayed a moment earlier.
+// mutating Server Action (add/remove member, set payout order, activate,
+// round lifecycle, circle completion) independently re-authorizes through
+// requireUser() and the same owner-scoped domain services on every
+// submission -- this page's own authorization is not relied upon as
+// sufficient protection for those mutations, and each one re-reads and
+// re-validates fresh state under its own row lock regardless of what this
+// page displayed a moment earlier.
 export default async function OwnerCirclePage({
   params,
 }: {
@@ -198,8 +233,18 @@ export default async function OwnerCirclePage({
       <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
         <ActiveCircleSummary summary={data.summary} />
         <RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} />
-        <ContributionDesk circleId={circleId} contributions={data.contributions} />
-        <PayoutDesk circleId={circleId} payouts={data.payouts} />
+        <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} />
+        <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} />
+      </main>
+    );
+  }
+
+  if (data.kind === "completed") {
+    return (
+      <main className="min-h-[calc(100vh-73px)] flex flex-col gap-6 bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
+        <CompletedCircleSummary summary={data.summary} />
+        <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly />
+        <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly />
       </main>
     );
   }

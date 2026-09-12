@@ -83,15 +83,24 @@ test("IN_PROGRESS: never renders a Start-first-round control alongside the advan
 
 const allClosedBranch = source.slice(source.indexOf('phase === "ALL_ROUNDS_CLOSED"'));
 
-test("ALL_ROUNDS_CLOSED: states every round is closed and that the circle is not yet marked complete, with no lifecycle control rendered", () => {
+test("ALL_ROUNDS_CLOSED: states every round is closed and that the circle is not yet marked complete, with no round-lifecycle control rendered", () => {
   assert.match(allClosedBranch, /All rotation rounds are closed\./);
   assert.match(allClosedBranch, /has not yet been marked complete in NIA/);
   assert.doesNotMatch(allClosedBranch, /StartFirstRoundForm/);
   assert.doesNotMatch(allClosedBranch, /AdvanceRoundForm/);
 });
 
-test("ALL_ROUNDS_CLOSED: never claims the circle status is COMPLETED, never says 'Complete circle'/'Finish SUSU'/'Archive circle'", () => {
-  for (const forbidden of [/circle is completed/i, /complete circle/i, /finish susu/i, /archive circle/i, /status: "?COMPLETED"?/]) {
+test("ALL_ROUNDS_CLOSED: renders CompleteCircleForm -- the completion CTA's sole authority is phase === \"ALL_ROUNDS_CLOSED\" itself, no independent readiness check (7L.3 section 7)", () => {
+  assert.match(allClosedBranch, /<CompleteCircleForm circleId=\{circleId\} \/>/);
+});
+
+test("the completion CTA is rendered ONLY inside the ALL_ROUNDS_CLOSED branch -- never in NOT_STARTED or IN_PROGRESS", () => {
+  assert.doesNotMatch(notStartedBranch, /CompleteCircleForm/);
+  assert.doesNotMatch(inProgressBranch, /CompleteCircleForm/);
+});
+
+test("ALL_ROUNDS_CLOSED: never claims the circle status is already COMPLETED, never says 'Finish SUSU'/'Archive circle', and this file itself never asserts status: COMPLETED", () => {
+  for (const forbidden of [/circle is completed/i, /finish susu/i, /archive circle/i, /status: "?COMPLETED"?/]) {
     assert.doesNotMatch(allClosedBranch, forbidden);
   }
 });
@@ -114,21 +123,31 @@ test("no financial data (ContributionPayment/ContributionObligation/Payout field
   }
 });
 
-test("no direct Prisma, repository, lifecycle-service-write, or completion-service reference", () => {
+test("no direct Prisma, repository, lifecycle-service-write, or completion-service reference -- the completion CTA is rendered only via the CompleteCircleForm component, never a raw service/action call", () => {
   assert.doesNotMatch(source, /prisma\./);
   for (const forbidden of [
     "@/src/repositories/round-lifecycle.repository",
     "@/src/repositories/round-lifecycle-owner-read.repository",
     "@/src/repositories/circle-lock.repository",
+    "@/src/repositories/circle-completion.repository",
+    "@/src/services/circle-completion.service",
+    "@/src/actions/complete-circle",
+    "@/src/actions/circle-completion.actions",
     "activateFirstRound(",
     "advanceRound(",
-    "completeCircle",
+    "completeCircle(",
+    "completeCircleAction",
+    "runCompleteCircleAction",
     "completeSavingsCircle",
     "archiveCircle",
     "completedById",
+    "completedAt",
   ]) {
     assert.ok(!source.includes(forbidden), `expected no reference to "${forbidden}"`);
   }
+  // The one, sole reference to circle completion this file may ever have:
+  // importing the already-built CompleteCircleForm component.
+  assert.match(source, /import \{ CompleteCircleForm \} from "\.\/complete-circle-controls";/);
 });
 
 test("no date-based eligibility logic anywhere in this file", () => {

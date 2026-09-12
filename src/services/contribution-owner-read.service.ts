@@ -11,12 +11,14 @@ import {
   type OwnerContributionsPaymentRecord,
 } from "@/src/repositories/contribution-owner-read.repository";
 
-// Read-only owner-facing SUSU contribution read model (7J.5). Answers
-// "what is expected, what has been recorded, what is confirmed, what was
-// rejected, what remains outstanding" for one ACTIVE circle, optionally
-// narrowed to one round. No mutation anywhere in this file -- see
-// contribution-recording/confirmation/rejection.service.ts for the
-// writers this read model observes.
+// Read-only owner-facing SUSU contribution read model (7J.5, eligibility
+// extended 7L.3). Answers "what is expected, what has been recorded, what
+// is confirmed, what was rejected, what remains outstanding" for one
+// ACTIVE or COMPLETED circle, optionally narrowed to one round. No
+// mutation anywhere in this file -- see contribution-recording/
+// confirmation/rejection.service.ts for the writers this read model
+// observes; extending this READ's eligibility changes nothing about
+// those services' own ACTIVE-only mutation gates.
 //
 // Historical authority: every fact returned here comes straight from the
 // persisted ContributionObligation/ContributionPayment rows -- never
@@ -29,6 +31,13 @@ import {
 // deliberately not merged into a single boolean, so an owner (or a future
 // UI) can see when they disagree rather than have that disagreement
 // silently hidden.
+//
+// Eligibility (7L.3, the P1 fix named by docs/product/susu-circle
+// -completion-audit.md §14): ACTIVE and COMPLETED both eligible, mirroring
+// getOwnerCirclePayouts's own precedent that contribution history is
+// exactly as permanent an accounting record as payout history once made.
+// ARCHIVED remains out of scope (deferred with archive itself, 7L §16) --
+// not included here, since no circle can ever reach ARCHIVED yet.
 
 export class OwnerContributionsCircleNotFoundError extends Error {
   constructor() {
@@ -44,10 +53,10 @@ export class OwnerContributionsAuthorizationError extends Error {
   }
 }
 
-export class OwnerContributionsCircleNotActiveError extends Error {
+export class OwnerContributionsCircleNotEligibleError extends Error {
   constructor() {
-    super("Contribution details are only available for an active circle.");
-    this.name = "OwnerContributionsCircleNotActiveError";
+    super("Contribution details are only available once a circle has been activated.");
+    this.name = "OwnerContributionsCircleNotEligibleError";
   }
 }
 
@@ -58,11 +67,18 @@ export class OwnerContributionsRoundNotFoundError extends Error {
   }
 }
 
+const ELIGIBLE_CIRCLE_STATUSES = ["ACTIVE", "COMPLETED"] as const;
+type EligibleCircleStatus = (typeof ELIGIBLE_CIRCLE_STATUSES)[number];
+
+function isEligibleCircleStatus(status: string): status is EligibleCircleStatus {
+  return (ELIGIBLE_CIRCLE_STATUSES as readonly string[]).includes(status);
+}
+
 export type OwnerContributionsCircleResult = {
   readonly id: string;
   readonly name: string;
   readonly currency: string;
-  readonly status: "ACTIVE";
+  readonly status: EligibleCircleStatus;
 };
 
 export type OwnerContributionsRoundResult = {
@@ -157,7 +173,7 @@ export async function getOwnerCircleContributions(params: {
   const circle = await findCircleForOwnerContributions(circleId);
   if (!circle) throw new OwnerContributionsCircleNotFoundError();
   if (circle.ownerId !== ownerId) throw new OwnerContributionsAuthorizationError();
-  if (circle.status !== "ACTIVE") throw new OwnerContributionsCircleNotActiveError();
+  if (!isEligibleCircleStatus(circle.status)) throw new OwnerContributionsCircleNotEligibleError();
 
   const rounds = await findRoundsForOwnerContributions(circleId);
 
@@ -210,7 +226,7 @@ export async function getOwnerCircleContributions(params: {
   });
 
   return {
-    circle: { id: circle.id, name: circle.name, currency: circle.currency, status: "ACTIVE" },
+    circle: { id: circle.id, name: circle.name, currency: circle.currency, status: circle.status },
     rounds: selectedRounds.map((round) => ({
       id: round.id,
       roundNumber: round.roundNumber,

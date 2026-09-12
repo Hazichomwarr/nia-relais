@@ -14,6 +14,13 @@ import { RecordPayoutForm } from "./record-payout-form";
 // confirm/dispute control anywhere here; only the recipient can confirm
 // or dispute a payout (7K.1 sign-off item 4), and that UI does not exist
 // yet (7K.10).
+//
+// readOnly (7L.3): an explicit mode, not an incidental consequence of
+// persisted data shape -- see contribution-desk.tsx's own identical
+// comment. getOwnerCirclePayouts was already COMPLETED-eligible before
+// this ticket; what changes here is that the owner page now actually
+// reaches this component for a COMPLETED circle, and must never let it
+// render RecordPayoutForm regardless of what canRecordFreshPayout says.
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -28,10 +35,18 @@ function Badge({ label, className }: { label: string; className: string }) {
   return <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
 
-function RoundCard({ circleId, round }: { circleId: string; round: OwnerPayoutsRoundResult }) {
+function RoundCard({
+  circleId,
+  round,
+  readOnly,
+}: {
+  circleId: string;
+  round: OwnerPayoutsRoundResult;
+  readOnly: boolean;
+}) {
   const roundStatus = getRoundStatusBadge(round.status);
   const presentation = getPayoutStatusPresentation(round.payout ? round.payout.status : null);
-  const canRecord = canRecordFreshPayout(round.payout);
+  const canRecord = !readOnly && canRecordFreshPayout(round.payout);
 
   return (
     <Card title={`Round ${round.roundNumber} · ${round.recipient.displayName}`}>
@@ -92,15 +107,24 @@ function RoundCard({ circleId, round }: { circleId: string; round: OwnerPayoutsR
   );
 }
 
-export function PayoutDesk({ circleId, payouts }: { circleId: string; payouts: OwnerCirclePayoutsResult }) {
+export function PayoutDesk({
+  circleId,
+  payouts,
+  readOnly,
+}: {
+  circleId: string;
+  payouts: OwnerCirclePayoutsResult;
+  readOnly: boolean;
+}) {
   const { rounds, summary } = payouts;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <Card title="Payout desk">
         <p className="text-sm leading-6 text-[#587066]">
-          Record a payout once you have actually paid the recipient outside NIA. NIA records payouts that happen
-          outside the app -- it does not send, hold, or transfer the money.
+          {readOnly
+            ? "This circle is complete. The payout history below is a permanent record and can no longer be changed."
+            : "Record a payout once you have actually paid the recipient outside NIA. NIA records payouts that happen outside the app -- it does not send, hold, or transfer the money."}
         </p>
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div>
@@ -131,7 +155,7 @@ export function PayoutDesk({ circleId, payouts }: { circleId: string; payouts: O
           <p className="text-sm leading-6 text-[#587066]">No rounds exist for this circle yet.</p>
         </Card>
       ) : (
-        rounds.map((round) => <RoundCard key={round.id} circleId={circleId} round={round} />)
+        rounds.map((round) => <RoundCard key={round.id} circleId={circleId} round={round} readOnly={readOnly} />)
       )}
     </div>
   );
