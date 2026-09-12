@@ -78,6 +78,20 @@ test("the ACTIVE fallback also fetches getOwnerCirclePayouts (7K.7), in the SAME
   );
 });
 
+test("the ACTIVE fallback also fetches getOwnerRoundLifecycle (7K.15), in the SAME Promise.all, using the SAME trusted ownerId/circleId -- no client fetch, no new API route", () => {
+  assert.match(dataLoaderSource, /getOwnerRoundLifecycle\(\{\s*ownerId,\s*circleId\s*\}\)/);
+  assert.match(
+    dataLoaderSource,
+    /Promise\.all\(\[\s*getActiveCircleSummaryForOwner\([\s\S]*?getOwnerCircleContributions\([\s\S]*?getOwnerCirclePayouts\([\s\S]*?getOwnerRoundLifecycle\([\s\S]*?\]\)/,
+  );
+  assert.doesNotMatch(source, /fetch\(/);
+  assert.doesNotMatch(source, /\/api\//);
+});
+
+test("the lifecycle read's result is passed to a dedicated lifecycle component, verbatim -- this file composes nothing itself", () => {
+  assert.match(source, /<RoundLifecycleCard circleId=\{circleId\} lifecycle=\{data\.lifecycle\} \/>/);
+});
+
 test("every ActiveCircleOwnerRead* and OwnerContributions* failure in the fallback also collapses to notFound()", () => {
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadNotFoundError/);
   assert.match(dataLoaderSource, /ActiveCircleOwnerReadAuthorizationError/);
@@ -98,6 +112,16 @@ test("every OwnerPayouts* not-found/authorization/not-eligible failure also coll
   assert.doesNotMatch(dataLoaderSource, /OwnerPayoutsIntegrityError/);
 });
 
+test("every OwnerRoundLifecycle* not-found/authorization/not-eligible failure also collapses to notFound() -- but NOT an integrity error (7K.16 section 23)", () => {
+  assert.match(dataLoaderSource, /OwnerRoundLifecycleCircleNotFoundError/);
+  assert.match(dataLoaderSource, /OwnerRoundLifecycleAuthorizationError/);
+  assert.match(dataLoaderSource, /OwnerRoundLifecycleCircleNotEligibleError/);
+  // A genuine persisted round-lifecycle-history corruption must never be
+  // disguised as an ordinary 404 or as "round not ready yet" -- it is
+  // deliberately left to propagate to Next's own error boundary.
+  assert.doesNotMatch(dataLoaderSource, /OwnerRoundLifecycleIntegrityError/);
+});
+
 test("the page renders circle name, a DRAFT badge, contribution terms, the add-member form, the member list, the payout-order form, and the activation review", () => {
   assert.match(source, /circle\.name/);
   assert.match(source, />\s*DRAFT\s*</);
@@ -114,6 +138,7 @@ test("the ACTIVE branch renders ActiveCircleSummary, ContributionDesk, and Payou
   const activeBranch = source.slice(activeBranchIndex, draftDestructureIndex);
 
   assert.match(activeBranch, /<ActiveCircleSummary summary=\{data\.summary\} \/>/);
+  assert.match(activeBranch, /<RoundLifecycleCard circleId=\{circleId\} lifecycle=\{data\.lifecycle\} \/>/);
   assert.match(activeBranch, /<ContributionDesk circleId=\{circleId\} contributions=\{data\.contributions\} \/>/);
   assert.match(activeBranch, /<PayoutDesk circleId=\{circleId\} payouts=\{data\.payouts\} \/>/);
   assert.doesNotMatch(activeBranch, /<MemberList/);
@@ -122,10 +147,23 @@ test("the ACTIVE branch renders ActiveCircleSummary, ContributionDesk, and Payou
   assert.doesNotMatch(activeBranch, /<ActivationReviewSection/);
 });
 
-test("the DRAFT branch never renders PayoutDesk", () => {
+test("placement: RoundLifecycleCard renders between ActiveCircleSummary and ContributionDesk (7K.16 section 5)", () => {
+  const activeBranchIndex = source.indexOf('data.kind === "active"');
+  const draftDestructureIndex = source.indexOf("const { circle, members, review } = data;");
+  const activeBranch = source.slice(activeBranchIndex, draftDestructureIndex);
+
+  const summaryIndex = activeBranch.indexOf("<ActiveCircleSummary");
+  const lifecycleIndex = activeBranch.indexOf("<RoundLifecycleCard");
+  const contributionIndex = activeBranch.indexOf("<ContributionDesk");
+  assert.ok(summaryIndex >= 0 && lifecycleIndex > summaryIndex && contributionIndex > lifecycleIndex);
+});
+
+test("the DRAFT branch never renders PayoutDesk or the round-lifecycle card (7K.16 section 3: lifecycle only applies after activation)", () => {
   const activeBranchIndex = source.indexOf('data.kind === "active"');
   const draftBranch = source.slice(source.indexOf("const { circle, members, review } = data;"));
   assert.doesNotMatch(draftBranch, /<PayoutDesk/);
+  assert.doesNotMatch(draftBranch, /<RoundLifecycleCard/);
+  assert.doesNotMatch(draftBranch, /getOwnerRoundLifecycle/);
   assert.ok(activeBranchIndex >= 0);
 });
 

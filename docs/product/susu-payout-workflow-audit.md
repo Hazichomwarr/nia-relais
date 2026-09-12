@@ -2270,6 +2270,95 @@ that this service contains no `prisma.*.create/update/updateMany/delete/
 upsert`, no transaction, and no reference to
 `activateFirstRound`/`advanceRound`/any Server Action.
 
+### 21.31 7K.16 implementation note
+
+**Status: implemented and tested.** The owner circle workspace now
+exposes round-lifecycle progression, wired to the 7K.15 read and 7K.14
+actions exactly as frozen — no new lifecycle rule of any kind exists in
+this UI layer.
+
+**Files added**: `app/(app)/circles/[circleId]/round-lifecycle-card.tsx`
+(server component), `round-lifecycle-controls.tsx` (`"use client"`,
+`StartFirstRoundForm`/`AdvanceRoundForm`), `round-lifecycle-display.ts`
+(pure copy-mapping helpers: `getBlockerMessage`, `getAdvanceCtaLabel`),
+plus their four test files. `page.tsx` was extended (not restructured):
+`getOwnerRoundLifecycle` joins the existing ACTIVE-branch `Promise.all`
+(now 4 reads, same pattern), and `<RoundLifecycleCard>` is rendered
+between `<ActiveCircleSummary>` and `<ContributionDesk>` (the placement
+this ticket's own section 5 asked for). `active-circle-summary.tsx`,
+`contribution-desk.tsx`, `payout-desk.tsx`, and every member-route file
+are untouched.
+
+**Read-authority boundary**: `round-lifecycle-card.tsx` renders *only*
+from `lifecycle.phase`/`currentRound`/`nextRound`/`progression` — it
+never receives (and therefore cannot inspect) `ContributionPayment`/
+`ContributionObligation`/`Payout` data; `ContributionDesk`/`PayoutDesk`
+remain separate siblings with their own, unrelated read models on the
+same page. Verified structurally (source-grep for `ContributionPayment`,
+`payout.status`, `confirmedAt`, `.every(`, `.filter(`, `.reduce(` — none
+present in either the card or its controls) and by construction (the
+component's own props carry no such data at all).
+
+**Phase rendering**, exactly per the frozen 7K.15 model, no independent
+eligibility logic added: `NOT_STARTED` shows round 1's persisted
+recipient/date and a `StartFirstRoundForm` gated only by
+`progression.canStartFirstRound`; `IN_PROGRESS` shows the current (and,
+if any, next) round from their own persisted fields, the blocker message
+(`getBlockerMessage`) only when `progression.blocker` is set, and
+`AdvanceRoundForm` only when `progression.canAdvanceCurrentRound`;
+`ALL_ROUNDS_CLOSED` states every round is closed and that "the circle has
+not yet been marked complete in NIA" — never rendering any lifecycle
+control, and never claiming `SavingsCircle.status` is `COMPLETED`.
+
+**Action wiring**: `StartFirstRoundForm` submits `circleId` only, to
+`activateFirstRoundAction`; `AdvanceRoundForm` submits `circleId` +
+`currentRound.id` only, to `advanceRoundAction` — the same single action
+for both the non-final-advance and final-round-closure cases (no
+`closeFinalRoundAction` was created; the service already owns that
+distinction via `transitionKind`). Both forms use the established
+`initialActivateFirstRoundState`/`initialAdvanceRoundState`. Neither form
+computes CTA eligibility; `getAdvanceCtaLabel` only maps an
+already-decided `transitionKind` plus two display-only round numbers to a
+label string.
+
+**Wording discipline**, verified by both pure-function tests
+(`getBlockerMessage`/`getAdvanceCtaLabel`) and source-grep on the
+components: `PAYOUT_DISPUTED`'s copy contains none of fix/retry/resolve/
+override/refund/adjudicate; the final-round CTA and its supporting copy
+contain none of complete/finish/archive; dates are labeled "Scheduled
+date," never phrased as a start/collection trigger; no date
+(`dueDate`/`startDate`/`Date.now()`) gates any control.
+
+**No circle completion**: grepped across every new/changed file for
+`completeCircle`/`completeSavingsCircle`/`archiveCircle`/`completedAt`/
+`completedById` — none present.
+
+**Member isolation**: `src/actions/round-lifecycle-ui-isolation.test.ts`
+(originally 7K.14's "no UI at all" guard) was extended, not replaced —
+it now separately asserts (a) the four untouched/near owner files never
+reference the raw action identifiers directly, and (b) all three member
+route files never reference the action identifiers, the new component
+names, or their CTA copy ("Start round 1," "Close final round," "Close
+round").
+
+**Test methodology** (reported precisely, per this ticket's own section
+46): `round-lifecycle-display.test.ts` runs genuine pure-function unit
+tests (real `getBlockerMessage`/`getAdvanceCtaLabel` invocations, real
+assertions on their return values) — no DOM/browser rendering. Every
+other new/changed test file (`round-lifecycle-controls.test.ts`,
+`round-lifecycle-card.test.ts`, `page.test.ts`'s additions, the extended
+isolation guard) is a structural/source-regex test reading the actual
+`.tsx`/`.ts` source text — the same established methodology as every
+prior UI ticket in this sequence (`record-payout-form.test.ts`,
+`active-circle-summary.test.ts`, etc.). No React Testing Library, no
+jsdom, and no real browser session was exercised for any component in
+this ticket; a manual live check (`pnpm build` + route compilation) is
+the only end-to-end evidence gathered.
+
+**No 7K.13/7K.14/7K.15 contract change**: none was needed or made. This
+ticket found no mismatch between what the read model exposes and what the
+UI needed to render.
+
 ## Verification
 
 - `pnpm lint`: clean.
@@ -2328,3 +2417,15 @@ refactored to call those same two functions with its 56-test external
 contract verified unchanged. No UI, Server Action, schema, or mutation was
 added; circle completion remains a separate, unimplemented future
 operation, exactly as §21.13/§21.25 froze.
+
+**TICKET 7K.16 — OWNER ROUND LIFECYCLE UI: COMPLETE** — see §21.31's own
+implementation note. The owner circle workspace now renders round
+progression (`RoundLifecycleCard`) between `ActiveCircleSummary` and
+`ContributionDesk`, reading exclusively from `getOwnerRoundLifecycle`
+(7K.15) and mutating exclusively through `activateFirstRoundAction`/
+`advanceRoundAction` (7K.14) — no new eligibility, financial, or
+date-gating logic was introduced anywhere in the UI layer. Member routes
+remain untouched and isolated by an extended structural guard. No
+circle-completion behavior was added; the circle remains ACTIVE (never
+rendered as completed) once all rounds are closed, exactly as §21.13/
+§21.25 froze.
