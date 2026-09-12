@@ -6,7 +6,14 @@ import { runConfirmPayoutAction, type ConfirmPayoutActionState } from "@/src/act
 import { runDisputePayoutAction, type DisputePayoutActionState } from "@/src/actions/dispute-payout";
 import { runRecordPayoutAction, type RecordPayoutActionState } from "@/src/actions/record-payout";
 
-export type { ConfirmPayoutActionState, DisputePayoutActionState, RecordPayoutActionState };
+// No `export type { ... }` re-export here, deliberately (hotfix, P1) --
+// see circle.actions.ts's own identical comment: a "use server" file's
+// export list is scanned by the Next.js/Turbopack Server Action
+// transform as if every named export were a callable action reference,
+// regardless of the `type` keyword on the specifier. Each action-state
+// type is imported directly from its own owning module
+// (confirm-payout.ts/dispute-payout.ts/record-payout.ts) by whichever
+// state/UI file needs it.
 
 /**
  * The real Server Action a future owner payout-recording UI (7K.9, not

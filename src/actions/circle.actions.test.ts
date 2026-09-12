@@ -160,23 +160,40 @@ test("contribution services are never imported directly -- only the run*Contribu
   assert.doesNotMatch(source, /recordContributionSchema|confirmContributionSchema|rejectContributionSchema/);
 });
 
-// --- type-vs-runtime export regression guard (hotfix) ---
+// --- type-vs-runtime export regression guard (superseded by a hotfix) ---
 //
-// Every *ActionState type this file imports and re-exports is a
-// type-only construct declared in its own core action module (e.g.
-// ActivateCircleActionState in activate-circle.ts) -- never a runtime
-// value. If a future edit ever drops the `type` modifier from either the
-// per-symbol import (line ~8) or the barrel `export type { ... }` block
-// below, Next's Server Actions module loader would try to resolve an
-// erased symbol at module-evaluation time and crash with a
-// ReferenceError ("<Name> is not defined") the instant any route that
-// imports this file (e.g. /circles/new, via circle.state.ts) loads --
-// this is exactly the failure class TypeScript's own type-checker does
-// NOT catch, since `import { X }` and `import type { X }` are both
-// perfectly valid syntax to tsc when X really is only ever used in type
-// position; the crash is a pure module-evaluation/erasure issue, not a
-// type error.
-test("every re-exported *ActionState symbol is imported and re-exported as a TYPE, never a runtime value", () => {
+// SUPERSEDED: this test previously asserted that a single barrel
+// `export type { ... };` block re-exporting every *ActionState type was
+// the correct, safe shape for this file. It was wrong. That block was
+// syntactically type-only (tsc erases it completely, and the assertions
+// below correctly proved that), but Next.js/Turbopack's "use server"
+// action-reference collector does not check the `type` keyword on a
+// specifier-list re-export -- it swept every name in that block into the
+// action-entry manifest and emitted `registerServerReference(<Name>, ...)`
+// for each, producing `ReferenceError: <Name> is not defined` at
+// module-evaluation time in the real compiled dev bundle (confirmed
+// against actual `.next/dev/server/chunks/ssr/*.js` output, reproduced on
+// POST /circles/new). This was a genuine, real production-shaped
+// failure that a purely syntactic/type-checker-level test like the one
+// this replaces could never catch, because the bug lives in the bundler
+// transform, not in TypeScript's own erasure rules.
+//
+// The actual fix: the barrel `export type { ... };` block was removed
+// entirely (see circle.actions.ts's own comment). Each *ActionState type
+// is now imported directly from its own owning core module
+// (activate-circle.ts, add-draft-circle-member.ts, ...) by whichever
+// state/UI file needs it -- never re-exported through this "use server"
+// file at all. This test now asserts that corrected shape; the systemic,
+// codebase-wide version of this guard (covering every "use server" file,
+// not just this one) lives in use-server-export-shape.test.ts.
+test("no barrel type re-export exists in this file -- every *ActionState type is imported directly from its own owning core module elsewhere", () => {
+  assert.doesNotMatch(source, /export\s+type\s*\{/, "a type re-export specifier list here reproduces the ReferenceError this hotfix fixed");
+
+  // Each *ActionState symbol is still imported here (needed as a
+  // parameter/return type for this file's own exported async functions)
+  // with the `type` modifier -- this half of the original test remains
+  // valid and worth keeping, even though it is not sufficient on its own
+  // (see the module-level comment above for why).
   const stateTypeNames = [
     "ActivateCircleActionState",
     "AddDraftCircleMemberActionState",
@@ -186,35 +203,8 @@ test("every re-exported *ActionState symbol is imported and re-exported as a TYP
     "RejectContributionActionState",
     "SetDraftCirclePayoutOrderActionState",
   ];
-
-  // The barrel re-export must be a single `export type { ... }` block
-  // (fully erased at runtime), never a bare `export { ... }`.
-  const exportTypeBlockMatch = source.match(/export type \{([\s\S]*?)\};/);
-  assert.ok(exportTypeBlockMatch, "expected a single `export type { ... };` block");
-  const exportedNames = exportTypeBlockMatch[1].split(",").map((name) => name.trim()).filter(Boolean);
-  assert.deepEqual(exportedNames.sort(), [...stateTypeNames].sort());
-
-  // No OTHER export statement anywhere in the file may re-export any of
-  // these names as a runtime value (e.g. a stray `export { X }` outside
-  // the type-only block above).
   for (const name of stateTypeNames) {
-    const strayValueExport = new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}(?!\\s*from)`);
-    const exportTypeStripped = source.replace(/export type \{[\s\S]*?\};/, "");
-    assert.doesNotMatch(exportTypeStripped, strayValueExport, `expected no stray runtime export of ${name}`);
-  }
-
-  // Each *ActionState symbol must be imported with the `type` modifier
-  // (either `import { ..., type X, ... }` or a dedicated `import type`),
-  // never as a plain runtime import.
-  for (const name of stateTypeNames) {
-    const typedImport = new RegExp(`(?:import type[\\s\\S]*?\\b${name}\\b|type ${name}\\b)`);
+    const typedImport = new RegExp(`(?:import[\\s\\S]*?\\btype ${name}\\b|import type[\\s\\S]*?\\b${name}\\b)`);
     assert.match(source, typedImport, `expected ${name} to be imported with the \`type\` modifier`);
-
-    // And it must never appear as a plain (non-type) named import specifier.
-    const plainImport = new RegExp(`import \\{[^}]*(?<!type )\\b${name}\\b[^}]*\\}\\s*from`);
-    const matches = source.match(plainImport);
-    if (matches) {
-      assert.ok(matches[0].includes(`type ${name}`), `expected ${name}'s import specifier to carry \`type\`, got: ${matches[0]}`);
-    }
   }
 });

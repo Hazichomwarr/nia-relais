@@ -1,7 +1,10 @@
-import type {
-  ActivateFirstRoundActionState,
-  AdvanceRoundActionState,
-} from "@/src/actions/round-lifecycle.actions";
+// Each type is imported directly from its own owning testable-core
+// module, never from round-lifecycle.actions.ts (a "use server" file) --
+// see that file's own comment: re-exporting a type from a Server Action
+// module trips the Next.js/Turbopack transform into treating it as a
+// callable action reference.
+import type { ActivateFirstRoundActionState } from "@/src/actions/activate-first-round";
+import type { AdvanceRoundActionState } from "@/src/actions/advance-round";
 
 // Mirrors payout.state.ts's own per-domain initial-action-state
 // convention exactly. Deliberately its own file, never merged into

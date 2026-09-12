@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { runCompleteCircleAction, type CompleteCircleActionState } from "@/src/actions/complete-circle";
 
-export type { CompleteCircleActionState };
+// No `export type { ... }` re-export here, deliberately (hotfix, P1) --
+// see circle.actions.ts's own identical comment: a "use server" file's
+// export list is scanned by the Next.js/Turbopack Server Action
+// transform as if every named export were a callable action reference,
+// regardless of the `type` keyword on the specifier. The action-state
+// type is imported directly from its own owning module
+// (complete-circle.ts) by whichever state/UI file needs it.
 
 // The real Server Action a future "Complete circle" UI (7L.3, not built by
 // this ticket) will bind to useActionState. All real logic --

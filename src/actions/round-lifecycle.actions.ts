@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { runActivateFirstRoundAction, type ActivateFirstRoundActionState } from "@/src/actions/activate-first-round";
 import { runAdvanceRoundAction, type AdvanceRoundActionState } from "@/src/actions/advance-round";
 
-export type { ActivateFirstRoundActionState, AdvanceRoundActionState };
+// No `export type { ... }` re-export here, deliberately (hotfix, P1) --
+// see circle.actions.ts's own identical comment: a "use server" file's
+// export list is scanned by the Next.js/Turbopack Server Action
+// transform as if every named export were a callable action reference,
+// regardless of the `type` keyword on the specifier. Each action-state
+// type is imported directly from its own owning module
+// (activate-first-round.ts/advance-round.ts) by whichever state/UI file
+// needs it.
 
 // The real Server Actions a future owner round-lifecycle UI (not built by
 // this ticket) will bind to useActionState. All real logic --

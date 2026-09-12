@@ -30,15 +30,17 @@ import {
   type SetDraftCirclePayoutOrderActionState,
 } from "@/src/actions/set-draft-circle-payout-order";
 
-export type {
-  ActivateCircleActionState,
-  AddDraftCircleMemberActionState,
-  ConfirmContributionActionState,
-  CreateDraftCircleActionState,
-  RecordContributionActionState,
-  RejectContributionActionState,
-  SetDraftCirclePayoutOrderActionState,
-};
+// No `export type { ... }` re-export here, deliberately (hotfix, P1): a
+// "use server" file's export list is scanned by the Next.js/Turbopack
+// Server Action transform as if every named export were a callable
+// action reference, regardless of the `type` keyword on the specifier --
+// type-only re-exports are erased by the TypeScript compiler (no runtime
+// binding survives), but the transform still emits
+// `registerServerReference(<name>, ...)` for them, producing a
+// `ReferenceError: <Name> is not defined` at module-evaluation time. Each
+// action-state type is imported directly from its own owning module
+// (activate-circle.ts, add-draft-circle-member.ts, ...) by whichever
+// state/UI file actually needs it -- never re-exported from this file.
 
 /**
  * The real Server Action the create-circle form (7I.2) binds to

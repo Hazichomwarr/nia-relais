@@ -2,33 +2,56 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-// Structural checks only -- circle.state.ts imports its *ActionState
-// types from circle.actions.ts (a real "use server" module that
-// statically imports next/navigation's redirect()), so it is not safe to
-// import/execute directly under the plain Node test harness.
+// Structural checks only -- circle.state.ts's own imports are not safe
+// to execute directly under the plain Node test harness (circle.actions.ts,
+// which this file used to import from, statically imports
+// next/navigation's redirect()).
 //
-// Type-vs-runtime export regression guard (hotfix): this file's entire
-// purpose is to hold `initial*State = {}` constants typed by symbols
-// declared elsewhere -- every import here must be `import type`, never a
-// runtime import. If it were ever a runtime import, Next's Server Actions
-// module loader would try to resolve an erased symbol (ActivateCircleActionState,
-// et al. are `export type` in circle.actions.ts) at module-evaluation
-// time and crash with "ReferenceError: <Name> is not defined" the instant
-// any page importing this file (e.g. /circles/new's new-circle-form.tsx)
-// loads -- a failure tsc alone does not catch, since `import type` and a
-// plain `import` are both syntactically valid to it.
+// SUPERSEDED (hotfix): this file previously imported every *ActionState
+// type from circle.actions.ts (a "use server" module) via a single
+// `import type { ... } from "@/src/actions/circle.actions";` block, and
+// this test file asserted that whole-block-is-type-only shape as
+// correct. It was syntactically correct and tsc-clean, but wrong at the
+// bundler level: circle.actions.ts was re-exporting those same types via
+// a barrel `export type { ... };`, which Next.js/Turbopack's "use server"
+// transform does not treat as type-only -- it swept them into the
+// action-reference manifest and crashed with
+// "ReferenceError: <Name> is not defined" on the real compiled dev
+// bundle (confirmed, reproduced on POST /circles/new). Whether THIS
+// file's own import carried the `type` keyword was never actually the
+// deciding factor -- the defect lived entirely in circle.actions.ts's
+// own re-export shape, which is why this test alone (however correct its
+// own assertions were) could not have caught the real failure.
+//
+// The actual fix: each type is now imported directly from its own owning
+// core module (activate-circle.ts, add-draft-circle-member.ts, ...),
+// never from circle.actions.ts at all -- see circle.actions.ts's own
+// comment, and use-server-export-shape.test.ts for the systemic,
+// codebase-wide version of this guard.
 
 const source = readFileSync(new URL("./circle.state.ts", import.meta.url), "utf8")
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/\/\/.*$/gm, "");
 
-test("the entire import from circle.actions.ts is type-only", () => {
-  assert.match(source, /^import type \{[\s\S]*?\} from "@\/src\/actions\/circle\.actions";/m);
+const ORIGIN_MODULES = [
+  "@/src/actions/activate-circle",
+  "@/src/actions/add-draft-circle-member",
+  "@/src/actions/confirm-contribution",
+  "@/src/actions/create-draft-circle",
+  "@/src/actions/record-contribution",
+  "@/src/actions/reject-contribution",
+  "@/src/actions/set-draft-circle-payout-order",
+];
+
+test("no import of any kind exists from circle.actions.ts (a \"use server\" file) -- every type comes from its own owning core module instead", () => {
+  assert.doesNotMatch(source, /from "@\/src\/actions\/circle\.actions"/);
 });
 
-test("no plain (non-type) import from circle.actions.ts exists anywhere in this file", () => {
-  const nonTypeImport = /import \{[^}]*\} from "@\/src\/actions\/circle\.actions"/;
-  assert.doesNotMatch(source, nonTypeImport);
+test("each *ActionState type is imported as `import type` directly from its own owning core module", () => {
+  for (const originModule of ORIGIN_MODULES) {
+    const typedImport = new RegExp(`^import type \\{[\\s\\S]*?\\} from "${originModule.replace(/\//g, "\\/")}";`, "m");
+    assert.match(source, typedImport, `expected a type-only import from ${originModule}`);
+  }
 });
 
 test("every initial*State constant is a plain empty object, never a call into the action module", () => {
