@@ -26,8 +26,8 @@ import { AdvanceRoundForm, StartFirstRoundForm } from "./round-lifecycle-control
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-      <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">{title}</h2>
+    <section className="border-t border-[#e2d7c9] pt-6">
+      <h2 className="font-serif text-2xl tracking-tight text-[#173b32]">{title}</h2>
       <div className="mt-5">{children}</div>
     </section>
   );
@@ -50,10 +50,7 @@ function RoundSummary({
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{label}</span>
       <Badge {...status} />
-      <p className="text-sm text-[#173b32]">
-        Round {round.roundNumber} · {round.recipient.displayName}{" "}
-        <span className="text-xs text-[#7b8179]">({round.recipient.memberCode})</span>
-      </p>
+      <p className="text-sm text-[#173b32]">Round {round.roundNumber} · {round.recipient.displayName}</p>
       <p className="text-xs text-[#7b8179]">Scheduled date {formatOwnerDate(round.dueDate)}</p>
     </div>
   );

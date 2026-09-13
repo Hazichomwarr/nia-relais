@@ -14,3 +14,10 @@ test("the existing nav items (Dashboard, My savings, Trusted person) are unchang
   assert.match(source, /label:\s*"My savings"/);
   assert.match(source, /label:\s*"Trusted person"/);
 });
+
+test("mobile navigation is compact behind an accessible menu control", () => {
+  assert.match(source, /aria-label="Open navigation"/);
+  assert.match(source, /aria-controls="mobile-primary-navigation"/);
+  assert.match(source, /sm:hidden/);
+  assert.match(source, /id="mobile-primary-navigation"/);
+});

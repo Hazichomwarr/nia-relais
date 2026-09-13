@@ -239,7 +239,7 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={activeSections} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={activeSections} />
           <div className="min-w-0">
             {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} /> : null}
@@ -257,7 +257,7 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={completedSections} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={completedSections} />
           <div className="min-w-0">
             {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly /> : null}
@@ -276,7 +276,7 @@ export default async function OwnerCirclePage({
   return (
     <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-        <CircleWorkspaceNavigation circleId={circleId} section={section} availableSections={draftSections} />
+        <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${circle.currency} ${circle.contributionAmount} ${getFrequencyLabel(circle.frequency)}`} availableSections={draftSections} />
         <div className="min-w-0">
           {section === "overview" ? (
             <div className="max-w-3xl">

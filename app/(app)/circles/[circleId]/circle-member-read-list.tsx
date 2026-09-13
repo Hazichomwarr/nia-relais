@@ -14,7 +14,7 @@ export function CircleMemberReadList({ members }: { members: readonly Member[] }
         {members.map((member, index) => (
           <li key={member.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#dce9dc] text-sm font-semibold text-[#173b32]">{member.payoutOrder ?? index + 1}</span>
-            <div><p className="font-semibold text-[#173b32]">{member.displayName}</p><p className="text-xs text-[#7b8179]">Member code: {member.memberCode}</p></div>
+            <div><p className="font-semibold text-[#173b32]">{member.displayName}</p><p className="text-xs text-[#7b8179]">Active member</p></div>
           </li>
         ))}
       </ol>

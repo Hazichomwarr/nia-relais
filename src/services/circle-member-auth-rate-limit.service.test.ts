@@ -4,24 +4,58 @@ import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { checkMemberAuthenticationRateLimit } from "@/src/services/circle-member-auth-rate-limit.service";
-import {
-  incrementRateLimitBucket,
-  findRateLimitBucket,
-  type RateLimitScope,
-} from "@/src/repositories/circle-member-auth-rate-limit.repository";
-import { getTrustedMemberAuthSource } from "@/src/auth/trusted-member-auth-source";
-import { prisma } from "@/src/prisma";
+import { checkIsolatedTestDatabaseConfiguration } from "@/src/testing/isolated-test-database";
+import type { RateLimitScope } from "@/src/repositories/circle-member-auth-rate-limit.repository";
 
-// This suite talks to the real configured database (temporary fixtures,
-// guaranteed cleanup below) because the atomicity, concurrency, and
-// database-time guarantees under test are genuine PostgreSQL behaviors that
-// a mock cannot faithfully stand in for.
+// This suite needs PostgreSQL's real concurrency and database-time behavior,
+// but it must never use the ordinary application database. Resolve the
+// explicit isolation guard before loading src/prisma.ts, then point only this
+// test process at TEST_DATABASE_URL. Without an isolated database every
+// integration case is skipped with the guard's reason.
+const isolation = checkIsolatedTestDatabaseConfiguration();
+const rateLimitTest = isolation.isolated ? test : test.skip;
+const originalTestEnvironment = new Map(
+  ["DATABASE_URL", "NODE_ENV", "ALLOW_TEST_AUTH_SOURCE", "MEMBER_AUTH_RATE_LIMIT_SECRET"].map((key) => [
+    key,
+    Object.getOwnPropertyDescriptor(process.env, key),
+  ]),
+);
+
+function restoreTestEnvironment() {
+  for (const [key, descriptor] of originalTestEnvironment) {
+    if (descriptor) Object.defineProperty(process.env, key, descriptor);
+    else delete process.env[key];
+  }
+}
+
+if (isolation.isolated) {
+  process.env["DATABASE_URL"] = isolation.connectionString;
+  Object.defineProperty(process.env, "NODE_ENV", {
+    value: "test",
+    configurable: true,
+    enumerable: true,
+    writable: true,
+  });
+  process.env["ALLOW_TEST_AUTH_SOURCE"] = "1";
+}
+
+const runtime = isolation.isolated
+  ? await Promise.all([
+      import("@/src/services/circle-member-auth-rate-limit.service"),
+      import("@/src/repositories/circle-member-auth-rate-limit.repository"),
+      import("@/src/auth/trusted-member-auth-source"),
+      import("@/src/prisma"),
+    ])
+  : null;
+
+const checkMemberAuthenticationRateLimit = runtime?.[0].checkMemberAuthenticationRateLimit as typeof import("@/src/services/circle-member-auth-rate-limit.service").checkMemberAuthenticationRateLimit;
+const incrementRateLimitBucket = runtime?.[1].incrementRateLimitBucket as typeof import("@/src/repositories/circle-member-auth-rate-limit.repository").incrementRateLimitBucket;
+const findRateLimitBucket = runtime?.[1].findRateLimitBucket as typeof import("@/src/repositories/circle-member-auth-rate-limit.repository").findRateLimitBucket;
+const getTrustedMemberAuthSource = runtime?.[2].getTrustedMemberAuthSource as typeof import("@/src/auth/trusted-member-auth-source").getTrustedMemberAuthSource;
+const prisma = runtime?.[3].prisma as typeof import("@/src/prisma").prisma;
 
 const TEST_SECRET = "test-only-member-auth-rate-limit-secret-do-not-reuse-32ch";
 process.env.MEMBER_AUTH_RATE_LIMIT_SECRET = TEST_SECRET;
-process.env.NODE_ENV = "test";
-process.env.ALLOW_TEST_AUTH_SOURCE = "1";
 
 function hmacHex(material: string): string {
   return createHmac("sha256", TEST_SECRET).update(material).digest("hex");
@@ -61,7 +95,7 @@ function randomMemberCode(): string {
 }
 
 function sourceFromIp(ip: string) {
-  const result = getTrustedMemberAuthSource(
+  const result = getTrustedMemberAuthSource!(
     new Request("https://example.invalid/", { headers: { "x-nia-test-source": ip } }),
   );
   assert.equal(result.ok, true, "test fixture: expected the test-override source path to succeed");
@@ -75,29 +109,35 @@ function trackTarget(circleId: string, memberCode: string) {
 }
 
 async function readBucket(scope: RateLimitScope, keyHash: string, windowSeconds: number) {
-  const rows = await prisma.$transaction((tx) => findRateLimitBucket(tx, { scope, keyHash, windowSeconds }));
+  const rows = await prisma!.$transaction((tx) => findRateLimitBucket!(tx, { scope, keyHash, windowSeconds }));
   return rows[0]?.attemptCount ?? 0;
 }
 
 let baselineCounts: { users: number; goals: number; deposits: number; custodians: number };
 
 test.before(async () => {
+  if (!isolation.isolated) return;
   baselineCounts = {
-    users: await prisma.user.count(),
-    goals: await prisma.personalGoal.count(),
-    deposits: await prisma.deposit.count(),
-    custodians: await prisma.goalCustodian.count(),
+    users: await prisma!.user.count(),
+    goals: await prisma!.personalGoal.count(),
+    deposits: await prisma!.deposit.count(),
+    custodians: await prisma!.goalCustodian.count(),
   };
 });
 
 test.after(async () => {
-  for (const [scope, keyHashes] of touchedBucketKeys) {
-    if (keyHashes.size === 0) continue;
-    await prisma.circleMemberAuthRateLimitBucket.deleteMany({
-      where: { scope, keyHash: { in: [...keyHashes] } },
-    });
+  try {
+    if (!isolation.isolated) return;
+    for (const [scope, keyHashes] of touchedBucketKeys) {
+      if (keyHashes.size === 0) continue;
+      await prisma!.circleMemberAuthRateLimitBucket.deleteMany({
+        where: { scope, keyHash: { in: [...keyHashes] } },
+      });
+    }
+    await prisma!.$disconnect();
+  } finally {
+    restoreTestEnvironment();
   }
-  await prisma.$disconnect();
 });
 
 // ---------------------------------------------------------------------------
@@ -106,7 +146,7 @@ test.after(async () => {
 // of the three real, policy-shaped keys the service derives.
 // ---------------------------------------------------------------------------
 
-test("Repository: threshold enforcement is precise with a small synthetic limit", async () => {
+rateLimitTest("Repository: threshold enforcement is precise with a small synthetic limit", async () => {
   const keyHash = hmacHex(`REPO-THRESHOLD-TEST:${randomBytes(8).toString("hex")}`);
   track("SOURCE", keyHash);
   const limit = 3;
@@ -124,7 +164,7 @@ test("Repository: threshold enforcement is precise with a small synthetic limit"
   assert.ok(counts[limit] > limit, "the (limit+1)-th attempt must exceed the limit");
 });
 
-test("G (repository). concurrent increments on the same bucket produce no lost updates", async () => {
+rateLimitTest("G (repository). concurrent increments on the same bucket produce no lost updates", async () => {
   const keyHash = hmacHex(`REPO-CONCURRENCY-TEST:${randomBytes(8).toString("hex")}`);
   track("SOURCE", keyHash);
   const concurrency = 25;
@@ -143,7 +183,7 @@ test("G (repository). concurrent increments on the same bucket produce no lost u
   );
 });
 
-test("I. a new fixed window resets the counter", async () => {
+rateLimitTest("I. a new fixed window resets the counter", async () => {
   const keyHash = hmacHex(`REPO-WINDOW-TEST:${randomBytes(8).toString("hex")}`);
   track("SOURCE", keyHash);
   const windowSeconds = 2;
@@ -161,7 +201,7 @@ test("I. a new fixed window resets the counter", async () => {
   assert.equal(second.attemptCount, 1, "a request in a new window must start a fresh counter, not continue the old one");
 });
 
-test("J. the window boundary is computed from PostgreSQL's own clock, consistent with real elapsed time", async () => {
+rateLimitTest("J. the window boundary is computed from PostgreSQL's own clock, consistent with real elapsed time", async () => {
   const keyHash = hmacHex(`REPO-DBTIME-TEST:${randomBytes(8).toString("hex")}`);
   track("SOURCE", keyHash);
   const windowSeconds = 900;
@@ -188,7 +228,7 @@ test("J. the window boundary is computed from PostgreSQL's own clock, consistent
 // GLOBAL 1000/1min), wired through checkMemberAuthenticationRateLimit.
 // ---------------------------------------------------------------------------
 
-test("A. an allowed request with a fresh source and target returns allowed:true", async () => {
+rateLimitTest("A. an allowed request with a fresh source and target returns allowed:true", async () => {
   const source = sourceFromIp(randomTestIp());
   const circleId = randomCircleId();
   const memberCode = randomMemberCode();
@@ -198,7 +238,7 @@ test("A. an allowed request with a fresh source and target returns allowed:true"
   assert.equal(decision.allowed, true);
 });
 
-test("B / E. SOURCE denies the 21st attempt from one source, even when every target differs (spraying)", async () => {
+rateLimitTest("B / E. SOURCE denies the 21st attempt from one source, even when every target differs (spraying)", async () => {
   const source = sourceFromIp(randomTestIp());
   const decisions: boolean[] = [];
 
@@ -214,7 +254,7 @@ test("B / E. SOURCE denies the 21st attempt from one source, even when every tar
   assert.equal(decisions[20], false, "the 21st attempt from this source should be denied by SOURCE, despite every target being distinct");
 });
 
-test("C. TARGET denies the 11th attempt against the same target, even from 11 different sources", async () => {
+rateLimitTest("C. TARGET denies the 11th attempt against the same target, even from 11 different sources", async () => {
   const circleId = randomCircleId();
   const memberCode = randomMemberCode();
   trackTarget(circleId, memberCode);
@@ -230,7 +270,7 @@ test("C. TARGET denies the 11th attempt against the same target, even from 11 di
   assert.equal(decisions[10], false, "the 11th attempt against this target should be denied by TARGET");
 });
 
-test("D. GLOBAL is wired to the documented fixed key and increments on every call (not exhausted here -- see note)", async () => {
+rateLimitTest("D. GLOBAL is wired to the documented fixed key and increments on every call (not exhausted here -- see note)", async () => {
   // The 1000/60s GLOBAL threshold is deliberately NOT exhausted end-to-end
   // in this suite: doing so would mean 1000 live round-trips against the
   // one real, shared "GLOBAL:circle-member-auth" bucket, which would also
@@ -253,7 +293,7 @@ test("D. GLOBAL is wired to the documented fixed key and increments on every cal
   assert.equal(after, before + 1, "GLOBAL should increment by exactly one per call, regardless of source or target");
 });
 
-test("F. malformed circleId/memberCode still consumes SOURCE and a single shared TARGET bucket", async () => {
+rateLimitTest("F. malformed circleId/memberCode still consumes SOURCE and a single shared TARGET bucket", async () => {
   const source = sourceFromIp(randomTestIp());
   const malformedTargetKeyHash = hmacHex("TARGET:malformed-target");
   const sourceKeyHash = hmacHex(`SOURCE:${source.value}`);
@@ -275,7 +315,7 @@ test("F. malformed circleId/memberCode still consumes SOURCE and a single shared
   assert.equal(afterSource, beforeSource + 1, "malformed input must still consume SOURCE capacity, not bypass it");
 });
 
-test("F2. two differently-malformed targets from the same source share ONE target bucket, not two", async () => {
+rateLimitTest("F2. two differently-malformed targets from the same source share ONE target bucket, not two", async () => {
   const source = sourceFromIp(randomTestIp());
   const malformedTargetKeyHash = hmacHex("TARGET:malformed-target");
   const before = await readBucket("TARGET", malformedTargetKeyHash, 900);
@@ -287,7 +327,7 @@ test("F2. two differently-malformed targets from the same source share ONE targe
   assert.equal(after, before + 2, "both malformed attempts, despite different garbage input, must land in the same bounded bucket");
 });
 
-test("G. concurrent requests against a fresh SOURCE cannot exceed the SOURCE threshold", async () => {
+rateLimitTest("G. concurrent requests against a fresh SOURCE cannot exceed the SOURCE threshold", async () => {
   const source = sourceFromIp(randomTestIp());
   const concurrency = 25; // > SOURCE limit of 20
 
@@ -306,7 +346,7 @@ test("G. concurrent requests against a fresh SOURCE cannot exceed the SOURCE thr
   assert.equal(allowedCount, 20, "exactly 20 of the 25 truly concurrent attempts from the same source should be allowed");
 });
 
-test("H. state is shared across independent calls (all state lives in PostgreSQL, not in-memory)", async () => {
+rateLimitTest("H. state is shared across independent calls (all state lives in PostgreSQL, not in-memory)", async () => {
   const source = sourceFromIp(randomTestIp());
   const circleId = randomCircleId();
   const memberCode = randomMemberCode();
@@ -323,7 +363,7 @@ test("H. state is shared across independent calls (all state lives in PostgreSQL
   assert.equal(count, 2, "the second call must observe the first call's persisted increment");
 });
 
-test("K. one admission decision atomically touches all three scopes together", async () => {
+rateLimitTest("K. one admission decision atomically touches all three scopes together", async () => {
   const source = sourceFromIp(randomTestIp());
   const circleId = randomCircleId();
   const memberCode = randomMemberCode();
@@ -352,7 +392,7 @@ test("K. one admission decision atomically touches all three scopes together", a
   assert.equal(after.global, before.global + 1);
 });
 
-test("L. a denied attempt still increments its exhausted scope's counter (denied attempts are recorded, not free)", async () => {
+rateLimitTest("L. a denied attempt still increments its exhausted scope's counter (denied attempts are recorded, not free)", async () => {
   const source = sourceFromIp(randomTestIp());
 
   for (let i = 0; i < 20; i++) {
@@ -378,7 +418,7 @@ test("L. a denied attempt still increments its exhausted scope's counter (denied
   );
 });
 
-test("M. fails closed when the rate-limit secret is missing or too short (no DB row is written either)", async () => {
+rateLimitTest("M. fails closed when the rate-limit secret is missing or too short (no DB row is written either)", async () => {
   const original = process.env.MEMBER_AUTH_RATE_LIMIT_SECRET;
   try {
     delete process.env.MEMBER_AUTH_RATE_LIMIT_SECRET;
@@ -402,7 +442,7 @@ test("M. fails closed when the rate-limit secret is missing or too short (no DB 
   }
 });
 
-test("N. only a lowercase 64-character hex digest is ever persisted as keyHash", async () => {
+rateLimitTest("N. only a lowercase 64-character hex digest is ever persisted as keyHash", async () => {
   const source = sourceFromIp(randomTestIp());
   const circleId = randomCircleId();
   const memberCode = randomMemberCode();
@@ -459,7 +499,7 @@ test("P/Q/R. the limiter never looks up CircleMember, verifies credentials, or t
   }
 });
 
-test("S. Personal Savings and custodian data are unchanged by this entire suite", async () => {
+rateLimitTest("S. Personal Savings and custodian data are unchanged by this entire suite", async () => {
   const finalCounts = {
     users: await prisma.user.count(),
     goals: await prisma.personalGoal.count(),

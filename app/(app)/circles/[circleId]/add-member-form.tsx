@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { addDraftCircleMemberAction } from "@/src/actions/circle.actions";
@@ -57,8 +58,9 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
       <div role="alert" className="rounded-2xl border border-[#e4b69c] bg-[#fbe1d1] p-5">
         <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#a53f2b]">Share these privately, now</p>
         <p className="mt-2 text-sm leading-6 text-[#68483e]">
-          This is the only time NIA will show {handoff.displayName}&apos;s PIN. Share the circle ID, member code, and
-          PIN with them privately (in person or a secure message) so they can sign in.
+          This is the only time NIA will show {handoff.displayName}&apos;s PIN. Share the Circle ID, member code, and
+          PIN privately (in person or a secure message). They use those three details at the separate member sign-in
+          page, <Link href="/member/login" className="font-semibold underline">/member/login</Link>, rather than NIA account email and password sign-in.
         </p>
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-white/70 p-3">

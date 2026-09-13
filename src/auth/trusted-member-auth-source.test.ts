@@ -3,18 +3,32 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { getTrustedMemberAuthSource } from "./trusted-member-auth-source.ts";
+import { getTrustedMemberAuthSource } from "./trusted-member-auth-source";
 
 const TEST_FLAG = "ALLOW_TEST_AUTH_SOURCE";
-const originalNodeEnv = process.env.NODE_ENV;
-const originalFlag = process.env[TEST_FLAG];
+const originalNodeEnv = Object.getOwnPropertyDescriptor(process.env, "NODE_ENV");
+const originalFlag = Object.getOwnPropertyDescriptor(process.env, TEST_FLAG);
+
+function replaceEnvValue(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  Object.defineProperty(process.env, key, {
+    value,
+    configurable: true,
+    enumerable: true,
+    writable: true,
+  });
+}
 
 function restoreEnv() {
-  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = originalNodeEnv;
+  if (originalNodeEnv) Object.defineProperty(process.env, "NODE_ENV", originalNodeEnv);
+  else replaceEnvValue("NODE_ENV", undefined);
 
-  if (originalFlag === undefined) delete process.env[TEST_FLAG];
-  else process.env[TEST_FLAG] = originalFlag;
+  if (originalFlag) Object.defineProperty(process.env, TEST_FLAG, originalFlag);
+  else delete process.env[TEST_FLAG];
 }
 
 function requestWithHeaders(headers: Record<string, string>): Request {
@@ -88,7 +102,7 @@ test("F. never reads x-real-ip, even when it is a valid IP", () => {
 
 // G. test source accepted only under explicit non-production test mode
 test("G. accepts the test header when NODE_ENV is not production and the flag is set", () => {
-  process.env.NODE_ENV = "test";
+  replaceEnvValue("NODE_ENV", "test");
   process.env[TEST_FLAG] = "1";
 
   const result = getTrustedMemberAuthSource(
@@ -103,7 +117,7 @@ test("G. accepts the test header when NODE_ENV is not production and the flag is
 });
 
 test("G2. accepts the test header when NODE_ENV is unset and the flag is set (unset is not \"production\")", () => {
-  delete process.env.NODE_ENV;
+  replaceEnvValue("NODE_ENV", undefined);
   process.env[TEST_FLAG] = "1";
 
   const result = getTrustedMemberAuthSource(
@@ -118,7 +132,7 @@ test("G2. accepts the test header when NODE_ENV is unset and the flag is set (un
 });
 
 test("G3. rejects the test header when NODE_ENV is non-production but the flag is not set", () => {
-  process.env.NODE_ENV = "test";
+  replaceEnvValue("NODE_ENV", "test");
   delete process.env[TEST_FLAG];
 
   const result = getTrustedMemberAuthSource(
@@ -130,7 +144,7 @@ test("G3. rejects the test header when NODE_ENV is non-production but the flag i
 
 // H. test source ignored/rejected in production even if flag is enabled
 test("H. rejects the test header when NODE_ENV is production, even with the flag enabled", () => {
-  process.env.NODE_ENV = "production";
+  replaceEnvValue("NODE_ENV", "production");
   process.env[TEST_FLAG] = "1";
 
   const result = getTrustedMemberAuthSource(
@@ -142,7 +156,7 @@ test("H. rejects the test header when NODE_ENV is production, even with the flag
 
 // I. test header cannot override trusted production signal
 test("I. the Vercel header wins even when a differing test header is also present and override is allowed", () => {
-  process.env.NODE_ENV = "test";
+  replaceEnvValue("NODE_ENV", "test");
   process.env[TEST_FLAG] = "1";
 
   const result = getTrustedMemberAuthSource(

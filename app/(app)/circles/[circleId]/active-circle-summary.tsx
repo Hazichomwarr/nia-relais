@@ -98,7 +98,6 @@ export function ActiveCircleSummary({ summary }: { summary: ActiveCircleOwnerSum
           {members.map((member) => (
             <li key={member.id} className="py-2 text-sm text-[#173b32]">
               <span className="font-semibold">{member.payoutOrder}.</span> {member.displayName}{" "}
-              <span className="text-xs text-[#7b8179]">({member.memberCode})</span>
             </li>
           ))}
         </ol>
@@ -118,7 +117,7 @@ export function ActiveCircleSummary({ summary }: { summary: ActiveCircleOwnerSum
                     Round {round.roundNumber} · {round.recipientDisplayName}
                   </p>
                   <p className="text-xs text-[#7b8179]">
-                    ({round.recipientMemberCode}) · Due {formatOwnerDate(round.dueDate)}
+                    Due {formatOwnerDate(round.dueDate)}
                   </p>
                 </div>
                 <Badge {...status} />

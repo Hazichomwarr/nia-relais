@@ -53,7 +53,7 @@ export function RecordContributionForm({
       ref={formRef}
       action={formAction}
       onInput={handleFormInput}
-      className="rounded-xl border border-[#e4d9c8] bg-white/70 p-3"
+      className="rounded-xl border border-[#e4d9c8] bg-[#f7f1e8] p-4"
     >
       <input type="hidden" name="circleId" value={circleId} />
       <input type="hidden" name="obligationId" value={obligationId} />
@@ -95,7 +95,7 @@ export function RecordContributionForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-[#b96549] px-4 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-[#173b32] px-5 text-sm font-semibold text-white transition hover:bg-[#285347] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? "Recording…" : "Record contribution"}
       </button>

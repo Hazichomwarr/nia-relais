@@ -95,7 +95,6 @@ export function PayoutOrderForm({
           <li key={member.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
             <p className="text-sm text-[#173b32]">
               <span className="font-semibold">{index + 1}.</span> {member.displayName}{" "}
-              <span className="text-xs text-[#7b8179]">({member.memberCode})</span>
             </p>
             <div className="flex items-center gap-1">
               <button

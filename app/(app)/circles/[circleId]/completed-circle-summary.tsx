@@ -68,7 +68,6 @@ export function CompletedCircleSummary({ summary }: { summary: CompletedCircleOw
           {members.map((member) => (
             <li key={member.id} className="py-2 text-sm text-[#173b32]">
               <span className="font-semibold">{member.payoutOrder}.</span> {member.displayName}{" "}
-              <span className="text-xs text-[#7b8179]">({member.memberCode})</span>
             </li>
           ))}
         </ol>

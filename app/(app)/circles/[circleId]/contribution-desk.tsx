@@ -42,9 +42,9 @@ import { RecordContributionForm } from "./record-contribution-form";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-      <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">{title}</h2>
-      <div className="mt-5">{children}</div>
+    <section className="border-b border-[#e2d7c9] py-5 first:pt-0 last:border-b-0">
+      <h2 className="font-serif text-2xl tracking-tight text-[#173b32]">{title}</h2>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -65,7 +65,7 @@ function PaymentHistoryItem({
   const presentation = getPaymentStatusPresentation(payment.status);
 
   return (
-    <li className="rounded-xl bg-white/70 p-3 text-sm">
+    <li className="rounded-lg bg-[#f7f1e8] p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold text-[#173b32]">{formatContributionMoney(payment.amount, payment.currency)}</span>
         <Badge label={presentation.label} className={presentation.className} />
@@ -107,10 +107,10 @@ function ObligationCard({
   const statusPresentation = getObligationStatusPresentation(obligation.status);
 
   return (
-    <li className="rounded-2xl border border-[#efe6d8] bg-[#fffaf2] p-4">
+    <li className="border-b border-[#e7ded1] py-4 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-[#173b32]">
-          {obligation.memberDisplayName} <span className="text-xs text-[#7b8179]">({obligation.memberCode})</span>
+          {obligation.memberDisplayName}
         </p>
         <Badge label={statusPresentation.label} className={statusPresentation.className} />
       </div>
@@ -146,14 +146,14 @@ function ObligationCard({
       ) : null}
 
       {history.length > 0 ? (
-        <div className="mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Payment history</p>
-          <ul className="mt-2 flex flex-col gap-2">
+        <details className="mt-4 rounded-xl bg-[#f7f1e8] px-3 py-2">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#587066]">Payment history ({history.length})</summary>
+          <ul className="mt-3 flex flex-col gap-2">
             {history.map((payment) => (
               <PaymentHistoryItem key={payment.id} circleId={circleId} payment={payment} readOnly={readOnly} />
             ))}
           </ul>
-        </div>
+        </details>
       ) : null}
     </li>
   );
@@ -173,7 +173,9 @@ export function ContributionDesk({
   const paymentsByObligationId = groupPaymentsByObligationId(payments);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className="w-full max-w-4xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
+      <h1 className="mt-3 font-serif text-4xl tracking-tight text-[#173b32]">Contributions</h1>
       <Card title="Contributions">
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly

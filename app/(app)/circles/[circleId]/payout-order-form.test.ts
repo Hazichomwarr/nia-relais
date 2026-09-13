@@ -64,9 +64,9 @@ test("no payoutOrder numeric value or ownerId is ever submitted from the client"
   assert.deepEqual([...new Set(nameAttributes)].sort(), ["circleId", "memberId"]);
 });
 
-// W. memberCode may display, PIN never displays
-test("W. memberCode is shown for disambiguation, but no PIN field is ever rendered", () => {
-  assert.match(source, /member\.memberCode/);
+// W. ordering does not expose credentials
+test("W. member codes and PIN fields are not rendered in payout ordering", () => {
+  assert.doesNotMatch(source, /member\.memberCode/);
   assert.doesNotMatch(source, /\bpin\b/i);
   assert.doesNotMatch(source, /pinHash/);
 });

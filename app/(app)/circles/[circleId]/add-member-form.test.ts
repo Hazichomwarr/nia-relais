@@ -77,3 +77,9 @@ test("no direct Prisma reference or member-session identity import", () => {
   assert.doesNotMatch(source, /validateCircleMemberSession/);
   assert.doesNotMatch(source, /nia_member_session/);
 });
+
+test("the one-time handoff explains the three member credentials and the separate sign-in route", () => {
+  assert.match(source, /Circle ID, member code, and[\s\S]*PIN/);
+  assert.match(source, /href="\/member\/login"/);
+  assert.match(source, /rather than NIA account email and password sign-in/);
+});

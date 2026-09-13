@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import { logoutAction } from "@/src/actions/auth.actions";
 
@@ -12,6 +13,7 @@ type AppNavigationProps = {
 
 export function AppNavigation({ userName }: AppNavigationProps) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
   const isSavingsRoute =
     pathname === "/deposits" ||
     /^\/goals\/[^/]+\/deposits(?:\/|$)/.test(pathname);
@@ -29,7 +31,7 @@ export function AppNavigation({ userName }: AppNavigationProps) {
 
   return (
     <header className="border-b border-[#e2d7c9] bg-[#fffaf2] px-4 py-3 sm:px-8">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
         <Link
           href="/dashboard"
           aria-label="NIA dashboard, powered by RELAIS"
@@ -46,8 +48,19 @@ export function AppNavigation({ userName }: AppNavigationProps) {
           </span>
         </Link>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:gap-x-5">
-          <nav aria-label="Primary navigation" className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          aria-label="Open navigation"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-primary-navigation"
+          onClick={() => setMenuOpen((open) => !open)}
+          className="flex size-11 items-center justify-center rounded-full border border-[#d9cdbc] text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] sm:hidden"
+        >
+          <span aria-hidden="true" className="text-xl leading-none">☰</span>
+        </button>
+
+        <div className="hidden min-w-0 flex-1 items-center justify-end gap-x-5 sm:flex">
+          <nav aria-label="Primary navigation" className="flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -76,6 +89,30 @@ export function AppNavigation({ userName }: AppNavigationProps) {
           </form>
         </div>
       </div>
+
+      {menuOpen ? (
+        <div id="mobile-primary-navigation" className="mx-auto mt-3 max-w-7xl border-t border-[#e9dfd1] pt-3 sm:hidden">
+          <nav aria-label="Primary navigation" className="grid gap-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={item.isActive ? "page" : undefined}
+                onClick={() => setMenuOpen(false)}
+                className={`flex min-h-11 items-center rounded-xl px-4 text-sm font-medium ${item.isActive ? "bg-[#dce9dc] text-[#173b32]" : "text-[#587066] hover:bg-[#f7eee4]"}`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-3 flex items-center justify-between border-t border-[#e9dfd1] pt-3">
+            <span className="max-w-[12rem] truncate text-sm text-[#7b8179]">Hello, {userName}</span>
+            <form action={logoutAction}>
+              <button type="submit" className="min-h-11 rounded-full border border-[#cdbda9] px-4 text-sm font-semibold text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">Sign out</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

@@ -66,8 +66,8 @@ test("no actor id (completedById/activatedById) is ever rendered", () => {
   }
 });
 
-test("member codes are shown, but no PIN or credential field is ever rendered", () => {
-  assert.match(source, /member\.memberCode/);
+test("ordinary owner history hides member codes and never renders PIN or credential fields", () => {
+  assert.doesNotMatch(source, /member\.memberCode/);
   assert.doesNotMatch(source, /\bpin\b/i);
   assert.doesNotMatch(source, /pinHash/);
 });

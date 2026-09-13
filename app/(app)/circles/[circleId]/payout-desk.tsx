@@ -24,9 +24,9 @@ import { RecordPayoutForm } from "./record-payout-form";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-      <h2 className="text-xl font-semibold tracking-tight text-[#173b32]">{title}</h2>
-      <div className="mt-5">{children}</div>
+    <section className="border-b border-[#e2d7c9] py-5 first:pt-0 last:border-b-0">
+      <h2 className="font-serif text-2xl tracking-tight text-[#173b32]">{title}</h2>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -52,9 +52,7 @@ function RoundCard({
     <Card title={`Round ${round.roundNumber} · ${round.recipient.displayName}`}>
       <div className="flex flex-wrap items-center gap-3">
         <Badge label={roundStatus.label} className={roundStatus.className} />
-        <p className="text-xs text-[#7b8179]">
-          ({round.recipient.memberCode}) · Due {formatOwnerDate(round.dueDate)}
-        </p>
+        <p className="text-xs text-[#7b8179]">Due {formatOwnerDate(round.dueDate)}</p>
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -74,7 +72,9 @@ function RoundCard({
       <p className="mt-2 text-xs leading-5 text-[#7b8179]">{presentation.description}</p>
 
       {round.payout ? (
-        <div className="mt-3 rounded-xl bg-white/70 p-3 text-sm">
+        <details className="mt-3 rounded-xl bg-[#f7f1e8] p-3 text-sm">
+          <summary className="cursor-pointer text-sm font-semibold text-[#173b32]">Payout record</summary>
+          <div className="mt-3">
           <p className="font-semibold text-[#173b32]">
             {formatContributionMoney(round.payout.amount, round.payout.currency)}
           </p>
@@ -90,7 +90,8 @@ function RoundCard({
               Reason: {round.payout.disputeReason}
             </p>
           ) : null}
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {canRecord ? (
@@ -119,7 +120,9 @@ export function PayoutDesk({
   const { rounds, summary } = payouts;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className="w-full max-w-4xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
+      <h1 className="mt-3 font-serif text-4xl tracking-tight text-[#173b32]">Payouts</h1>
       <Card title="Payouts">
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly

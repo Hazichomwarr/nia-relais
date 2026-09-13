@@ -52,8 +52,8 @@ test("no financial payment/payout total is computed or rendered -- out of scope 
   }
 });
 
-test("member codes are shown, but no PIN or credential field is ever rendered", () => {
-  assert.match(source, /member\.memberCode/);
+test("ordinary owner summaries hide member codes and never render PIN or credential fields", () => {
+  assert.doesNotMatch(source, /member\.memberCode/);
   assert.doesNotMatch(source, /\bpin\b/i);
   assert.doesNotMatch(source, /pinHash/);
 });

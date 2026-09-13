@@ -35,6 +35,15 @@ export default function LoginForm() {
       <p className="mt-4 text-sm">
         Need an account? <Link href="/register" className="underline">Create one</Link>
       </p>
+      <section className="mt-8 rounded-xl border border-[#dfd2c1] bg-[#fffdf8] p-4 text-sm text-[#587066]">
+        <h2 className="font-semibold text-[#173b32]">Signing in to a SUSU circle?</h2>
+        <p className="mt-1 leading-6">
+          Member sign-in is separate from your NIA account. Use your Circle ID, member code, and PIN.
+        </p>
+        <Link href="/member/login" className="mt-3 inline-flex font-semibold text-[#a95f45] underline">
+          Sign in as a SUSU member
+        </Link>
+      </section>
     </main>
   );
 }

@@ -12,6 +12,14 @@ const labels: Record<CircleWorkspaceSection, string> = {
   schedule: "Schedule",
 };
 
+const icons: Record<CircleWorkspaceSection, string> = {
+  overview: "◌",
+  contributions: "↙",
+  payouts: "↗",
+  members: "◉",
+  schedule: "□",
+};
+
 export function getCircleWorkspaceSection(value: string | undefined): CircleWorkspaceSection {
   return CIRCLE_WORKSPACE_SECTIONS.includes(value as CircleWorkspaceSection)
     ? (value as CircleWorkspaceSection)
@@ -21,21 +29,32 @@ export function getCircleWorkspaceSection(value: string | undefined): CircleWork
 export function CircleWorkspaceNavigation({
   circleId,
   section,
+  circleName,
+  status,
+  terms,
   availableSections = CIRCLE_WORKSPACE_SECTIONS,
 }: {
   circleId: string;
   section: CircleWorkspaceSection;
+  circleName: string;
+  status: string;
+  terms: string;
   availableSections?: readonly CircleWorkspaceSection[];
 }) {
   return (
     <nav aria-label="Circle workspace" className="shrink-0">
-      <div className="hidden rounded-[1.5rem] border border-[#dfd2c1] bg-[#fffdf8] p-3 shadow-[0_8px_30px_rgba(77,57,40,0.06)] md:block">
-        <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#7b8179]">This circle</p>
+      <div className="hidden border-r border-[#e2d7c9] py-2 pr-6 md:block">
+        <p className="text-lg font-semibold text-[#173b32]">{circleName}</p>
+        <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold ${status === "ACTIVE" ? "bg-[#dce9dc] text-[#35634f]" : status === "DRAFT" ? "bg-[#fff0d9] text-[#8a5b27]" : "bg-[#efe7db] text-[#587066]"}`}>{status}</span>
+        <p className="mt-3 text-sm leading-6 text-[#587066]">{terms}</p>
+        <div className="mt-7 space-y-1">
         <div className="space-y-1">
           {availableSections.map((item) => (
             <WorkspaceLink key={item} circleId={circleId} item={item} section={section} />
           ))}
         </div>
+        </div>
+        <Link href="/circles" className="mt-8 inline-flex min-h-11 items-center text-sm font-semibold text-[#587066] hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">← Back to my circles</Link>
       </div>
 
       <div className="md:hidden">
@@ -71,7 +90,7 @@ function WorkspaceLink({
           : "text-[#587066] hover:bg-[#f7eee4] hover:text-[#173b32]"
       } ${compact ? "border border-[#dfd2c1] bg-[#fffdf8]" : ""}`}
     >
-      {labels[item]}
+      <span aria-hidden="true" className="mr-2 text-base leading-none">{icons[item]}</span>{labels[item]}
     </Link>
   );
 }
