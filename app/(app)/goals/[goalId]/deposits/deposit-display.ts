@@ -5,7 +5,7 @@ export function getDepositStatusPresentation(deposit: DepositHistoryItem) {
     return {
       label: "Confirmed",
       description: "This saving has been confirmed and counts toward your progress.",
-      className: "bg-[#e6f0e8] text-[#35634f]",
+      className: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]",
     };
   }
 
@@ -13,14 +13,14 @@ export function getDepositStatusPresentation(deposit: DepositHistoryItem) {
     return {
       label: "Awaiting confirmation",
       description: "This saving was recorded and is waiting for your trusted person to confirm it.",
-      className: "bg-[#fff0d9] text-[#8a5b27]",
+      className: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]",
     };
   }
 
   return {
     label: "Not confirmed",
     description: "This saving was not confirmed.",
-    className: "bg-[#f4e6e1] text-[#8d4f42]",
+    className: "bg-[var(--nia-draft-soft)] text-[var(--nia-secondary)]",
   };
 }
 

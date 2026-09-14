@@ -72,6 +72,7 @@ export function findPersonalGoalByIdAndOwnerId(goalId: string, ownerId: string) 
       ownerId: true,
       name: true,
       status: true,
+      targetAmount: true,
       weeklyAmount: true,
       startDate: true,
       unlockDate: true,

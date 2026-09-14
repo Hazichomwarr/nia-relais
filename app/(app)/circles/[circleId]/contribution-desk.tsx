@@ -173,9 +173,9 @@ export function ContributionDesk({
   const paymentsByObligationId = groupPaymentsByObligationId(payments);
 
   return (
-    <div className="w-full max-w-4xl">
+    <div className="w-full min-w-0 max-w-4xl">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
-      <h1 className="mt-3 font-serif text-4xl tracking-tight text-[#173b32]">Contributions</h1>
+      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">Contributions</h1>
       <Card title="Contributions">
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly

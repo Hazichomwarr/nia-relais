@@ -15,20 +15,20 @@ export function DepositHistoryFilters({
   const path = `/goals/${encodeURIComponent(goalId)}/deposits`;
 
   return (
-    <form action={path} className="mt-5 flex flex-col gap-3 rounded-2xl border border-[#dfd2c1] bg-[#fffaf2] p-4 sm:flex-row sm:items-end sm:justify-between">
+    <form action={path} className="mt-5 flex flex-col gap-4 rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm font-semibold text-[#173b32]" htmlFor="deposit-status">
+        <label className="grid gap-1.5 text-sm font-semibold text-[var(--nia-text)]" htmlFor="deposit-status">
           Status
-          <select id="deposit-status" name="status" defaultValue={status} className="min-h-10 rounded-xl border border-[#d8cec0] bg-white px-3 text-sm font-normal text-[#173b32] outline-none focus:border-[#b96549] focus:ring-2 focus:ring-[#f2d2bd]">
+          <select id="deposit-status" name="status" defaultValue={status} className="min-h-11 rounded-xl border border-[var(--nia-border)] bg-[var(--nia-surface)] px-3 text-sm font-normal text-[var(--nia-text)] outline-none transition focus:border-[var(--nia-primary)] focus:ring-2 focus:ring-[var(--nia-active-soft)]">
             <option value="all">All</option>
             <option value="APPROVED">Confirmed</option>
             <option value="PENDING">Awaiting confirmation</option>
             <option value="REJECTED">Not confirmed</option>
           </select>
         </label>
-        <label className="grid gap-1 text-sm font-semibold text-[#173b32]" htmlFor="deposit-range">
+        <label className="grid gap-1.5 text-sm font-semibold text-[var(--nia-text)]" htmlFor="deposit-range">
           Date
-          <select id="deposit-range" name="range" defaultValue={range} className="min-h-10 rounded-xl border border-[#d8cec0] bg-white px-3 text-sm font-normal text-[#173b32] outline-none focus:border-[#b96549] focus:ring-2 focus:ring-[#f2d2bd]">
+          <select id="deposit-range" name="range" defaultValue={range} className="min-h-11 rounded-xl border border-[var(--nia-border)] bg-[var(--nia-surface)] px-3 text-sm font-normal text-[var(--nia-text)] outline-none transition focus:border-[var(--nia-primary)] focus:ring-2 focus:ring-[var(--nia-active-soft)]">
             <option value="all">All time</option>
             <option value="30d">Last 30 days</option>
             <option value="90d">Last 90 days</option>
@@ -36,11 +36,11 @@ export function DepositHistoryFilters({
           </select>
         </label>
       </div>
-      <div className="flex gap-3">
-        <button type="submit" className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#173b32] px-4 text-sm font-semibold text-[#fffaf2] transition hover:bg-[#28564a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[var(--nia-primary)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">
           Apply
         </button>
-        <Link href={path} className="inline-flex min-h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-[#587066] transition hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">
+        <Link href={path} className="inline-flex min-h-11 items-center justify-center rounded-full px-3 text-sm font-semibold text-[var(--nia-text-muted)] transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">
           Reset
         </Link>
       </div>

@@ -42,7 +42,7 @@ export function CircleWorkspaceNavigation({
   availableSections?: readonly CircleWorkspaceSection[];
 }) {
   return (
-    <nav aria-label="Circle workspace" className="shrink-0">
+    <nav aria-label="Circle workspace" className="w-full min-w-0 shrink-0">
       <div className="hidden border-r border-[#e2d7c9] py-2 pr-6 md:block">
         <p className="text-lg font-semibold text-[#173b32]">{circleName}</p>
         <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold ${status === "ACTIVE" ? "bg-[#dce9dc] text-[#35634f]" : status === "DRAFT" ? "bg-[#fff0d9] text-[#8a5b27]" : "bg-[#efe7db] text-[#587066]"}`}>{status}</span>
@@ -58,7 +58,7 @@ export function CircleWorkspaceNavigation({
       </div>
 
       <div className="md:hidden">
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 pr-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {availableSections.map((item) => (
             <WorkspaceLink key={item} circleId={circleId} item={item} section={section} compact />
           ))}
@@ -84,7 +84,7 @@ function WorkspaceLink({
     <Link
       href={item === "overview" ? `/circles/${circleId}` : `/circles/${circleId}?section=${item}`}
       aria-current={selected ? "page" : undefined}
-      className={`block whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] ${
+      className={`block shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] ${
         selected
           ? "bg-[#dce9dc] text-[#173b32]"
           : "text-[#587066] hover:bg-[#f7eee4] hover:text-[#173b32]"
