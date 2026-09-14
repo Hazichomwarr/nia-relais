@@ -5,8 +5,11 @@ import { useActionState, useState } from "react";
 import { createDraftCircleAction } from "@/src/actions/circle.actions";
 import { initialCreateDraftCircleState } from "@/src/actions/circle.state";
 import { DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES } from "@/src/validations/circle.schema";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
+import { getFrequencyLabel as getLocalizedFrequencyLabel } from "@/src/i18n/format";
 
-import { buildContributionRestatement, getFrequencyLabel } from "./new-circle-form-display";
+import { buildContributionRestatement } from "./new-circle-form-display";
 
 // This form reads only the five fields runCreateDraftCircleAction actually
 // consumes -- circle name, currency, contribution amount, frequency, start
@@ -30,7 +33,8 @@ function FieldError({ id, errors }: { id: string; errors?: string[] }) {
 const inputClassName =
   "mt-2 min-h-12 w-full rounded-xl border border-[#cdbda9] bg-white px-3.5 text-base text-[#173b32] outline-none transition focus-visible:border-[#b96549] focus-visible:ring-2 focus-visible:ring-[#b96549]/30";
 
-export function NewCircleForm() {
+export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; locale: Locale }) {
+  const copy = dictionary.susu;
   const [state, formAction, pending] = useActionState(createDraftCircleAction, initialCreateDraftCircleState);
   const [currency, setCurrency] = useState<(typeof DRAFT_CIRCLE_CURRENCIES)[number]>(DRAFT_CIRCLE_CURRENCIES[0]);
   const [contributionAmount, setContributionAmount] = useState("");
@@ -41,14 +45,12 @@ export function NewCircleForm() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-0">
-      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circles</p>
-      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">Start a savings circle</h1>
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{copy.eyebrow}</p><h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">{copy.newTitle}</h1>
       <p className="mt-4 max-w-xl text-base leading-7 text-[#587066]">
-        Create a savings circle with people you trust. Each member contributes, and everyone receives their turn.
+        {copy.newDescription}
       </p>
       <p className="mt-3 max-w-xl text-sm leading-6 text-[#7b8179]">
-        NIA tracks each circle&apos;s contributions and payouts as a shared ledger. It does not hold or transfer
-        money on anyone&apos;s behalf.
+        {copy.ledgerDescription}
       </p>
 
       <form
@@ -57,7 +59,7 @@ export function NewCircleForm() {
       >
         <div>
           <label htmlFor="name" className="block text-sm font-semibold text-[#173b32]">
-            Circle name
+            {copy.circleName}
           </label>
           <input
             id="name"
@@ -65,7 +67,7 @@ export function NewCircleForm() {
             type="text"
             required
             maxLength={100}
-            placeholder="e.g. Family Susu"
+            placeholder={copy.circleNamePlaceholder}
             aria-invalid={Boolean(state.fieldErrors?.name)}
             aria-describedby="name-error"
             className={inputClassName}
@@ -76,7 +78,7 @@ export function NewCircleForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="contributionAmount" className="block text-sm font-semibold text-[#173b32]">
-              Contribution amount
+              {copy.contributionAmount}
             </label>
             <input
               id="contributionAmount"
@@ -96,7 +98,7 @@ export function NewCircleForm() {
 
           <div>
             <label htmlFor="currency" className="block text-sm font-semibold text-[#173b32]">
-              Currency
+              {copy.currency}
             </label>
             <select
               id="currency"
@@ -119,7 +121,7 @@ export function NewCircleForm() {
 
         <div>
           <label htmlFor="frequency" className="block text-sm font-semibold text-[#173b32]">
-            Frequency
+            {copy.frequency}
           </label>
           <select
             id="frequency"
@@ -132,7 +134,7 @@ export function NewCircleForm() {
           >
             {DRAFT_CIRCLE_FREQUENCIES.map((option) => (
               <option key={option} value={option}>
-                {getFrequencyLabel(option)}
+                {getLocalizedFrequencyLabel(option, locale)}
               </option>
             ))}
           </select>
@@ -141,7 +143,7 @@ export function NewCircleForm() {
 
         <div>
           <label htmlFor="startDate" className="block text-sm font-semibold text-[#173b32]">
-            Start date
+            {copy.startDate}
           </label>
           <input
             id="startDate"
@@ -174,7 +176,7 @@ export function NewCircleForm() {
           disabled={pending}
           className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#b96549] px-6 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(185,101,73,0.22)] transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Creating your circle…" : "Create circle"}
+          {pending ? copy.creating : copy.create}
         </button>
       </form>
     </div>

@@ -5,6 +5,8 @@ import { useActionState, useState } from "react";
 import { setDraftCirclePayoutOrderAction } from "@/src/actions/circle.actions";
 import { initialSetDraftCirclePayoutOrderState } from "@/src/actions/circle.state";
 import type { DraftCircleOwnerMemberResult } from "@/src/services/circle-draft-owner.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { presentSusuDraftError } from "@/src/i18n/susu-draft-error-presentation";
 
 // Move-up/move-down, deliberately not drag-and-drop: reliable on touch
 // screens, keyboard-operable for free (plain <button> elements), and
@@ -24,10 +26,13 @@ import type { DraftCircleOwnerMemberResult } from "@/src/services/circle-draft-o
 export function PayoutOrderForm({
   circleId,
   members,
+  dictionary,
 }: {
   circleId: string;
   members: readonly DraftCircleOwnerMemberResult[];
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susu;
   const activeMembers = members.filter((member) => member.status === "ACTIVE");
   const [order, setOrder] = useState<readonly DraftCircleOwnerMemberResult[]>(activeMembers);
   const [state, formAction, pending] = useActionState(
@@ -75,18 +80,17 @@ export function PayoutOrderForm({
   const isSaved = order.length > 0 && order.every((member, index) => persistedPayoutOrderFor(member) === index + 1);
 
   if (activeMembers.length === 0) {
-    return <p className="text-sm leading-6 text-[#587066]">Add at least one active member to set a payout order.</p>;
+    return <p className="text-sm leading-6 text-[#587066]">{copy.payoutOrderEmpty}</p>;
   }
 
   return (
     <div>
       <p className="text-sm leading-6 text-[#587066]">
-        Choose the order in which members will receive the circle payout. You can still change this while the
-        circle is in draft.
+        {copy.payoutOrderDescription}
       </p>
       {activeMembers.length < 2 ? (
         <p className="mt-3 text-sm leading-6 text-[#8a5b27]">
-          At least 2 active members are required before the circle can be activated.
+          {copy.payoutOrderMinimum}
         </p>
       ) : null}
 
@@ -101,19 +105,19 @@ export function PayoutOrderForm({
                 type="button"
                 onClick={() => moveUp(index)}
                 disabled={index === 0}
-                aria-label={`Move ${member.displayName} up`}
+                aria-label={copy.moveUpAria.replace("{name}", member.displayName)}
                 className="rounded-full border border-[#cdbda9] px-2.5 py-1 text-xs font-semibold text-[#173b32] transition-colors hover:border-[#b96549] hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Move up
+                {copy.moveUp}
               </button>
               <button
                 type="button"
                 onClick={() => moveDown(index)}
                 disabled={index === order.length - 1}
-                aria-label={`Move ${member.displayName} down`}
+                aria-label={copy.moveDownAria.replace("{name}", member.displayName)}
                 className="rounded-full border border-[#cdbda9] px-2.5 py-1 text-xs font-semibold text-[#173b32] transition-colors hover:border-[#b96549] hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Move down
+                {copy.moveDown}
               </button>
             </div>
           </li>
@@ -121,7 +125,7 @@ export function PayoutOrderForm({
       </ol>
 
       <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-[#7b8179]" role="status">
-        {isSaved ? "Saved" : "Not saved yet"}
+        {isSaved ? copy.saved : copy.notSaved}
       </p>
 
       <form action={formAction} className="mt-3">
@@ -131,7 +135,7 @@ export function PayoutOrderForm({
         ))}
         {state.formError ? (
           <p role="alert" className="mb-3 text-sm font-medium text-[#b3261e]">
-            {state.formError}
+            {presentSusuDraftError(state.formError, copy)}
           </p>
         ) : null}
         <button
@@ -139,7 +143,7 @@ export function PayoutOrderForm({
           disabled={pending}
           className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Saving…" : "Save payout order"}
+          {pending ? copy.saving : copy.savePayoutOrder}
         </button>
       </form>
     </div>

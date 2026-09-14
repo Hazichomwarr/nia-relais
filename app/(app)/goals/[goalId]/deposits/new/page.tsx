@@ -5,6 +5,8 @@ import {
   requireGoalOwner,
 } from "@/src/auth/require-goal-owner";
 import DepositForm from "./deposit-form";
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
 
 export default async function NewDepositPage({
   params,
@@ -22,14 +24,16 @@ export default async function NewDepositPage({
   }
 
   const { goal } = authority;
+  const locale = await getLocale();
+  const dictionary = getDictionary(locale);
 
   if (goal.status !== "ACTIVE") {
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-12">
         <div className="mx-auto w-full max-w-xl rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-7 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-10">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{goal.name}</p>
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight">This goal is not accepting new savings.</h1>
-          <p className="mt-3 text-base leading-7 text-[#587066]">You can still view it from your dashboard.</p>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight">{dictionary.personalSavings.goalNotAccepting}</h1>
+          <p className="mt-3 text-base leading-7 text-[#587066]">{dictionary.personalSavings.goalNotAcceptingDescription}</p>
         </div>
       </main>
     );
@@ -44,6 +48,7 @@ export default async function NewDepositPage({
         startDate: goal.startDate.toISOString().slice(0, 10),
       }}
       goalId={goal.id}
+      dictionary={dictionary}
     />
   );
 }

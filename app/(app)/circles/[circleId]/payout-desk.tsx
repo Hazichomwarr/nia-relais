@@ -1,4 +1,6 @@
 import type { OwnerCirclePayoutsResult, OwnerPayoutsRoundResult } from "@/src/services/payout-owner-read.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
 
 import { formatContributionDateTime, formatContributionMoney } from "./contribution-desk-display";
 import { formatOwnerDate, getRoundStatusBadge } from "./circle-workspace-display";
@@ -112,22 +114,27 @@ export function PayoutDesk({
   circleId,
   payouts,
   readOnly,
+  dictionary,
+  locale: _locale,
 }: {
   circleId: string;
   payouts: OwnerCirclePayoutsResult;
   readOnly: boolean;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.susuFinancial;
   const { rounds, summary } = payouts;
 
   return (
     <div className="w-full min-w-0 max-w-4xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
-      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">Payouts</h1>
-      <Card title="Payouts">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow}</p>
+      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">{copy.payouts}</h1>
+      <Card title={copy.payouts}>
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly
-            ? "This circle is complete. The payout history below is a permanent record and can no longer be changed."
-            : "Record a payout once you have actually paid the recipient outside NIA. NIA records payouts that happen outside the app -- it does not send, hold, or transfer the money."}
+            ? copy.completePayoutHistory
+            : copy.payoutDescription}
         </p>
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div>

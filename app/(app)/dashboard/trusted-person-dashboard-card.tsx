@@ -2,12 +2,14 @@ import Link from "next/link";
 
 import type { CustodianInboxItem } from "@/src/services/custodian.service";
 import type { PendingCustodianDeposit } from "@/src/services/custodian-deposit.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 type TrustedPersonDashboardCardProps = {
   pendingInvitations: CustodianInboxItem[];
   activeAssignments: CustodianInboxItem[];
   pendingDeposits: PendingCustodianDeposit[];
   hasHistoricalAssignments: boolean;
+  dictionary: Dictionary;
 };
 
 function ShieldIcon() {
@@ -24,19 +26,21 @@ export function TrustedPersonDashboardCard({
   activeAssignments,
   pendingDeposits,
   hasHistoricalAssignments,
+  dictionary,
 }: TrustedPersonDashboardCardProps) {
   const waitingCount = pendingInvitations.length + pendingDeposits.length;
   const activeAssignment = activeAssignments[0] ?? null;
+  const copy = dictionary.dashboard;
 
   return (
     <section className="mt-8 rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-5 shadow-sm sm:p-7" aria-labelledby="trusted-person-dashboard-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 id="trusted-person-dashboard-heading" className="font-serif text-3xl tracking-tight">Trusted person</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Support others on their savings journey.</p>
+          <h2 id="trusted-person-dashboard-heading" className="font-serif text-3xl tracking-tight">{dictionary.common.trustedPerson}</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.trustedPersonDescription}</p>
         </div>
         <Link href="/custodian" className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
-          View all <span aria-hidden="true">→</span>
+          {copy.viewAll} <span aria-hidden="true">→</span>
         </Link>
       </div>
 
@@ -48,29 +52,29 @@ export function TrustedPersonDashboardCard({
             <div>
               {waitingCount > 0 ? (
                 <>
-                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{waitingCount} item{waitingCount === 1 ? "" : "s"} waiting for your confirmation.</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Review the savings requests that need your attention.</p>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{waitingCount} {waitingCount === 1 ? copy.waitingForConfirmationOne : copy.waitingForConfirmation}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.reviewSavingsRequests}</p>
                 </>
               ) : activeAssignment ? (
                 <>
-                  <h3 className="font-serif text-xl text-[var(--nia-text)]">You&apos;re helping someone stay on track.</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{activeAssignment.ownerName} is saving toward {activeAssignment.goal.name}. You&apos;re all caught up for now.</p>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{copy.helpingSomeone}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{activeAssignment.ownerName} {copy.savingToward} {activeAssignment.goal.name}. {copy.caughtUp}</p>
                 </>
               ) : hasHistoricalAssignments ? (
                 <>
-                  <h3 className="font-serif text-xl text-[var(--nia-text)]">Your trusted-person history is here.</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Past relationships and decisions remain available whenever you need them.</p>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{copy.historyTitle}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.historyDescription}</p>
                 </>
               ) : (
                 <>
-                  <h3 className="font-serif text-xl text-[var(--nia-text)]">Nothing waiting for you right now.</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">You&apos;re all caught up. We&apos;ll let you know when a new confirmation needs your attention.</p>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{copy.nothingWaiting}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.nothingWaitingDescription}</p>
                 </>
               )}
             </div>
           </div>
           <Link href="/custodian" className="relative inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-[var(--nia-primary)] px-5 text-sm font-semibold text-[var(--nia-primary)] transition hover:bg-[var(--nia-surface)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
-            {waitingCount > 0 ? "Review requests" : "People grow stronger together."} <span aria-hidden="true">→</span>
+            {waitingCount > 0 ? copy.reviewRequests : copy.strongerTogether} <span aria-hidden="true">→</span>
           </Link>
         </div>
       </div>

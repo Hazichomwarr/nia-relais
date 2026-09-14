@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { completeCircleAction } from "@/src/actions/circle-completion.actions";
 import { initialCompleteCircleState } from "@/src/actions/circle-completion.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // Owner-only circle-completion control (7L.3), mirroring
 // round-lifecycle-controls.tsx's own StartFirstRoundForm shape exactly:
@@ -17,7 +18,8 @@ import { initialCompleteCircleState } from "@/src/actions/circle-completion.stat
 // getCompletedCircleSummaryForOwner and renders its COMPLETED branch) --
 // this form never sets a local optimistic status of its own.
 
-export function CompleteCircleForm({ circleId }: { circleId: string }) {
+export function CompleteCircleForm({ circleId, dictionary }: { circleId: string; dictionary: Dictionary }) {
+  const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(completeCircleAction, initialCompleteCircleState);
 
   return (
@@ -41,7 +43,7 @@ export function CompleteCircleForm({ circleId }: { circleId: string }) {
         disabled={pending}
         className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#35634f] px-5 text-sm font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35634f] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "Completing circle…" : "Complete circle"}
+        {pending ? copy.completingCircle : copy.completeCircle}
       </button>
     </form>
   );

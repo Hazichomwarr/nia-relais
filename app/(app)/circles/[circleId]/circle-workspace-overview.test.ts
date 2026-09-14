@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
 
 const source = readFileSync(new URL("./circle-workspace-overview.tsx", import.meta.url), "utf8");
 
@@ -13,13 +15,15 @@ test("the active overview is composed from existing summary, contribution, payou
 });
 
 test("the overview provides the premium header, summary strip, current round, payout, member, and schedule previews", () => {
-  for (const heading of ["Contribution", "Members", "Started", "Round", "Current round", "Next payout", "Upcoming rounds"]) {
-    assert.ok(source.includes(heading), `expected ${heading}`);
+  for (const key of ["contribution", "members", "started", "round", "currentRound", "nextPayout", "upcomingRounds"]) {
+    assert.match(source, new RegExp(`copy\\.${key}`));
   }
-  assert.match(source, /Record contributions/);
-  assert.match(source, /View payouts/);
-  assert.match(source, /View all/);
-  assert.match(source, /Full schedule/);
+  assert.equal(en.susuWorkspace.currentRound, "Current round");
+  assert.equal(fr.susuWorkspace.currentRound, "Tour en cours");
+  assert.match(source, /copy\.recordContributions/);
+  assert.match(source, /copy\.viewPayouts/);
+  assert.match(source, /copy\.viewAll/);
+  assert.match(source, /copy\.fullSchedule/);
 });
 
 test("progress and payout copy are mapped from authoritative serialized values instead of new eligibility logic", () => {

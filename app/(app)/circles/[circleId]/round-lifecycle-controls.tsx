@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { activateFirstRoundAction, advanceRoundAction } from "@/src/actions/round-lifecycle.actions";
 import { initialActivateFirstRoundState, initialAdvanceRoundState } from "@/src/actions/round-lifecycle.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 import { getAdvanceCtaLabel } from "./round-lifecycle-display";
 
@@ -21,7 +22,8 @@ import { getAdvanceCtaLabel } from "./round-lifecycle-display";
 // page's server-rendered lifecycle data -- neither form ever sets a
 // local optimistic phase/round/status of its own.
 
-export function StartFirstRoundForm({ circleId }: { circleId: string }) {
+export function StartFirstRoundForm({ circleId, dictionary }: { circleId: string; dictionary: Dictionary }) {
+  const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(activateFirstRoundAction, initialActivateFirstRoundState);
 
   return (
@@ -45,7 +47,7 @@ export function StartFirstRoundForm({ circleId }: { circleId: string }) {
         disabled={pending}
         className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#35634f] px-5 text-sm font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35634f] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "Starting round…" : "Start round 1"}
+        {pending ? copy.startingRound : copy.startFirstRound}
       </button>
     </form>
   );
@@ -57,13 +59,16 @@ export function AdvanceRoundForm({
   transitionKind,
   currentRoundNumber,
   nextRoundNumber,
+  dictionary,
 }: {
   circleId: string;
   roundId: string;
   transitionKind: "ADVANCE_TO_NEXT_ROUND" | "CLOSE_FINAL_ROUND";
   currentRoundNumber: number;
   nextRoundNumber: number | null;
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(advanceRoundAction, initialAdvanceRoundState);
   const ctaLabel = getAdvanceCtaLabel(transitionKind, currentRoundNumber, nextRoundNumber);
   const isFinalRound = transitionKind === "CLOSE_FINAL_ROUND";
@@ -75,8 +80,8 @@ export function AdvanceRoundForm({
 
       <p className="mb-2 text-xs leading-5 text-[#7b8179]">
         {isFinalRound
-          ? "This closes the final rotation round."
-          : "Closing this round immediately starts the next round — this is one operation, not two."}
+          ? copy.finalRoundNotice
+          : copy.advanceNotice}
       </p>
 
       {state.status === "success" && state.message ? (
@@ -96,7 +101,7 @@ export function AdvanceRoundForm({
         disabled={pending}
         className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#35634f] px-5 text-sm font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35634f] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "Updating round…" : ctaLabel}
+        {pending ? copy.updatingRound : isFinalRound ? copy.closeFinalRound : copy.advanceRound}
       </button>
     </form>
   );

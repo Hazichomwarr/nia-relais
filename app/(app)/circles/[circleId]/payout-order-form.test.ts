@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
 
 // Structural checks on the actual client component source -- no DOM/React
 // render is exercised (no new testing-library/jsdom dependency for this
@@ -90,7 +92,9 @@ test("shows an unsaved/saved indicator derived at render time -- no setState-in-
 
 test("shows a note that at least 2 active members are required for activation, without blocking saving below that count", () => {
   assert.match(source, /activeMembers\.length < 2/);
-  assert.match(source, /At least 2 active members are required before the circle can be activated\./);
+  assert.match(source, /copy\.payoutOrderMinimum/);
+  assert.match(en.susu.payoutOrderMinimum, /At least 2 active members/);
+  assert.match(fr.susu.payoutOrderMinimum, /Au moins 2 membres actifs/);
   // The save button itself is never conditionally hidden/disabled based on
   // member count -- only on `pending` -- matching the domain service's own
   // contract (min length 1), not a UI-invented stricter rule.

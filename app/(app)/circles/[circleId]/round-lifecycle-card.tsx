@@ -1,4 +1,5 @@
 import type { OwnerRoundLifecycleResult } from "@/src/services/round-lifecycle-owner-read.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 import { formatOwnerDate, getRoundStatusBadge } from "./circle-workspace-display";
 import { CompleteCircleForm } from "./complete-circle-controls";
@@ -59,14 +60,17 @@ function RoundSummary({
 export function RoundLifecycleCard({
   circleId,
   lifecycle,
+  dictionary,
 }: {
   circleId: string;
   lifecycle: OwnerRoundLifecycleResult;
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susuFinancial;
   const { phase, totalRounds, closedRounds, currentRound, nextRound, progression } = lifecycle;
 
   return (
-    <Card title="Next round action">
+    <Card title={copy.advanceRound}>
       <p className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">
         {closedRounds} / {totalRounds} rounds closed
       </p>
@@ -78,7 +82,7 @@ export function RoundLifecycleCard({
             start it — nothing happens automatically.
           </p>
           {nextRound ? <RoundSummary label="Round 1" round={nextRound} /> : null}
-          {progression.canStartFirstRound ? <StartFirstRoundForm circleId={circleId} /> : null}
+          {progression.canStartFirstRound ? <StartFirstRoundForm circleId={circleId} dictionary={dictionary} /> : null}
         </div>
       ) : null}
 
@@ -94,6 +98,7 @@ export function RoundLifecycleCard({
           {progression.canAdvanceCurrentRound && currentRound ? (
             <AdvanceRoundForm
               circleId={circleId}
+              dictionary={dictionary}
               roundId={currentRound.id}
               transitionKind={progression.transitionKind === "CLOSE_FINAL_ROUND" ? "CLOSE_FINAL_ROUND" : "ADVANCE_TO_NEXT_ROUND"}
               currentRoundNumber={currentRound.roundNumber}
@@ -105,9 +110,9 @@ export function RoundLifecycleCard({
 
       {phase === "ALL_ROUNDS_CLOSED" ? (
         <div className="mt-4">
-          <p className="text-sm leading-6 text-[#587066]">All rotation rounds are closed.</p>
+          <p className="text-sm leading-6 text-[#587066]">{copy.allRoundsClosed}</p>
           <p className="mt-2 text-sm leading-6 text-[#587066]">The circle has not yet been marked complete in NIA.</p>
-          <CompleteCircleForm circleId={circleId} />
+          <CompleteCircleForm circleId={circleId} dictionary={dictionary} />
         </div>
       ) : null}
     </Card>

@@ -5,43 +5,47 @@ import { useActionState } from "react";
 
 import { loginAction } from "@/src/actions/auth.actions";
 import { initialLoginState } from "@/src/actions/auth.state";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { localizeFieldError, localizeLoginError } from "@/src/i18n/auth-error-presentation";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
-export default function LoginForm() {
+export default function LoginForm({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const [state, formAction, pending] = useActionState(loginAction, initialLoginState);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <h1 className="text-2xl font-semibold">Sign in to NIA</h1>
+      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">{dictionary.login.title}</h1><LanguageSwitcher locale={locale} compact /></div>
       <form action={formAction} className="mt-6 space-y-4">
         <label className="block">
-          <span className="text-sm font-medium">Email</span>
+          <span className="text-sm font-medium">{dictionary.common.email}</span>
           <input name="email" type="email" required className="mt-1 w-full rounded border px-3 py-2" />
           {state.fieldErrors?.email?.map((error) => (
-            <span key={error} className="mt-1 block text-sm text-red-600">{error}</span>
+            <span key={error} className="mt-1 block text-sm text-red-600">{localizeFieldError(error, dictionary)}</span>
           ))}
         </label>
         <label className="block">
-          <span className="text-sm font-medium">Password</span>
+          <span className="text-sm font-medium">{dictionary.common.password}</span>
           <input name="password" type="password" required className="mt-1 w-full rounded border px-3 py-2" />
           {state.fieldErrors?.password?.map((error) => (
-            <span key={error} className="mt-1 block text-sm text-red-600">{error}</span>
+            <span key={error} className="mt-1 block text-sm text-red-600">{localizeFieldError(error, dictionary)}</span>
           ))}
         </label>
-        {state.formError && <p className="text-sm text-red-600">{state.formError}</p>}
+        {state.formError && <p className="text-sm text-red-600">{localizeLoginError(dictionary)}</p>}
         <button type="submit" disabled={pending} className="rounded bg-black px-4 py-2 text-white disabled:opacity-50">
-          {pending ? "Signing in…" : "Sign in"}
+          {pending ? dictionary.common.signingIn : dictionary.common.signIn}
         </button>
       </form>
       <p className="mt-4 text-sm">
-        Need an account? <Link href="/register" className="underline">Create one</Link>
+        {dictionary.login.needAccount} <Link href="/register" className="underline">{dictionary.common.createAccount}</Link>
       </p>
       <section className="mt-8 rounded-xl border border-[#dfd2c1] bg-[#fffdf8] p-4 text-sm text-[#587066]">
-        <h2 className="font-semibold text-[#173b32]">Signing in to a SUSU circle?</h2>
+        <h2 className="font-semibold text-[#173b32]">{dictionary.login.memberTitle}</h2>
         <p className="mt-1 leading-6">
-          Member sign-in is separate from your NIA account. Use your Circle ID, member code, and PIN.
+          {dictionary.login.memberDescription}
         </p>
         <Link href="/member/login" className="mt-3 inline-flex font-semibold text-[#a95f45] underline">
-          Sign in as a SUSU member
+          {dictionary.login.memberLink}
         </Link>
       </section>
     </main>

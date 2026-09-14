@@ -9,6 +9,8 @@ import {
   type CreateDepositActionState,
 } from "@/src/actions/deposit.actions";
 import { initialCreateDepositState } from "@/src/actions/deposit.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { localizePersonalSavingsError } from "@/src/i18n/personal-savings-error-presentation";
 
 type DepositFormProps = {
   goalId: string;
@@ -18,6 +20,7 @@ type DepositFormProps = {
     weeklyAmount: string;
     startDate: string;
   };
+  dictionary: Dictionary;
 };
 
 function todayDate() {
@@ -38,7 +41,8 @@ function FieldError({ id, errors }: { id: string; errors?: string[] }) {
   );
 }
 
-export default function DepositForm({ goalId, goal }: DepositFormProps) {
+export default function DepositForm({ goalId, goal, dictionary }: DepositFormProps) {
+  const copy = dictionary.personalSavings;
   const [state, formAction, pending] = useActionState<CreateDepositActionState, FormData>(
     createDepositAction,
     initialCreateDepositState,
@@ -64,15 +68,15 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
       <div className="mx-auto w-full max-w-xl">
         <div className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-7 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-10">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">Record savings</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{copy.recordSavings}</p>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">{goal.name}</h1>
             <p className="mt-3 text-base leading-7 text-[#587066]">
-              Record what you saved toward this goal. NIA does not hold or receive the money.
+              {copy.recordSavingsDescription}
             </p>
           </div>
 
           <div className="mt-7 rounded-2xl bg-[#fff4e8] p-4 text-sm leading-6 text-[#587066]">
-            Your weekly commitment is {goal.currency} {goal.weeklyAmount}, but you can record any amount you actually saved.
+            {copy.commitmentNotice.replace("{currency}", goal.currency).replace("{amount}", goal.weeklyAmount)}
           </div>
 
           {state.success ? (
@@ -81,18 +85,18 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#d7e5d7] font-serif text-lg text-[#315b4b]" aria-hidden="true">✦</span>
                 <div>
                   <h2 className="font-semibold text-[#173b32]">
-                    {state.success.status === "APPROVED" ? "Another step toward your dream." : "Your savings were recorded."}
+                    {state.success.status === "APPROVED" ? copy.approvedSuccessTitle : copy.pendingSuccessTitle}
                   </h2>
                   <p className="mt-1 text-sm leading-6">
                     {state.success.status === "APPROVED"
-                      ? `${successAmount} has been added to your savings.`
-                      : `${successAmount} is waiting for your trusted person to confirm it.`}
+                      ? copy.approvedSuccessDescription.replace("{amount}", successAmount ?? "")
+                      : copy.pendingSuccessDescription.replace("{amount}", successAmount ?? "")}
                   </p>
                   <Link
                     href={savingsHistoryHref}
                     className="mt-4 inline-flex min-h-10 items-center justify-center rounded-full border border-[#a9c5b0] px-4 text-sm font-semibold text-[#315b4b] transition hover:bg-[#e1efdf] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]"
                   >
-                    View savings
+                    {copy.viewSavings}
                   </Link>
                 </div>
               </div>
@@ -104,8 +108,7 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
             <input type="hidden" name="clientOperationId" value={clientOperationId} readOnly />
 
             <label className="block" htmlFor="deposit-amount">
-              <span className="text-sm font-semibold">Amount saved</span>
-              <span className="mt-1 block text-sm text-[#7b8179]">Currency: {goal.currency}</span>
+              <span className="text-sm font-semibold">{copy.amountSaved}</span><span className="mt-1 block text-sm text-[#7b8179]">{copy.currency}: {goal.currency}</span>
               <input
                 id="deposit-amount"
                 name="amount"
@@ -121,7 +124,7 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
             </label>
 
             <label className="block" htmlFor="deposit-date">
-              <span className="text-sm font-semibold">Date saved</span>
+              <span className="text-sm font-semibold">{copy.dateSaved}</span>
               <input
                 id="deposit-date"
                 name="depositDate"
@@ -138,13 +141,13 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
             </label>
 
             <label className="block" htmlFor="deposit-note">
-              <span className="text-sm font-semibold">Note <span className="font-normal text-[#7b8179]">(optional)</span></span>
+              <span className="text-sm font-semibold">{copy.note} <span className="font-normal text-[#7b8179]">({copy.optional})</span></span>
               <textarea
                 id="deposit-note"
                 name="note"
                 rows={3}
                 maxLength={500}
-                placeholder="What was this saving for?"
+                placeholder={copy.notePlaceholder}
                 aria-invalid={Boolean(state.fieldErrors?.note)}
                 aria-describedby="deposit-note-error"
                 className="mt-2 w-full resize-y rounded-xl border border-[#d8cec0] bg-white px-4 py-3 text-base outline-none transition focus:border-[#b96549] focus:ring-2 focus:ring-[#f2d2bd]"
@@ -154,13 +157,13 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
 
             {state.fieldErrors?.clientOperationId?.length ? (
               <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">
-                We could not identify this recording. Please refresh and try again.
+                {copy.recordingIdentifierError}
               </p>
             ) : null}
 
             {state.formError ? (
               <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">
-                {state.formError}
+                {localizePersonalSavingsError(state.formError, dictionary)}
               </p>
             ) : null}
 
@@ -169,7 +172,7 @@ export default function DepositForm({ goalId, goal }: DepositFormProps) {
               disabled={pending}
               className="min-h-12 w-full rounded-full bg-[#b96549] px-5 text-base font-semibold text-white shadow-sm transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {pending ? "Recording…" : "Record savings"}
+              {pending ? copy.recording : copy.recordSavings}
             </button>
           </form>
         </div>

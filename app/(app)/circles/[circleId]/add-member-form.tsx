@@ -5,6 +5,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import { addDraftCircleMemberAction } from "@/src/actions/circle.actions";
 import { initialAddDraftCircleMemberState } from "@/src/actions/circle.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { presentSusuDraftError } from "@/src/i18n/susu-draft-error-presentation";
 
 // The raw PIN never comes back from the server -- addDraftCircleMember's
 // own result type has no PIN field at all (only memberCode), and this
@@ -33,7 +35,8 @@ const inputClassName =
 
 type HandoffMember = { displayName: string; memberCode: string; pin: string };
 
-export function AddMemberForm({ circleId }: { circleId: string }) {
+export function AddMemberForm({ circleId, dictionary }: { circleId: string; dictionary: Dictionary }) {
+  const copy = dictionary.susu;
   const [state, formAction, pending] = useActionState(addDraftCircleMemberAction, initialAddDraftCircleMemberState);
   const [pin, setPin] = useState("");
   const [handoff, setHandoff] = useState<HandoffMember | null>(null);
@@ -56,23 +59,21 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
   if (handoff) {
     return (
       <div role="alert" className="rounded-2xl border border-[#e4b69c] bg-[#fbe1d1] p-5">
-        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#a53f2b]">Share these privately, now</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#a53f2b]">{copy.credentialTitle}</p>
         <p className="mt-2 text-sm leading-6 text-[#68483e]">
-          This is the only time NIA will show {handoff.displayName}&apos;s PIN. Share the Circle ID, member code, and
-          PIN privately (in person or a secure message). They use those three details at the separate member sign-in
-          page, <Link href="/member/login" className="font-semibold underline">/member/login</Link>, rather than NIA account email and password sign-in.
+          {copy.credentialDescription.replace("{name}", handoff.displayName)} <Link href="/member/login" className="font-semibold underline">{copy.memberSignIn}</Link>.
         </p>
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-white/70 p-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">Name</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialName}</dt>
             <dd className="mt-1 text-base font-semibold text-[#173b32]">{handoff.displayName}</dd>
           </div>
           <div className="rounded-xl bg-white/70 p-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">Member code</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialMemberCode}</dt>
             <dd className="mt-1 font-mono text-base font-semibold tracking-wide text-[#173b32]">{handoff.memberCode}</dd>
           </div>
           <div className="rounded-xl bg-white/70 p-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">PIN</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialPin}</dt>
             <dd className="mt-1 font-mono text-base font-semibold tracking-[0.3em] text-[#173b32]">{handoff.pin}</dd>
           </div>
         </dl>
@@ -81,7 +82,7 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
           onClick={() => setHandoff(null)}
           className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
         >
-          I&apos;ve shared this — add another member
+          {copy.credentialDismiss}
         </button>
       </div>
     );
@@ -99,12 +100,12 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
       <input type="hidden" name="circleId" value={circleId} />
 
       <p className="text-sm leading-6 text-[#587066]">
-        Add someone you trust. You&apos;ll get their member code and PIN once, to share with them privately.
+        {copy.addMemberDescription}
       </p>
 
       <div>
         <label htmlFor="displayName" className="block text-sm font-semibold text-[#173b32]">
-          Display name
+          {copy.memberName}
         </label>
         <input
           id="displayName"
@@ -112,7 +113,7 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
           type="text"
           required
           maxLength={100}
-          placeholder="e.g. Amara"
+          placeholder={copy.memberNamePlaceholder}
           aria-invalid={Boolean(state.fieldErrors?.displayName)}
           aria-describedby="displayName-error"
           className={inputClassName}
@@ -122,7 +123,7 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
 
       <div>
         <label htmlFor="email" className="block text-sm font-semibold text-[#173b32]">
-          Email <span className="font-normal text-[#7b8179]">(optional)</span>
+          {dictionary.common.email} <span className="font-normal text-[#7b8179]">({copy.optional})</span>
         </label>
         <input
           id="email"
@@ -139,10 +140,10 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
 
       <div>
         <label htmlFor="pin" className="block text-sm font-semibold text-[#173b32]">
-          Member PIN
+          {copy.memberPin}
         </label>
         <p id="pin-hint" className="mt-1 text-xs text-[#7b8179]">
-          A 6-digit PIN this member will use to sign in. Choose it with them, or set one to share.
+          {copy.memberPinHint}
         </p>
         <input
           id="pin"
@@ -163,7 +164,7 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
 
       {state.formError ? (
         <p role="alert" className="text-sm font-medium text-[#b3261e]">
-          {state.formError}
+          {presentSusuDraftError(state.formError, copy)}
         </p>
       ) : null}
 
@@ -172,7 +173,7 @@ export function AddMemberForm({ circleId }: { circleId: string }) {
         disabled={pending}
         className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? "Adding member…" : "Add member"}
+        {pending ? copy.addingMember : copy.addMember}
       </button>
     </form>
   );

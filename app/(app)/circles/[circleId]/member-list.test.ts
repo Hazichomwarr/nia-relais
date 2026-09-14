@@ -18,7 +18,7 @@ test("renders both an active-members group and a removed (history) group, filter
 
 // removed history preserved / no reactivation control
 test("removed members render with no reactivation control -- only active members get a RemoveMemberButton", () => {
-  const removedHeadingIndex = source.indexOf("Removed (history)");
+  const removedHeadingIndex = source.indexOf("copy.removedMembers");
   const removeButtonIndex = source.indexOf("RemoveMemberButton");
   assert.ok(removedHeadingIndex >= 0, "expected to find the removed-members section heading");
   assert.ok(removeButtonIndex >= 0, "expected to find RemoveMemberButton somewhere in the active section");

@@ -1,4 +1,6 @@
 import type { DepositHistoryItem as DepositHistoryItemModel } from "@/src/services/deposit.service";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import Link from "next/link";
 
 import {
@@ -10,11 +12,15 @@ import {
 export default function DepositHistoryItem({
   deposit,
   currency,
+  dictionary,
+  locale,
 }: {
   deposit: DepositHistoryItemModel;
   currency: string;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
-  const status = getDepositStatusPresentation(deposit);
+  const status = getDepositStatusPresentation(deposit, dictionary);
 
   return (
     <li>
@@ -30,7 +36,7 @@ export default function DepositHistoryItem({
             {formatDepositAmount(deposit.amount, currency)}
           </p>
           <time className="mt-0.5 block text-sm text-[var(--nia-text-muted)]" dateTime={deposit.depositDate}>
-            {formatDepositDate(deposit.depositDate)}
+            {formatDepositDate(deposit.depositDate, locale)}
           </time>
         </div>
         <span className={`hidden shrink-0 rounded-full px-3 py-1.5 text-xs font-bold sm:inline-flex ${status.className}`}>

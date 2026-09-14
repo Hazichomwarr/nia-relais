@@ -1,6 +1,9 @@
 import type { DraftCircleOwnerMemberResult } from "@/src/services/circle-draft-owner.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
+import { formatDate } from "@/src/i18n/format";
 
-import { formatOwnerDate, getMemberStatusBadgeLabel } from "./circle-workspace-display";
+import { getMemberStatusBadgeLabel } from "./circle-workspace-display";
 import { RemoveMemberButton } from "./remove-member-button";
 
 // Renders exactly the fields getDraftCircleForOwner already returns --
@@ -14,23 +17,28 @@ import { RemoveMemberButton } from "./remove-member-button";
 export function MemberList({
   circleId,
   members,
+  dictionary,
+  locale,
 }: {
   circleId: string;
   members: readonly DraftCircleOwnerMemberResult[];
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.susu;
   const activeMembers = members.filter((member) => member.status === "ACTIVE");
   const removedMembers = members.filter((member) => member.status === "REMOVED");
 
   if (members.length === 0) {
-    return <p className="text-sm leading-6 text-[#587066]">No members yet. Add the first person you trust below.</p>;
+    return <p className="text-sm leading-6 text-[#587066]">{copy.noMembers}</p>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">Active members</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">{copy.activeMembers}</h3>
         {activeMembers.length === 0 ? (
-          <p className="mt-2 text-sm text-[#587066]">No active members yet.</p>
+          <p className="mt-2 text-sm text-[#587066]">{copy.noActiveMembers}</p>
         ) : (
           <ul className="mt-3 divide-y divide-[#efe6d8]">
             {activeMembers.map((member) => (
@@ -38,14 +46,14 @@ export function MemberList({
                 <div>
                   <p className="text-sm font-semibold text-[#173b32]">{member.displayName}</p>
                   <p className="text-xs text-[#7b8179]">
-                    {member.email ? `${member.email} · ` : ""}Code: {member.memberCode}
+                    {member.email ? `${member.email} · ` : ""}{copy.memberCode}: {member.memberCode}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="inline-flex w-fit rounded-full bg-[#e6f0e8] px-3 py-1 text-xs font-semibold text-[#35634f]">
                     {getMemberStatusBadgeLabel(member.status)}
                   </span>
-                  <RemoveMemberButton circleId={circleId} memberId={member.id} displayName={member.displayName} />
+                  <RemoveMemberButton circleId={circleId} memberId={member.id} displayName={member.displayName} dictionary={dictionary} />
                 </div>
               </li>
             ))}
@@ -55,15 +63,15 @@ export function MemberList({
 
       {removedMembers.length > 0 ? (
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">Removed (history)</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">{copy.removedMembers}</h3>
           <ul className="mt-3 divide-y divide-[#efe6d8]">
             {removedMembers.map((member) => (
               <li key={member.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between opacity-75">
                 <div>
                   <p className="text-sm font-semibold text-[#173b32]">{member.displayName}</p>
                   <p className="text-xs text-[#7b8179]">
-                    Code: {member.memberCode}
-                    {member.removedAt ? ` · Removed ${formatOwnerDate(member.removedAt)}` : ""}
+                    {copy.memberCode}: {member.memberCode}
+                    {member.removedAt ? ` · ${copy.removedOn.replace("{date}", formatDate(member.removedAt, locale))}` : ""}
                   </p>
                 </div>
                 <span className="inline-flex w-fit rounded-full bg-[#efe7db] px-3 py-1 text-xs font-semibold text-[#587066]">

@@ -11,6 +11,9 @@ import {
   type MemberLoginFieldErrors,
   validateMemberLoginForm,
 } from "./member-login-form.logic";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // Nothing in this file reads document.cookie, localStorage, or
 // sessionStorage, and nothing here ever inspects a Set-Cookie header or a
@@ -21,7 +24,7 @@ import {
 
 type FieldName = "circleId" | "memberCode" | "pin";
 
-export function MemberLoginForm() {
+export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const router = useRouter();
 
   const [circleId, setCircleId] = useState("");
@@ -97,13 +100,11 @@ export function MemberLoginForm() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col justify-center px-5 py-10 sm:px-0">
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#a95f45]">
-        SUSU circle member sign in
+        {dictionary.memberLogin.eyebrow}
       </p>
-      <h1 className="mt-3 font-serif text-4xl leading-tight tracking-[-0.02em] text-[#173b32] sm:text-5xl">
-        Welcome back
-      </h1>
+      <div className="mt-3 flex items-start justify-between gap-4"><h1 className="font-serif text-4xl leading-tight tracking-[-0.02em] text-[#173b32] sm:text-5xl">{dictionary.memberLogin.title}</h1><LanguageSwitcher locale={locale} compact /></div>
       <p className="mt-4 text-base leading-7 text-[#587066]">
-        Enter the details your circle organizer gave you to view your circle.
+        {dictionary.memberLogin.description}
       </p>
 
       <form
@@ -114,10 +115,10 @@ export function MemberLoginForm() {
       >
         <div>
           <label htmlFor="circleId" className="block text-sm font-semibold text-[#173b32]">
-            Circle ID
+            {dictionary.memberLogin.circleId}
           </label>
           <p id="circleId-hint" className="mt-1 text-xs text-[#7b8179]">
-            Ask your circle organizer for this.
+            {dictionary.memberLogin.circleIdHint}
           </p>
           <input
             id="circleId"
@@ -136,17 +137,17 @@ export function MemberLoginForm() {
           />
           {fieldErrors.circleId ? (
             <p id="circleId-error" role="alert" className="mt-1.5 text-sm text-[#b3261e]">
-              {fieldErrors.circleId}
+              {localizeMemberFieldError(fieldErrors.circleId, dictionary)}
             </p>
           ) : null}
         </div>
 
         <div>
           <label htmlFor="memberCode" className="block text-sm font-semibold text-[#173b32]">
-            Member code
+            {dictionary.memberLogin.memberCode}
           </label>
           <p id="memberCode-hint" className="mt-1 text-xs text-[#7b8179]">
-            The 16-character code from your circle invitation.
+            {dictionary.memberLogin.memberCodeHint}
           </p>
           <input
             id="memberCode"
@@ -165,17 +166,17 @@ export function MemberLoginForm() {
           />
           {fieldErrors.memberCode ? (
             <p id="memberCode-error" role="alert" className="mt-1.5 text-sm text-[#b3261e]">
-              {fieldErrors.memberCode}
+              {localizeMemberFieldError(fieldErrors.memberCode, dictionary)}
             </p>
           ) : null}
         </div>
 
         <div>
           <label htmlFor="pin" className="block text-sm font-semibold text-[#173b32]">
-            PIN
+            {dictionary.memberLogin.pin}
           </label>
           <p id="pin-hint" className="mt-1 text-xs text-[#7b8179]">
-            Your 6-digit PIN.
+            {dictionary.memberLogin.pinHint}
           </p>
           <input
             id="pin"
@@ -195,14 +196,14 @@ export function MemberLoginForm() {
           />
           {fieldErrors.pin ? (
             <p id="pin-error" role="alert" className="mt-1.5 text-sm text-[#b3261e]">
-              {fieldErrors.pin}
+              {localizeMemberFieldError(fieldErrors.pin, dictionary)}
             </p>
           ) : null}
         </div>
 
         {formError ? (
           <p role="alert" aria-live="assertive" className="text-sm font-medium text-[#b3261e]">
-            {formError}
+          {localizeMemberFormError(formError, dictionary)}
           </p>
         ) : null}
 
@@ -211,9 +212,22 @@ export function MemberLoginForm() {
           disabled={isSubmitting}
           className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#b96549] px-6 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(185,101,73,0.22)] transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Signing in…" : "Sign in"}
+          {isSubmitting ? dictionary.common.signingIn : dictionary.common.signIn}
         </button>
       </form>
     </div>
   );
+}
+
+function localizeMemberFieldError(error: string, dictionary: Dictionary) {
+  if (error === "Enter your Circle ID.") return dictionary.memberLogin.fieldCircleId;
+  if (error === "Enter the 16-character member code exactly as given to you.") return dictionary.memberLogin.fieldMemberCode;
+  if (error === "Enter your 6-digit PIN.") return dictionary.memberLogin.fieldPin;
+  return error;
+}
+
+function localizeMemberFormError(error: string, dictionary: Dictionary) {
+  if (error === GENERIC_MEMBER_AUTH_ERROR) return dictionary.memberLogin.genericError;
+  if (error === MEMBER_AUTH_NETWORK_ERROR) return dictionary.memberLogin.networkError;
+  return error;
 }

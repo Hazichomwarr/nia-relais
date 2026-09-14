@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { requireUser } from "@/src/auth/require-user";
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
+import { getFrequencyLabel } from "@/src/i18n/format";
 import {
   ActiveCircleOwnerReadAuthorizationError,
   ActiveCircleOwnerReadNotActiveError,
@@ -48,7 +51,6 @@ import {
 } from "@/src/services/round-lifecycle-owner-read.service";
 import type { DraftCircleActivationReviewResult } from "@/src/domain/circle-activation-review";
 
-import { getFrequencyLabel } from "../new/new-circle-form-display";
 import { ActivationReviewSection } from "./activation-review-section";
 import { AddMemberForm } from "./add-member-form";
 import { CircleMemberReadList } from "./circle-member-read-list";
@@ -230,7 +232,8 @@ export default async function OwnerCirclePage({
   const { circleId } = await params;
   const { section: requestedSection } = await searchParams;
   const section = getCircleWorkspaceSection(requestedSection);
-  const user = await requireUser();
+  const [user, locale] = await Promise.all([requireUser(), getLocale()]);
+  const dictionary = getDictionary(locale);
 
   const data = await loadWorkspaceOrSummary(user.id, circleId);
 
@@ -239,13 +242,13 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={activeSections} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={activeSections} dictionary={dictionary} />
           <div className="min-w-0">
-            {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} /> : null}
-            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} /> : null}
-            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} /> : null}
+            {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} dictionary={dictionary} locale={locale} /> : null}
+            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
+            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
             {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
-            {section === "schedule" ? <div className="flex max-w-3xl flex-col gap-6"><CircleSchedule rounds={data.summary.rounds} /><RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} /></div> : null}
+            {section === "schedule" ? <div className="flex max-w-3xl flex-col gap-6"><CircleSchedule rounds={data.summary.rounds} dictionary={dictionary} locale={locale} /><RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} dictionary={dictionary} /></div> : null}
           </div>
         </div>
       </main>
@@ -257,13 +260,13 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={completedSections} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={completedSections} dictionary={dictionary} />
           <div className="min-w-0">
-            {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} /> : null}
-            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly /> : null}
-            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly /> : null}
+            {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} dictionary={dictionary} locale={locale} /> : null}
+            {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly dictionary={dictionary} locale={locale} /> : null}
+            {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly dictionary={dictionary} locale={locale} /> : null}
             {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
-            {section === "schedule" ? <CircleSchedule rounds={data.payouts.rounds} /> : null}
+            {section === "schedule" ? <CircleSchedule rounds={data.payouts.rounds} dictionary={dictionary} locale={locale} /> : null}
           </div>
         </div>
       </main>
@@ -276,33 +279,33 @@ export default async function OwnerCirclePage({
   return (
     <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-        <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${circle.currency} ${circle.contributionAmount} ${getFrequencyLabel(circle.frequency)}`} availableSections={draftSections} />
+        <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${circle.currency} ${circle.contributionAmount} ${getFrequencyLabel(circle.frequency, locale)}`} availableSections={draftSections} dictionary={dictionary} />
         <div className="min-w-0">
           {section === "overview" ? (
             <div className="max-w-3xl">
               <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
-                <span className="mt-3 inline-flex w-fit rounded-full bg-[#fff0d9] px-3 py-1 text-sm font-semibold text-[#8a5b27]">DRAFT</span>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow}</p>
+                <span className="mt-3 inline-flex w-fit rounded-full bg-[#fff0d9] px-3 py-1 text-sm font-semibold text-[#8a5b27]">{dictionary.susu.draftStatus}</span>
                 <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{circle.name}</h1>
-                <p className="mt-4 max-w-xl leading-7 text-[#587066]">Each member will contribute {circle.currency} {circle.contributionAmount} {getFrequencyLabel(circle.frequency)}.</p>
-                <p className="mt-5 text-sm leading-6 text-[#587066]">Set up your circle in order: add members, choose the payout order, then review and activate when everything is ready.</p>
+                <p className="mt-4 max-w-xl leading-7 text-[#587066]">{dictionary.susu.setupContribution.replace("{amount}", `${circle.currency} ${circle.contributionAmount}`).replace("{frequency}", getFrequencyLabel(circle.frequency, locale))}</p>
+                <p className="mt-5 text-sm leading-6 text-[#587066]">{dictionary.susu.setupInstructions}</p>
               </section>
             </div>
           ) : null}
           {section === "members" ? (
             <div className="flex max-w-3xl flex-col gap-6">
               <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
-                <h1 className="font-serif text-3xl tracking-tight">Members</h1>
-                <p className="mt-2 text-sm leading-6 text-[#587066]">Add someone you trust and share their member code and PIN privately.</p>
-                <div className="mt-5"><AddMemberForm circleId={circleId} /></div>
+                <h1 className="font-serif text-3xl tracking-tight">{dictionary.susu.members}</h1>
+                <p className="mt-2 text-sm leading-6 text-[#587066]">{dictionary.susu.membersDescription}</p>
+                <div className="mt-5"><AddMemberForm circleId={circleId} dictionary={dictionary} /></div>
               </section>
-              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><MemberList circleId={circleId} members={members} /></section>
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><MemberList circleId={circleId} members={members} dictionary={dictionary} locale={locale} /></section>
             </div>
           ) : null}
           {section === "schedule" ? (
             <div className="flex max-w-3xl flex-col gap-6">
-              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h1 className="font-serif text-3xl tracking-tight">Payout order</h1><div className="mt-5"><PayoutOrderForm circleId={circleId} members={members} /></div></section>
-              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h2 className="text-xl font-semibold tracking-tight text-[#173b32]">Review &amp; activate</h2><div className="mt-5"><ActivationReviewSection circleId={circleId} review={review} /></div></section>
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h1 className="font-serif text-3xl tracking-tight">{dictionary.susu.payoutOrder}</h1><div className="mt-5"><PayoutOrderForm circleId={circleId} members={members} dictionary={dictionary} /></div></section>
+              <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><h2 className="text-xl font-semibold tracking-tight text-[#173b32]">{dictionary.susu.reviewActivate}</h2><div className="mt-5"><ActivationReviewSection circleId={circleId} review={review} dictionary={dictionary} locale={locale} /></div></section>
             </div>
           ) : null}
         </div>

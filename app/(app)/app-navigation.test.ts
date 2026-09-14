@@ -4,15 +4,16 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./app-navigation.tsx", import.meta.url), "utf8");
 
-test("AppNavigation includes a SUSU circles entry pointing at the owner circle index", () => {
-  assert.match(source, /label:\s*"SUSU circles"/);
+test("AppNavigation includes a localized SUSU circles entry pointing at the owner circle index", () => {
+  assert.match(source, /label:\s*dictionary\.common\.susuCircles/);
   assert.match(source, /href:\s*"\/circles"/);
 });
 
-test("the existing nav items (Dashboard, My savings, Trusted person) are unchanged", () => {
-  assert.match(source, /label:\s*"Dashboard"/);
-  assert.match(source, /label:\s*"My savings"/);
-  assert.match(source, /label:\s*"Trusted person"/);
+test("the existing nav destinations use typed shared dictionary labels", () => {
+  assert.match(source, /label:\s*dictionary\.common\.dashboard/);
+  assert.match(source, /label:\s*dictionary\.common\.mySavings/);
+  assert.match(source, /label:\s*dictionary\.common\.trustedPerson/);
+  assert.match(source, /<LanguageSwitcher locale=\{locale\}/);
 });
 
 test("mobile navigation is compact behind an accessible menu control", () => {

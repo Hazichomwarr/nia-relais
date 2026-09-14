@@ -34,10 +34,10 @@ test("completed circles retain navigation but contribution and payout views are 
 
 test("draft workspace preserves the sequential setup flow and private member handling components", () => {
   assert.match(source, /draftSections[\s\S]*"members"[\s\S]*"schedule"/);
-  assert.match(source, /<AddMemberForm circleId=\{circleId\} \/>/);
-  assert.match(source, /<MemberList circleId=\{circleId\} members=\{members\} \/>/);
-  assert.match(source, /<PayoutOrderForm circleId=\{circleId\} members=\{members\} \/>/);
-  assert.match(source, /<ActivationReviewSection circleId=\{circleId\} review=\{review\} \/>/);
+  assert.match(source, /<AddMemberForm circleId=\{circleId\} dictionary=\{dictionary\}/);
+  assert.match(source, /<MemberList circleId=\{circleId\} members=\{members\} dictionary=\{dictionary\} locale=\{locale\}/);
+  assert.match(source, /<PayoutOrderForm circleId=\{circleId\} members=\{members\} dictionary=\{dictionary\}/);
+  assert.match(source, /<ActivationReviewSection circleId=\{circleId\} review=\{review\} dictionary=\{dictionary\} locale=\{locale\}/);
 });
 
 test("the page adds no Prisma writes, member-session identity, or archive controls", () => {

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
@@ -41,19 +43,22 @@ test("the confirmation checkbox itself is disabled when the review is not eligib
   assert.match(source, /type="checkbox"[\s\S]*?disabled=\{!review\.eligible\}/);
 });
 
-test("plainly states that members, terms, and payout order are locked after activation, and that NIA does not hold or transfer money", () => {
-  assert.match(source, /can no longer be changed/);
-  assert.match(source, /does not hold or transfer money/);
+test("uses localized activation lock and money-disclaimer copy", () => {
+  assert.match(source, /copy\.activationFrozenNotice/);
+  assert.match(source, /copy\.expectedDisclaimer/);
+  assert.match(en.susu.activationFrozenNotice, /can no longer be changed/);
+  assert.match(fr.susu.activationFrozenNotice, /ne pourront plus être modifiés/);
+  assert.match(en.susu.expectedDisclaimer, /does not hold or transfer money/);
+  assert.match(fr.susu.expectedDisclaimer, /ne détient ni ne transfère d’argent/);
 });
 
-test("never implies money has already been collected or paid -- amounts are framed as expected, not collected", () => {
-  assert.match(source, /Expected/);
-  // The one legitimate use of "already" is the disclaimer explicitly
-  // denying collection ("not ... already collected or paid out") -- an
-  // affirmative claim would read "has been"/"was" collected/paid instead.
-  assert.doesNotMatch(source, /has been (collected|paid)/i);
-  assert.doesNotMatch(source, /\bwas (collected|paid)/i);
-  assert.match(source, /not.*already (collected|paid)/i);
+test("uses localized expected-amount framing without implying collection", () => {
+  assert.match(source, /copy\.expectedContribution/);
+  assert.match(source, /copy\.expectedCollection/);
+  assert.match(en.susu.expectedDisclaimer, /not money already collected or paid out/);
+  assert.match(fr.susu.expectedDisclaimer, /n’ont pas encore été collectés ni versés/);
+  assert.doesNotMatch(en.susu.expectedDisclaimer, /has been (collected|paid)/i);
+  assert.doesNotMatch(fr.susu.expectedDisclaimer, /\ba été (collecté|versé)/i);
 });
 
 test("no PIN, pinHash, or session field is ever rendered", () => {

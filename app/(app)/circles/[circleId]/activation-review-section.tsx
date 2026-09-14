@@ -6,6 +6,10 @@ import { activateCircleAction } from "@/src/actions/circle.actions";
 import { initialActivateCircleState } from "@/src/actions/circle.state";
 import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
 import type { DraftCircleActivationReviewResult } from "@/src/services/circle-activation-review.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
+import { formatDate } from "@/src/i18n/format";
+import { presentSusuDraftError } from "@/src/i18n/susu-draft-error-presentation";
 
 // The client submits only circleId, an explicit confirmation, and the
 // fingerprint of the review it was actually shown -- never terms, member
@@ -19,22 +23,19 @@ function formatMoney(value: string, currency: string): string {
   return `${currency} ${groupedWhole}.${fractionPart.padEnd(2, "0")}`;
 }
 
-function formatDueDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
-}
-
-const BLOCKER_MESSAGES: Record<string, string> = {
-  INSUFFICIENT_MEMBERS: "At least 2 active members are required to activate this circle.",
-  INCOMPLETE_PAYOUT_ORDER: "Every active member needs a complete payout order before activating.",
-};
-
 export function ActivationReviewSection({
   circleId,
   review,
+  dictionary,
+  locale,
 }: {
   circleId: string;
   review: DraftCircleActivationReviewResult;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.susu;
+  const blockers: Record<string, string> = { INSUFFICIENT_MEMBERS: copy.blockerInsufficientMembers, INCOMPLETE_PAYOUT_ORDER: copy.blockerIncompletePayoutOrder };
   const [state, formAction, pending] = useActionState(activateCircleAction, initialActivateCircleState);
   const [confirmed, setConfirmed] = useState(false);
   const fingerprint = computeActivationReviewFingerprint(review);
@@ -43,14 +44,14 @@ export function ActivationReviewSection({
   return (
     <div>
       <p className="text-sm leading-6 text-[#587066]">
-        Review your circle&apos;s active members, payout order, and proposed rotation before activating.
+        {copy.activationDescription}
       </p>
 
       {!review.eligible ? (
         <ul className="mt-4 space-y-1.5">
           {review.blockers.map((blocker) => (
             <li key={blocker} className="text-sm leading-6 text-[#8a5b27]">
-              {BLOCKER_MESSAGES[blocker] ?? blocker}
+              {blockers[blocker] ?? blocker}
             </li>
           ))}
         </ul>
@@ -58,7 +59,7 @@ export function ActivationReviewSection({
         <>
           <div className="mt-5">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">
-              Active members, in payout order
+              {copy.activationMembers}
             </h3>
             <ol className="mt-2 divide-y divide-[#efe6d8]">
               {review.orderedActiveMembers.map((member, index) => (
@@ -70,17 +71,16 @@ export function ActivationReviewSection({
           </div>
 
           <div className="mt-5">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">Proposed rotation</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#7b8179]">{copy.proposedRotation}</h3>
             <ol className="mt-2 divide-y divide-[#efe6d8]">
               {review.proposedRounds.map((round) => (
                 <li key={round.roundNumber} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-[#173b32]">
-                    Round {round.roundNumber} · {round.recipientDisplayName}{" "}
+                    {copy.round.replace("{number}", String(round.roundNumber))} · {round.recipientDisplayName}{" "}
                     <span className="text-xs text-[#7b8179]">({round.recipientMemberCode})</span>
                   </p>
                   <p className="text-xs text-[#7b8179]">
-                    Due {formatDueDate(round.dueDate)} · {formatMoney(round.expectedCollection, review.circle.currency)}{" "}
-                    expected collection
+                    {copy.due.replace("{date}", formatDate(round.dueDate, locale))} · {copy.expectedCollection.replace("{amount}", formatMoney(round.expectedCollection, review.circle.currency))}
                   </p>
                 </li>
               ))}
@@ -89,33 +89,32 @@ export function ActivationReviewSection({
 
           <div className="mt-5 rounded-2xl bg-[#f7eee4] p-4">
             <p className="text-sm text-[#587066]">
-              Expected contribution per member:{" "}
+              {copy.expectedContribution}{" "}
               <span className="font-semibold text-[#173b32]">
                 {formatMoney(review.expectedContributionPerMember, review.circle.currency)}
               </span>
             </p>
             <p className="mt-1 text-sm text-[#587066]">
-              Expected collection per round:{" "}
+              {copy.expectedRoundCollection}{" "}
               <span className="font-semibold text-[#173b32]">
                 {formatMoney(review.expectedCollectionPerRound, review.circle.currency)}
               </span>
             </p>
             <p className="mt-1 text-sm text-[#587066]">
-              Expected total across the full rotation:{" "}
+              {copy.expectedRotationTotal}{" "}
               <span className="font-semibold text-[#173b32]">
                 {formatMoney(review.expectedTotalAcrossRotation, review.circle.currency)}
               </span>
             </p>
             <p className="mt-3 text-xs leading-5 text-[#7b8179]">
-              These are expected amounts, not money already collected or paid out. NIA tracks this circle&apos;s
-              contributions and payouts as a shared ledger -- it does not hold or transfer money.
+              {copy.expectedDisclaimer}
             </p>
           </div>
         </>
       )}
 
       <p className="mt-5 text-sm font-medium leading-6 text-[#a53f2b]">
-        Once activated, the members, contribution terms, and payout order can no longer be changed.
+        {copy.activationFrozenNotice}
       </p>
 
       <form action={formAction} className="mt-4">
@@ -132,14 +131,13 @@ export function ActivationReviewSection({
             className="mt-0.5"
           />
           <span>
-            I have reviewed the members, payout order, and contribution terms and understand they cannot be
-            changed after activation.
+            {copy.activationConfirmation}
           </span>
         </label>
 
         {state.formError ? (
           <p role="alert" className="mt-3 text-sm font-medium text-[#b3261e]">
-            {state.formError}
+            {presentSusuDraftError(state.formError, copy)}
           </p>
         ) : null}
 
@@ -148,7 +146,7 @@ export function ActivationReviewSection({
           disabled={!canActivate}
           className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Activating…" : "Activate circle"}
+          {pending ? copy.activating : copy.activateCircle}
         </button>
       </form>
     </div>

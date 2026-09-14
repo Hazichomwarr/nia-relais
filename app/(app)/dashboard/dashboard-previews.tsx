@@ -2,10 +2,11 @@ import Link from "next/link";
 
 import type { OwnerCircleIndexItem } from "@/src/services/circle-owner-index.service";
 import type { PersonalGoalDashboardSummary } from "@/src/services/goal.service";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { formatDate, getFrequencyLabel, getStatusLabel } from "@/src/i18n/format";
 
 import { formatContributionMoney } from "../circles/[circleId]/contribution-desk-display";
-import { formatOwnerDate } from "../circles/[circleId]/circle-workspace-display";
-import { getFrequencyLabel } from "../circles/new/new-circle-form-display";
 
 function TargetIcon() {
   return (
@@ -44,7 +45,8 @@ function ChevronIcon() {
   );
 }
 
-export function DashboardGoalPreview({ goal, secondary = false }: { goal: PersonalGoalDashboardSummary; secondary?: boolean }) {
+export function DashboardGoalPreview({ goal, secondary = false, dictionary, locale }: { goal: PersonalGoalDashboardSummary; secondary?: boolean; dictionary: Dictionary; locale: Locale }) {
+  const copy = dictionary.dashboard;
   const progress = Math.min(goal.progressPercent, 100);
 
   return (
@@ -54,10 +56,10 @@ export function DashboardGoalPreview({ goal, secondary = false }: { goal: Person
         <h3 className="min-w-0 truncate font-serif text-xl text-[var(--nia-text)]">{goal.name}</h3>
       </div>
       <p className="mt-5 text-sm font-semibold text-[var(--nia-text)]">
-        {formatContributionMoney(goal.savedAmount, goal.currency)} <span className="font-normal text-[var(--nia-text-muted)]">of {formatContributionMoney(goal.targetAmount, goal.currency)}</span>
+        {copy.saved} {formatContributionMoney(goal.savedAmount, goal.currency)} <span className="font-normal text-[var(--nia-text-muted)]">{copy.of} {formatContributionMoney(goal.targetAmount, goal.currency)}</span>
       </p>
       <div className="mt-3 flex items-center gap-3">
-        <div aria-label={`${formatProgress(goal.progressPercent)}% of target recorded`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--nia-border)]" role="progressbar">
+        <div aria-label={`${formatProgress(goal.progressPercent)}% ${copy.progressOfTargetRecorded}`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--nia-border)]" role="progressbar">
           <div className="h-full rounded-full bg-[var(--nia-secondary)]" style={{ width: `${progress}%` }} />
         </div>
         <span className="text-xs font-bold text-[var(--nia-text-muted)]">{formatProgress(goal.progressPercent)}%</span>
@@ -65,26 +67,27 @@ export function DashboardGoalPreview({ goal, secondary = false }: { goal: Person
       <div className="mt-5 flex items-start gap-3 border-t border-[var(--nia-border)] pt-4 text-sm">
         <span aria-hidden="true" className="mt-0.5 text-[var(--nia-primary)]"><CalendarIcon /></span>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">Unlocks</p>
-          <time className="mt-1 block font-medium text-[var(--nia-text)]" dateTime={goal.unlockDate}>{formatGoalDate(goal.unlockDate)}</time>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">{copy.unlocks}</p>
+          <time className="mt-1 block font-medium text-[var(--nia-text)]" dateTime={goal.unlockDate}>{formatDate(goal.unlockDate, locale)}</time>
         </div>
       </div>
       <Link href={`/goals/${encodeURIComponent(goal.id)}/deposits`} className="mt-5 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
-        Continue saving <ChevronIcon />
+        {copy.continueSaving} <ChevronIcon />
       </Link>
     </article>
   );
 }
 
-export function DashboardCirclePreview({ circle }: { circle: OwnerCircleIndexItem | null }) {
+export function DashboardCirclePreview({ circle, dictionary, locale }: { circle: OwnerCircleIndexItem | null; dictionary: Dictionary; locale: Locale }) {
+  const copy = dictionary.dashboard;
   if (!circle) {
     return (
       <div className="rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-5">
         <span aria-hidden="true" className="inline-flex size-11 items-center justify-center rounded-full bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]"><GroupIcon /></span>
-        <h3 className="mt-4 font-serif text-xl text-[var(--nia-text)]">Start saving together</h3>
-        <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Create a SUSU circle when you are ready to plan a shared savings rotation.</p>
+        <h3 className="mt-4 font-serif text-xl text-[var(--nia-text)]">{copy.emptyCircleTitle}</h3>
+        <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.emptyCircleDescription}</p>
         <Link href="/circles/new" className="mt-5 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
-          Create circle <ChevronIcon />
+          {copy.createCircle} <ChevronIcon />
         </Link>
       </div>
     );
@@ -100,10 +103,10 @@ export function DashboardCirclePreview({ circle }: { circle: OwnerCircleIndexIte
           <span aria-hidden="true" className={`inline-flex size-11 shrink-0 items-center justify-center rounded-full ${isDraft ? "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]" : "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]"}`}><GroupIcon /></span>
           <div className="min-w-0">
             <h3 className="truncate font-serif text-xl text-[var(--nia-text)]">{circle.name}</h3>
-            <p className="mt-1 text-sm text-[var(--nia-text-muted)]">{formatContributionMoney(circle.contributionAmount, circle.currency)} · {getFrequencyLabel(circle.frequency)}</p>
+            <p className="mt-1 text-sm text-[var(--nia-text-muted)]">{formatContributionMoney(circle.contributionAmount, circle.currency)} · {getFrequencyLabel(circle.frequency, locale)}</p>
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-bold tracking-[0.12em] ${isDraft ? "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]" : circle.status === "ACTIVE" ? "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" : "bg-[var(--nia-border)] text-[var(--nia-text-muted)]"}`}>{circle.status}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-bold tracking-[0.12em] ${isDraft ? "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]" : circle.status === "ACTIVE" ? "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" : "bg-[var(--nia-border)] text-[var(--nia-text-muted)]"}`}>{getStatusLabel(circle.status, dictionary)}</span>
       </div>
 
       <div className="my-5 border-t border-[var(--nia-border)]" />
@@ -113,27 +116,22 @@ export function DashboardCirclePreview({ circle }: { circle: OwnerCircleIndexIte
           <div className="flex items-start gap-3">
             <span aria-hidden="true" className="mt-0.5 text-[var(--nia-primary)]"><CalendarIcon /></span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">{round.status === "ACTIVE" ? "Current round" : "Next round"}</p>
-              <p className="mt-1 font-semibold text-[var(--nia-text)]">Round {round.roundNumber} · {round.recipientDisplayName}</p>
-              <p className="mt-1 text-sm text-[var(--nia-text-muted)]">Scheduled for {formatOwnerDate(round.dueDate)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">{round.status === "ACTIVE" ? copy.currentRound : copy.nextRound}</p>
+              <p className="mt-1 font-semibold text-[var(--nia-text)]">{copy.round} {round.roundNumber} · {round.recipientDisplayName}</p>
+              <p className="mt-1 text-sm text-[var(--nia-text-muted)]">{copy.scheduledFor} {formatDate(new Date(round.dueDate), locale)}</p>
             </div>
           </div>
-          <p className="text-sm sm:text-right"><span className="block text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">Members</span><span className="mt-1 block font-semibold text-[var(--nia-text)]">{circle.memberCount}</span></p>
+          <p className="text-sm sm:text-right"><span className="block text-xs font-bold uppercase tracking-[0.12em] text-[var(--nia-text-muted)]">{copy.members}</span><span className="mt-1 block font-semibold text-[var(--nia-text)]">{circle.memberCount}</span></p>
         </div>
       ) : (
-        <p className="text-sm leading-6 text-[var(--nia-text-muted)]">{isDraft ? `${circle.memberCount} member${circle.memberCount === 1 ? "" : "s"} added. Finish setup to get started.` : `This circle is complete with ${circle.memberCount} member${circle.memberCount === 1 ? "" : "s"}.`}</p>
+        <p className="text-sm leading-6 text-[var(--nia-text-muted)]">{isDraft ? `${circle.memberCount} ${circle.memberCount === 1 ? copy.draftMemberAdded : copy.draftMembersAdded}` : circle.memberCount === 1 ? copy.completedCircleOne : copy.completedCircle.replace("{count}", String(circle.memberCount))}</p>
       )}
 
       <Link href={`/circles/${encodeURIComponent(circle.id)}`} className="mt-5 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
-        {isDraft ? "Finish setup" : "Continue circle"} <ChevronIcon />
+        {isDraft ? copy.draftFinishSetup : copy.continueCircle} <ChevronIcon />
       </Link>
     </article>
   );
-}
-
-function formatGoalDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", timeZone: "UTC", year: "numeric" }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function formatProgress(value: number) {

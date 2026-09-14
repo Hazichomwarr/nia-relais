@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
 
 // Structural checks on the actual client component source -- no DOM/React
 // render is exercised (no new testing-library/jsdom dependency for this
@@ -79,7 +81,9 @@ test("no direct Prisma reference or member-session identity import", () => {
 });
 
 test("the one-time handoff explains the three member credentials and the separate sign-in route", () => {
-  assert.match(source, /Circle ID, member code, and[\s\S]*PIN/);
+  assert.match(source, /copy\.credentialDescription/);
+  assert.match(en.susu.credentialDescription, /Circle ID, member code, and PIN/);
+  assert.match(fr.susu.credentialDescription, /identifiant du cercle, le code membre et le code PIN/);
   assert.match(source, /href="\/member\/login"/);
-  assert.match(source, /rather than NIA account email and password sign-in/);
+  assert.match(source, /copy\.memberSignIn/);
 });

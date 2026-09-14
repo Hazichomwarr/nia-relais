@@ -3,6 +3,8 @@ import type {
   OwnerContributionsObligationResult,
   OwnerContributionsPaymentResult,
 } from "@/src/services/contribution-owner-read.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
 
 import { formatOwnerDate, getRoundStatusBadge } from "./circle-workspace-display";
 import {
@@ -163,24 +165,29 @@ export function ContributionDesk({
   circleId,
   contributions,
   readOnly,
+  dictionary,
+  locale: _locale,
 }: {
   circleId: string;
   contributions: OwnerCircleContributionsResult;
   readOnly: boolean;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.susuFinancial;
   const { rounds, obligations, payments } = contributions;
   const obligationsByRoundId = groupObligationsByRoundId(obligations);
   const paymentsByObligationId = groupPaymentsByObligationId(payments);
 
   return (
     <div className="w-full min-w-0 max-w-4xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">SUSU circle</p>
-      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">Contributions</h1>
-      <Card title="Contributions">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow}</p>
+      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">{copy.contributions}</h1>
+      <Card title={copy.contributions}>
         <p className="text-sm leading-6 text-[#587066]">
           {readOnly
-            ? "This circle is complete. The contribution history below is a permanent record and can no longer be changed."
-            : "Record a contribution once a member has actually given it to you, and confirm it only after you have verified you received it outside NIA. NIA tracks the circle; it does not hold or move the money."}
+            ? copy.completeContributionHistory
+            : copy.contributionDescription}
         </p>
       </Card>
 

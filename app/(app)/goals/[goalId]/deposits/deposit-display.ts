@@ -1,25 +1,29 @@
 import type { DepositHistoryItem } from "@/src/services/deposit.service";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { formatDate } from "@/src/i18n/format";
 
-export function getDepositStatusPresentation(deposit: DepositHistoryItem) {
+export function getDepositStatusPresentation(deposit: DepositHistoryItem, dictionary: Dictionary) {
+  const copy = dictionary.personalSavings;
   if (deposit.status === "APPROVED") {
     return {
-      label: "Confirmed",
-      description: "This saving has been confirmed and counts toward your progress.",
+      label: copy.confirmed,
+      description: copy.approvedStatusDescription,
       className: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]",
     };
   }
 
   if (deposit.status === "PENDING") {
     return {
-      label: "Awaiting confirmation",
-      description: "This saving was recorded and is waiting for your trusted person to confirm it.",
+      label: copy.awaitingConfirmation,
+      description: copy.pendingStatusDescription,
       className: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]",
     };
   }
 
   return {
-    label: "Not confirmed",
-    description: "This saving was not confirmed.",
+    label: copy.notConfirmed,
+    description: copy.rejectedStatusDescription,
     className: "bg-[var(--nia-draft-soft)] text-[var(--nia-secondary)]",
   };
 }
@@ -33,18 +37,12 @@ export function formatDepositAmount(value: string, currency: string) {
   return `${currency} ${groupedWhole}${displayedFraction}`;
 }
 
-export function formatDepositDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  }).format(new Date(Date.UTC(year, month - 1, day)));
+export function formatDepositDate(value: string, locale: Locale) {
+  return formatDate(value, locale);
 }
 
-export function formatDecisionDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatDecisionDate(value: string, locale: Locale) {
+  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
     dateStyle: "medium",
     timeZone: "UTC",
   }).format(new Date(value));

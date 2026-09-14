@@ -6,12 +6,17 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { logoutAction } from "@/src/actions/auth.actions";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import type { Locale } from "@/src/i18n/config";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 type AppNavigationProps = {
   userName: string;
+  locale: Locale;
+  dictionary: Dictionary;
 };
 
-export function AppNavigation({ userName }: AppNavigationProps) {
+export function AppNavigation({ userName, locale, dictionary }: AppNavigationProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const isSavingsRoute =
@@ -19,14 +24,14 @@ export function AppNavigation({ userName }: AppNavigationProps) {
     /^\/goals\/[^/]+\/deposits(?:\/|$)/.test(pathname);
   const isCirclesRoute = pathname === "/circles" || pathname.startsWith("/circles/");
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", isActive: pathname === "/dashboard" },
-    { href: "/deposits", label: "My savings", isActive: isSavingsRoute },
+    { href: "/dashboard", label: dictionary.common.dashboard, isActive: pathname === "/dashboard" },
+    { href: "/deposits", label: dictionary.common.mySavings, isActive: isSavingsRoute },
     {
       href: "/custodian",
-      label: "Trusted person",
+      label: dictionary.common.trustedPerson,
       isActive: pathname === "/custodian" || pathname.startsWith("/custodian/"),
     },
-    { href: "/circles", label: "SUSU circles", isActive: isCirclesRoute },
+    { href: "/circles", label: dictionary.common.susuCircles, isActive: isCirclesRoute },
   ];
 
   return (
@@ -76,15 +81,16 @@ export function AppNavigation({ userName }: AppNavigationProps) {
               </Link>
             ))}
           </nav>
-          <span className="max-w-[9rem] truncate text-sm text-[var(--nia-text-muted)]" title={`Hello, ${userName}`}>
-            Hello, {userName}
+          <LanguageSwitcher locale={locale} />
+          <span className="max-w-[9rem] truncate text-sm text-[var(--nia-text-muted)]" title={`${dictionary.common.greeting}, ${userName}`}>
+            {dictionary.common.greeting}, {userName}
           </span>
           <form action={logoutAction}>
             <button
               type="submit"
               className="rounded-full border border-[var(--nia-border)] px-4 py-2 text-sm font-semibold text-[var(--nia-text)] transition-colors hover:border-[var(--nia-primary)] hover:bg-[var(--nia-surface-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]"
             >
-              Sign out
+              {dictionary.common.signOut}
             </button>
           </form>
         </div>
@@ -106,9 +112,10 @@ export function AppNavigation({ userName }: AppNavigationProps) {
             ))}
           </nav>
           <div className="mt-3 flex items-center justify-between border-t border-[var(--nia-border)] pt-3">
-            <span className="max-w-[12rem] truncate text-sm text-[var(--nia-text-muted)]">Hello, {userName}</span>
+            <span className="max-w-[12rem] truncate text-sm text-[var(--nia-text-muted)]">{dictionary.common.greeting}, {userName}</span>
+            <LanguageSwitcher locale={locale} compact />
             <form action={logoutAction}>
-              <button type="submit" className="min-h-11 rounded-full border border-[var(--nia-border)] px-4 text-sm font-semibold text-[var(--nia-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">Sign out</button>
+              <button type="submit" className="min-h-11 rounded-full border border-[var(--nia-border)] px-4 text-sm font-semibold text-[var(--nia-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">{dictionary.common.signOut}</button>
             </form>
           </div>
         </div>

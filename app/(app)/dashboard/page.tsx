@@ -1,6 +1,9 @@
 import Link from "next/link";
 
 import { requireUser } from "@/src/auth/require-user";
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { getCirclesForOwnerIndex } from "@/src/services/circle-owner-index.service";
 import { getCustodianInboxForUser } from "@/src/services/custodian.service";
 import { getPendingDepositsForCustodian } from "@/src/services/custodian-deposit.service";
@@ -23,15 +26,16 @@ function SummaryIcon({ kind }: { kind: "goal" | "circle" | "trusted" }) {
   );
 }
 
-function DashboardSummary({ activeGoalCount, activeCircleCount, waitingCount }: { activeGoalCount: number; activeCircleCount: number; waitingCount: number }) {
+function DashboardSummary({ activeGoalCount, activeCircleCount, waitingCount, dictionary }: { activeGoalCount: number; activeCircleCount: number; waitingCount: number; dictionary: Dictionary }) {
+  const copy = dictionary.dashboard;
   const items = [
-    { count: activeGoalCount, label: "Active goals", detail: "Keep going", kind: "goal" as const, iconClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" },
-    { count: activeCircleCount, label: "Active circles", detail: "Saving together", kind: "circle" as const, iconClassName: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]" },
-    { count: waitingCount, label: "Items waiting", detail: "As a trusted person", kind: "trusted" as const, iconClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" },
+    { count: activeGoalCount, label: copy.activeGoals, detail: copy.keepGoing, kind: "goal" as const, iconClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" },
+    { count: activeCircleCount, label: copy.activeCircles, detail: copy.savingTogether, kind: "circle" as const, iconClassName: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]" },
+    { count: waitingCount, label: copy.itemsWaiting, detail: copy.asTrustedPerson, kind: "trusted" as const, iconClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]" },
   ];
 
   return (
-    <section className="mt-8 rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-4 shadow-sm sm:p-5" aria-label="Your NIA summary">
+    <section className="mt-8 rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-4 shadow-sm sm:p-5" aria-label={copy.summaryLabel}>
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1.35fr] lg:items-center">
         {items.map((item) => (
           <div key={item.label} className="flex items-center gap-3 lg:border-r lg:border-[var(--nia-border)] lg:pr-4">
@@ -43,14 +47,16 @@ function DashboardSummary({ activeGoalCount, activeCircleCount, waitingCount }: 
             </div>
           </div>
         ))}
-        <p className="border-t border-[var(--nia-border)] pt-4 text-sm leading-6 text-[var(--nia-text-muted)] lg:border-t-0 lg:pt-0">Progress isn&apos;t perfection. It&apos;s showing up. <span aria-hidden="true">→</span></p>
+        <p className="border-t border-[var(--nia-border)] pt-4 text-sm leading-6 text-[var(--nia-text-muted)] lg:border-t-0 lg:pt-0">{copy.summaryQuote} <span aria-hidden="true">→</span></p>
       </div>
     </section>
   );
 }
 
 export default async function DashboardPage() {
-  const user = await requireUser();
+  const [user, locale] = await Promise.all([requireUser(), getLocale()]);
+  const dictionary = getDictionary(locale);
+  const copy = dictionary.dashboard;
   const [goals, circles, custodianAssignments, pendingDeposits] = await Promise.all([
     getPersonalGoalsForDashboard(user),
     getCirclesForOwnerIndex(user.id),
@@ -73,37 +79,37 @@ export default async function DashboardPage() {
         <header className="relative grid gap-6 lg:grid-cols-[1fr_17rem] lg:items-end">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--nia-primary)]">NIA</p>
-            <h1 className="mt-3 font-serif text-4xl tracking-tight sm:text-5xl">Welcome back, {user.name}</h1>
-            <p className="mt-3 max-w-xl text-base leading-7 text-[var(--nia-text-muted)]">Small steps, shared commitments, a brighter tomorrow.</p>
+            <h1 className="mt-3 font-serif text-4xl tracking-tight sm:text-5xl">{copy.heroWelcomeBack}, {user.name}</h1>
+            <p className="mt-3 max-w-xl text-base leading-7 text-[var(--nia-text-muted)]">{copy.heroDescription}</p>
           </div>
           <aside className="rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-active-soft)] p-5 text-[var(--nia-primary)]">
-            <p className="font-serif text-xl leading-7">Discipline today creates freedom tomorrow.</p>
+            <p className="font-serif text-xl leading-7">{copy.heroQuote}</p>
             <p className="mt-3 text-xs font-bold uppercase tracking-[0.15em]">— NIA</p>
           </aside>
         </header>
 
-        <DashboardSummary activeGoalCount={activeGoals.length} activeCircleCount={activeCircleCount} waitingCount={waitingCount} />
+        <DashboardSummary activeGoalCount={activeGoals.length} activeCircleCount={activeCircleCount} waitingCount={waitingCount} dictionary={dictionary} />
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
           <section className="flex min-h-[31rem] flex-col rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-5 shadow-sm sm:p-7" aria-labelledby="personal-savings-heading">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 id="personal-savings-heading" className="font-serif text-3xl tracking-tight">Personal savings</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Your goals for a more secure future.</p>
+                <h2 id="personal-savings-heading" className="font-serif text-3xl tracking-tight">{copy.personalSavings}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.personalSavingsDescription}</p>
               </div>
               <div className="flex items-center gap-3 text-sm font-semibold">
-                <Link href="/deposits" className="text-[var(--nia-text-muted)] transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">View all <span aria-hidden="true">→</span></Link>
-                <Link href="/goals/new" className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nia-secondary)] px-4 text-white transition hover:bg-[var(--nia-secondary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-secondary)]">+ New goal</Link>
+                <Link href="/deposits" className="text-[var(--nia-text-muted)] transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">{copy.viewAll} <span aria-hidden="true">→</span></Link>
+                <Link href="/goals/new" className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nia-secondary)] px-4 text-white transition hover:bg-[var(--nia-secondary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-secondary)]">+ {copy.newGoal}</Link>
               </div>
             </div>
             {activeGoals.length > 0 ? (
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {activeGoals.slice(0, 2).map((goal, index) => <DashboardGoalPreview key={goal.id} goal={goal} secondary={index === 1} />)}
+                {activeGoals.slice(0, 2).map((goal, index) => <DashboardGoalPreview key={goal.id} goal={goal} secondary={index === 1} dictionary={dictionary} locale={locale} />)}
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-5">
-                <p className="font-serif text-xl">A place to begin.</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Give one of your dreams a place to grow.</p>
+                <p className="font-serif text-xl">{copy.emptySavingsTitle}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.emptySavingsDescription}</p>
               </div>
             )}
           </section>
@@ -111,15 +117,15 @@ export default async function DashboardPage() {
           <section className="flex min-h-[31rem] flex-col rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-5 shadow-sm sm:p-7" aria-labelledby="susu-circles-heading">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 id="susu-circles-heading" className="font-serif text-3xl tracking-tight">SUSU circles</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Save together. Go further.</p>
+                <h2 id="susu-circles-heading" className="font-serif text-3xl tracking-tight">{dictionary.common.susuCircles}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.susuDescription}</p>
               </div>
               <div className="flex items-center gap-3 text-sm font-semibold">
-                <Link href="/circles" className="text-[var(--nia-text-muted)] transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">View all <span aria-hidden="true">→</span></Link>
-                <Link href="/circles/new" className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nia-primary)] px-4 text-white transition hover:bg-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">+ Create circle</Link>
+                <Link href="/circles" className="text-[var(--nia-text-muted)] transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">{copy.viewAll} <span aria-hidden="true">→</span></Link>
+                <Link href="/circles/new" className="inline-flex min-h-10 items-center justify-center rounded-full bg-[var(--nia-primary)] px-4 text-white transition hover:bg-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">+ {copy.createCircle}</Link>
               </div>
             </div>
-            <div className="mt-6"><DashboardCirclePreview circle={featuredCircle} /></div>
+            <div className="mt-6"><DashboardCirclePreview circle={featuredCircle} dictionary={dictionary} locale={locale} /></div>
           </section>
         </div>
 
@@ -128,6 +134,7 @@ export default async function DashboardPage() {
           activeAssignments={activeAssignments}
           pendingDeposits={pendingDeposits}
           hasHistoricalAssignments={hasHistoricalAssignments}
+          dictionary={dictionary}
         />
       </div>
     </main>
