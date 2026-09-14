@@ -10,80 +10,70 @@ type TrustedPersonDashboardCardProps = {
   hasHistoricalAssignments: boolean;
 };
 
+function ShieldIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-7">
+      <path d="M12 3.5 19 6v5.3c0 4.3-2.9 7.4-7 9.2-4.1-1.8-7-4.9-7-9.2V6l7-2.5Z" />
+      <path d="m8.8 12 2.1 2.1 4.4-4.4" />
+    </svg>
+  );
+}
+
 export function TrustedPersonDashboardCard({
   pendingInvitations,
   activeAssignments,
   pendingDeposits,
   hasHistoricalAssignments,
 }: TrustedPersonDashboardCardProps) {
-  const attentionRequired = pendingInvitations.length > 0 || pendingDeposits.length > 0;
+  const waitingCount = pendingInvitations.length + pendingDeposits.length;
   const activeAssignment = activeAssignments[0] ?? null;
-  const historicalDeposit = pendingDeposits[0] ?? null;
-
-  if (!attentionRequired && !activeAssignment && !hasHistoricalAssignments) return null;
 
   return (
-    <section className="mt-10 space-y-3" aria-labelledby="trusted-person-dashboard-heading">
-      <div className="flex items-center justify-between gap-4">
+    <section className="mt-8 rounded-[1.5rem] border border-[var(--nia-border)] bg-[var(--nia-surface)] p-5 shadow-sm sm:p-7" aria-labelledby="trusted-person-dashboard-heading">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">Trusted person</p>
-          <h2 id="trusted-person-dashboard-heading" className="mt-2 text-2xl font-semibold tracking-tight text-[#173b32]">
-            A little trust goes a long way.
-          </h2>
+          <h2 id="trusted-person-dashboard-heading" className="font-serif text-3xl tracking-tight">Trusted person</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Support others on their savings journey.</p>
         </div>
+        <Link href="/custodian" className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
+          View all <span aria-hidden="true">→</span>
+        </Link>
       </div>
 
-      {pendingInvitations.length > 0 ? (
-        <article className="rounded-[1.5rem] border border-[#e6c6ae] bg-[#fff4e8] p-5 shadow-[0_8px_30px_rgba(132,83,63,0.07)] sm:p-6">
-          <p className="text-lg font-semibold text-[#173b32]">You&apos;ve been invited to help someone stay accountable.</p>
-          <p className="mt-2 text-sm leading-6 text-[#587066]">
-            {pendingInvitations[0].ownerName} invited you to be a trusted person for {pendingInvitations[0].goal.name}.
-            {pendingInvitations.length > 1 ? ` You have ${pendingInvitations.length - 1} more invitation${pendingInvitations.length === 2 ? "" : "s"}.` : ""}
-          </p>
-          <Link
-            href="/custodian"
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]"
-          >
-            View invitation
+      <div className="relative mt-6 overflow-hidden rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-active-soft)] p-5 sm:p-6">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-12 hidden size-40 rounded-full border border-[var(--nia-primary)] opacity-10 sm:block" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex max-w-xl items-start gap-4">
+            <span aria-hidden="true" className="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--nia-surface)] text-[var(--nia-primary)]"><ShieldIcon /></span>
+            <div>
+              {waitingCount > 0 ? (
+                <>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">{waitingCount} item{waitingCount === 1 ? "" : "s"} waiting for your confirmation.</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Review the savings requests that need your attention.</p>
+                </>
+              ) : activeAssignment ? (
+                <>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">You&apos;re helping someone stay on track.</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{activeAssignment.ownerName} is saving toward {activeAssignment.goal.name}. You&apos;re all caught up for now.</p>
+                </>
+              ) : hasHistoricalAssignments ? (
+                <>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">Your trusted-person history is here.</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">Past relationships and decisions remain available whenever you need them.</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-serif text-xl text-[var(--nia-text)]">Nothing waiting for you right now.</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">You&apos;re all caught up. We&apos;ll let you know when a new confirmation needs your attention.</p>
+                </>
+              )}
+            </div>
+          </div>
+          <Link href="/custodian" className="relative inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-[var(--nia-primary)] px-5 text-sm font-semibold text-[var(--nia-primary)] transition hover:bg-[var(--nia-surface)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">
+            {waitingCount > 0 ? "Review requests" : "People grow stronger together."} <span aria-hidden="true">→</span>
           </Link>
-        </article>
-      ) : null}
-
-      {activeAssignment || pendingDeposits.length > 0 ? (
-        <article className="rounded-[1.5rem] border border-[#cfe0d0] bg-[#edf5eb] p-5 shadow-[0_8px_30px_rgba(49,91,75,0.06)] sm:p-6">
-          <p className="text-lg font-semibold text-[#173b32]">
-            {activeAssignment ? "You’re helping someone stay on track." : "A savings confirmation needs your attention."}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-[#587066]">
-            {activeAssignment
-              ? `${activeAssignment.ownerName} is saving toward ${activeAssignment.goal.name}.`
-              : `${historicalDeposit?.ownerName} has savings waiting for your confirmation.`}
-          </p>
-          {pendingDeposits.length > 0 ? (
-            <p className="mt-3 text-sm font-semibold text-[#315b4b]">
-              {pendingDeposits.length} savings deposit{pendingDeposits.length === 1 ? " is" : "s are"} waiting for your confirmation.
-            </p>
-          ) : (
-            <p className="mt-3 text-sm font-semibold text-[#315b4b]">You&apos;re all caught up.</p>
-          )}
-          <Link
-            href="/custodian"
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-[#a9c5b0] px-5 text-sm font-semibold text-[#315b4b] transition hover:bg-[#e1efdf] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]"
-          >
-            Review savings
-          </Link>
-        </article>
-      ) : null}
-
-      {!attentionRequired && !activeAssignment && hasHistoricalAssignments ? (
-        <article className="rounded-2xl border border-[#dfd2c1] bg-[#fffaf2] p-4 text-sm text-[#587066]">
-          <p className="font-semibold text-[#173b32]">Your trusted-person history is here.</p>
-          <p className="mt-1 leading-6">Past relationships and decisions remain available whenever you need them.</p>
-          <Link href="/custodian" className="mt-3 inline-flex font-semibold text-[#a95f45] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">
-            View history
-          </Link>
-        </article>
-      ) : null}
+        </div>
+      </div>
     </section>
   );
 }
