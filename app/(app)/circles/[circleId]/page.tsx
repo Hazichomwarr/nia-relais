@@ -237,7 +237,7 @@ export default async function OwnerCirclePage({
   if (data.kind === "active") {
     const activeSections: readonly CircleWorkspaceSection[] = ["overview", "contributions", "payouts", "members", "schedule"];
     return (
-      <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+      <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
           <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={activeSections} />
           <div className="min-w-0">
@@ -255,7 +255,7 @@ export default async function OwnerCirclePage({
   if (data.kind === "completed") {
     const completedSections: readonly CircleWorkspaceSection[] = ["overview", "contributions", "payouts", "members", "schedule"];
     return (
-      <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+      <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
           <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency)}`} availableSections={completedSections} />
           <div className="min-w-0">
@@ -274,7 +274,7 @@ export default async function OwnerCirclePage({
   const draftSections: readonly CircleWorkspaceSection[] = ["overview", "members", "schedule"];
 
   return (
-    <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
+    <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
         <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${circle.currency} ${circle.contributionAmount} ${getFrequencyLabel(circle.frequency)}`} availableSections={draftSections} />
         <div className="min-w-0">

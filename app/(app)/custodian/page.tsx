@@ -93,7 +93,7 @@ export default async function CustodianPage({
   const noActivity = assignments.length === 0;
 
   return (
-    <main className="min-h-[calc(100vh-73px)] bg-[#f8f1e4] px-4 py-8 text-[#173c35] sm:px-8 sm:py-12">
+    <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-4 py-8 text-[#173c35] sm:px-8 sm:py-12">
       <div className="mx-auto w-full max-w-3xl">
         <header className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b95035]">Trusted person</p>

@@ -10,7 +10,7 @@ export default async function AppLayout({
   const user = await requireUser();
 
   return (
-    <div className="min-h-screen bg-[#fbf7ef] text-[#173b32]">
+    <div className="min-h-screen bg-[var(--nia-app-background)] text-[var(--nia-text)]">
       <AppNavigation userName={user.name} />
       <main>{children}</main>
     </div>

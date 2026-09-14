@@ -37,7 +37,7 @@ export default async function DashboardPage() {
   const hasCustodianContext = pendingInvitations.length > 0 || activeAssignments.length > 0 || pendingDeposits.length > 0 || hasHistoricalAssignments;
 
   return (
-    <div className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-12">
+    <div className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-12">
       <div className="mx-auto w-full max-w-3xl">
         <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-xl">
