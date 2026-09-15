@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 
 import {
   registerAction,
@@ -47,6 +48,9 @@ export default function RegisterForm({ locale, dictionary }: { locale: Locale; d
           {pending ? dictionary.common.creatingAccount : dictionary.common.createAccount}
         </button>
       </form>
+      <p className="mt-5 text-sm text-[var(--nia-text-muted)]">
+        {dictionary.register.existingAccount} <Link href="/login" className="font-semibold text-[var(--nia-primary)] underline underline-offset-4">{dictionary.register.signIn}</Link>
+      </p>
     </main>
   );
 }

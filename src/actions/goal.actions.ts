@@ -22,10 +22,16 @@ import {
   InvalidPersonalGoalError,
 } from "@/src/services/goal.service";
 import {
+  createCustodianAssignment,
+  EligibleCustodianNotFoundError,
+  SelfCustodianAssignmentError,
+} from "@/src/services/custodian.service";
+import {
   archivePersonalGoalSchema,
   completePersonalGoalSchema,
   createPersonalGoalSchema,
 } from "@/src/validations/goal.schema";
+import { createCustodianAssignmentSchema } from "@/src/validations/custodian.schema";
 
 export type CreatePersonalGoalActionState = {
   fieldErrors?: Partial<
@@ -35,6 +41,8 @@ export type CreatePersonalGoalActionState = {
     >
   >;
   formError?: string;
+  createdGoalId?: string;
+  custodianAssignment?: "created" | "unavailable";
 };
 
 export type CompletePersonalGoalActionState = {
@@ -70,7 +78,27 @@ export async function createPersonalGoalAction(
   const user = await requireUser();
 
   try {
-    await createPersonalGoal(user, parsed.data);
+    const goal = await createPersonalGoal(user, parsed.data);
+    const custodianEmail = formData.get("custodianEmail");
+
+    if (typeof custodianEmail === "string" && custodianEmail.trim()) {
+      const assignmentInput = createCustodianAssignmentSchema.safeParse({ goalId: goal.id, custodianEmail });
+      if (!assignmentInput.success) return { createdGoalId: goal.id, custodianAssignment: "unavailable" };
+
+      try {
+        await createCustodianAssignment(user, assignmentInput.data);
+        return { createdGoalId: goal.id, custodianAssignment: "created" };
+      } catch (error) {
+        if (error instanceof EligibleCustodianNotFoundError || error instanceof SelfCustodianAssignmentError) {
+          return { createdGoalId: goal.id, custodianAssignment: "unavailable" };
+        }
+        console.error(
+          "[createPersonalGoalAction] custodian assignment failed after goal creation",
+          error instanceof Error ? error.name : "UnknownError",
+        );
+        return { createdGoalId: goal.id, custodianAssignment: "unavailable" };
+      }
+    }
   } catch (error) {
     if (error instanceof InvalidPersonalGoalError) {
       return { formError: error.message };

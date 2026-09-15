@@ -53,6 +53,10 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
           </span>
         </Link>
 
+        <div className="shrink-0 sm:hidden">
+          <LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} compact />
+        </div>
+
         <button
           type="button"
           aria-label={dictionary.common.openNavigation}
@@ -113,7 +117,6 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
           </nav>
           <div className="mt-3 flex items-center justify-between border-t border-[var(--nia-border)] pt-3">
             <span className="max-w-[12rem] truncate text-sm text-[var(--nia-text-muted)]">{dictionary.common.greeting}, {userName}</span>
-            <LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} compact />
             <form action={logoutAction}>
               <button type="submit" className="min-h-11 rounded-full border border-[var(--nia-border)] px-4 text-sm font-semibold text-[var(--nia-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">{dictionary.common.signOut}</button>
             </form>

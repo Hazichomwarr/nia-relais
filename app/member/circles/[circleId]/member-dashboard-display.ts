@@ -5,6 +5,7 @@ import type {
   RoundScheduleEntry,
 } from "@/src/services/circle-member-dashboard.service";
 import type { Locale } from "@/src/i18n/config";
+import { formatMoney } from "@/src/i18n/format";
 
 // Pure, framework-free presentation logic -- no React, no "use client",
 // nothing async. This module only formats and labels values the 7H.2
@@ -126,11 +127,7 @@ export function getPayoutPresentation(payout: MemberPayoutResult): BadgePresenta
  * padding only, never re-parsing into a number and recalculating.
  */
 export function formatCircleMoney(value: string, currency: string): string {
-  const [wholePart, fractionPart = ""] = value.split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const fraction = fractionPart.padEnd(2, "0");
-  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
-  return `${currency} ${groupedWhole}${displayedFraction}`;
+  return formatMoney(value, currency);
 }
 
 function toUtcDateOnly(value: string): Date {

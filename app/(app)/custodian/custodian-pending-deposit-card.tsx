@@ -12,6 +12,7 @@ import {
 import type { PendingCustodianDeposit } from "@/src/services/custodian-deposit.service";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
+import { formatMoney } from "@/src/i18n/format";
 
 export function CustodianPendingDepositCard({ deposit, dictionary, locale }: { deposit: PendingCustodianDeposit; dictionary: Dictionary; locale: Locale }) {
   const copy = dictionary.custodian;
@@ -125,10 +126,7 @@ export function CustodianPendingDepositCard({ deposit, dictionary, locale }: { d
 }
 
 function formatAmount(value: string, currency: string) {
-  const [whole, fraction = ""] = value.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction.padEnd(2, "0")}`;
-  return `${currency} ${grouped}${displayedFraction}`;
+  return formatMoney(value, currency);
 }
 
 function formatDate(value: string, locale: Locale) {

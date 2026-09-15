@@ -91,6 +91,7 @@ export async function createCustodianAssignmentAction(
   try {
     const assignment = await createCustodianAssignment(user, parsed.data);
     revalidatePath("/dashboard");
+    revalidatePath(`/goals/${encodeURIComponent(parsed.data.goalId)}/deposits`);
     return { status: "success", assignment };
   } catch (error) {
     if (isNextRedirectError(error)) throw error;

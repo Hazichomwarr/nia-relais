@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
+import Link from "next/link";
 
 import {
   createPersonalGoalAction,
@@ -36,8 +37,7 @@ function toCents(value: string) {
 function calculateTimeline(targetAmount: string, weeklyAmount: string, startDate: string, locale: Locale) {
   const targetCents = toCents(targetAmount);
   const weeklyCents = toCents(weeklyAmount);
-  const today = todayDate();
-  if (!targetCents || !weeklyCents || !isValidDateOnly(startDate) || startDate > today) return null;
+  if (!targetCents || !weeklyCents || !isValidDateOnly(startDate)) return null;
 
   const [year, month, day] = startDate.split("-").map(Number);
   const startTimestamp = BigInt(Date.UTC(year, month - 1, day));
@@ -68,7 +68,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
   const [weeklyAmount, setWeeklyAmount] = useState("");
   const [currency, setCurrency] = useState<(typeof currencies)[number]>("USD");
   const [startDate, setStartDate] = useState(todayDate);
-  const today = todayDate();
+  const [addCustodian, setAddCustodian] = useState(false);
   const timeline = useMemo(() => calculateTimeline(targetAmount, weeklyAmount, startDate, locale), [targetAmount, weeklyAmount, startDate, locale]);
 
   return (
@@ -80,13 +80,28 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
           <p className="mt-4 max-w-xl text-base leading-7 text-[#dce7dd]">{copy.newGoalDescription}</p>
         </header>
 
-        <form action={formAction} className="mt-6 space-y-5">
+        {state.createdGoalId ? (
+          <section className="mt-6 rounded-[2rem] border border-[#e4b69c] bg-[#fffaf0] p-6 shadow-[0_12px_30px_rgba(23,60,53,0.08)] sm:p-8" role="status">
+            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#b95035]">{copy.newGoalEyebrow}</p>
+            <h2 className="mt-2 text-2xl font-semibold">{state.custodianAssignment === "created" ? dictionary.goalCustodian.goalCreatedWithRequest : state.custodianAssignment === "unavailable" ? dictionary.goalCustodian.goalCreatedWithoutRequest : dictionary.goalCustodian.goalCreated}</h2>
+            <Link href={`/goals/${encodeURIComponent(state.createdGoalId)}/deposits`} className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-[#b95035] px-5 text-sm font-semibold text-white">{dictionary.goalCustodian.openGoal}</Link>
+          </section>
+        ) : <form action={formAction} className="mt-6 space-y-5">
           <section className="rounded-[2rem] bg-[#fffaf0] p-6 shadow-[0_12px_30px_rgba(23,60,53,0.08)] sm:p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#b95035]">{copy.stepName}</p><h2 className="mt-2 text-2xl font-semibold">{copy.stepNameTitle}</h2><p className="mt-2 text-sm leading-6 text-[#5a6b61]">{copy.stepNameDescription}</p>
             <label className="mt-6 block" htmlFor="goal-name">
               <span className="text-sm font-semibold">{copy.goalName}</span><input id="goal-name" name="name" required maxLength={100} aria-invalid={Boolean(state.fieldErrors?.name)} aria-describedby="goal-name-error" className={inputClassName} placeholder={copy.goalNamePlaceholder} />
               <FieldError id="goal-name-error" errors={state.fieldErrors?.name?.map((error) => localizePersonalSavingsError(error, dictionary))} />
             </label>
+          </section>
+
+          <section className="rounded-[2rem] bg-[#fffaf0] p-6 shadow-[0_12px_30px_rgba(23,60,53,0.08)] sm:p-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#b95035]">{dictionary.goalCustodian.choiceLabel}</p>
+            <fieldset className="mt-5 space-y-3">
+              <label className="flex items-center gap-3"><input type="radio" name="custodianChoice" checked={!addCustodian} onChange={() => setAddCustodian(false)} /> <span className="text-sm font-semibold">{dictionary.goalCustodian.noTrustedPerson}</span></label>
+              <label className="flex items-center gap-3"><input type="radio" name="custodianChoice" checked={addCustodian} onChange={() => setAddCustodian(true)} /> <span className="text-sm font-semibold">{dictionary.goalCustodian.addTrustedPerson}</span></label>
+            </fieldset>
+            {addCustodian ? <label className="mt-5 block" htmlFor="custodian-email"><span className="text-sm font-semibold">{dictionary.goalCustodian.emailLabel}</span><input id="custodian-email" name="custodianEmail" type="email" required className={inputClassName} /><span className="mt-2 block text-sm text-[#5a6b61]">{dictionary.goalCustodian.emailHelp}</span></label> : null}
           </section>
 
           <section className="rounded-[2rem] bg-[#fffaf0] p-6 shadow-[0_12px_30px_rgba(23,60,53,0.08)] sm:p-8">
@@ -120,7 +135,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#b95035]">{copy.stepStart}</p><h2 className="mt-2 text-2xl font-semibold">{copy.stepStartTitle}</h2><p className="mt-2 text-sm leading-6 text-[#5a6b61]">{copy.stepStartDescription}</p>
             <label className="mt-6 block" htmlFor="start-date">
               <span className="text-sm font-semibold">{copy.startDate}</span>
-              <input id="start-date" name="startDate" type="date" required max={today} value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-invalid={Boolean(state.fieldErrors?.startDate)} aria-describedby="start-date-error" className={inputClassName} />
+              <input id="start-date" name="startDate" type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-invalid={Boolean(state.fieldErrors?.startDate)} aria-describedby="start-date-error" className={inputClassName} />
               <FieldError id="start-date-error" errors={state.fieldErrors?.startDate} />
             </label>
           </section>
@@ -141,7 +156,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
           <button type="submit" disabled={pending} className="min-h-14 w-full rounded-2xl bg-[#b95035] px-5 text-base font-semibold text-white shadow-[0_10px_22px_rgba(185,80,53,0.22)] transition hover:bg-[#a53f2b] focus:outline-none focus:ring-4 focus:ring-[#f2c9af] disabled:cursor-not-allowed disabled:opacity-60">
             {pending ? copy.creatingGoal : copy.createMyGoal}
           </button>
-        </form>
+        </form>}
       </div>
     </main>
   );

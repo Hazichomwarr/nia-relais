@@ -63,10 +63,14 @@ export function AddMemberForm({ circleId, dictionary }: { circleId: string; dict
         <p className="mt-2 text-sm leading-6 text-[#68483e]">
           {copy.credentialDescription.replace("{name}", handoff.displayName)} <Link href="/member/login" className="font-semibold underline">{copy.memberSignIn}</Link>.
         </p>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl bg-white/70 p-3">
             <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialName}</dt>
             <dd className="mt-1 text-base font-semibold text-[#173b32]">{handoff.displayName}</dd>
+          </div>
+          <div className="rounded-xl bg-white/70 p-3">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.circleId}</dt>
+            <dd className="mt-1 break-all font-mono text-sm font-semibold text-[#173b32]">{circleId}</dd>
           </div>
           <div className="rounded-xl bg-white/70 p-3">
             <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialMemberCode}</dt>

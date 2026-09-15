@@ -72,15 +72,10 @@ export async function createPersonalGoal(
   user: { id: string },
   input: CreatePersonalGoalInput,
 ) {
-  const today = todayUtcDateOnly();
-
   if (!user.id) throw new InvalidPersonalGoalError("A platform User is required.");
   if (!input.name.trim()) throw new InvalidPersonalGoalError("Goal name is required.");
   if (!PERSONAL_GOAL_CURRENCIES.includes(input.currency as (typeof PERSONAL_GOAL_CURRENCIES)[number])) {
     throw new InvalidPersonalGoalError("Choose USD, XOF, EUR, or GBP.");
-  }
-  if (input.startDate > today) {
-    throw new InvalidPersonalGoalError("Start date cannot be in the future.");
   }
   const targetAmount = toMoney(input.targetAmount, "Target amount");
   const weeklyAmount = toMoney(input.weeklyAmount, "Weekly amount");

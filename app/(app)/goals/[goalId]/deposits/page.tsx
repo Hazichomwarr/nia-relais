@@ -6,10 +6,12 @@ import { GoalNotFoundOrUnauthorizedError, requireGoalOwner } from "@/src/auth/re
 import { getDictionary } from "@/src/i18n/get-dictionary";
 import { getLocale } from "@/src/i18n/locale";
 import { getDepositHistoryForGoal, type DepositHistoryItem } from "@/src/services/deposit.service";
+import { getCustodianAssignmentStatesForOwner } from "@/src/services/custodian.service";
 
 import { formatDepositAmount, formatDepositDate } from "./deposit-display";
 import { DepositHistoryFilters, type DepositRangeFilter, type DepositStatusFilter } from "./deposit-history-filters";
 import DepositHistoryItemCard from "./deposit-history-item";
+import { GoalCustodianSection } from "./goal-custodian-section";
 
 type DepositSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -65,7 +67,8 @@ export default async function DepositHistoryPage({ params, searchParams }: { par
   }
 
   const { goal } = authority;
-  const deposits = await getDepositHistoryForGoal(goal.id);
+  const [deposits, custodianStates] = await Promise.all([getDepositHistoryForGoal(goal.id), getCustodianAssignmentStatesForOwner(authority.user.id, [goal.id])]);
+  const custodianState = custodianStates.get(goal.id);
   const filteredDeposits = filterDeposits(deposits, status, range);
   const confirmedDeposits = deposits.filter((deposit) => deposit.status === "APPROVED");
   const pendingDeposits = deposits.filter((deposit) => deposit.status === "PENDING");
@@ -136,6 +139,7 @@ export default async function DepositHistoryPage({ params, searchParams }: { par
               <div className="mt-5"><div className="flex items-baseline justify-between gap-4"><p className="text-sm font-semibold text-[var(--nia-text)]">{formatDepositAmount(confirmedTotal.toFixed(2), goal.currency)} {copy.saved}</p><p className="text-sm font-bold text-[var(--nia-primary)]">{progressPercent}%</p></div><ProgressBar progressPercent={progressPercent} label={copy.progress} /></div>
               <p className="mt-6 rounded-2xl bg-[var(--nia-active-soft)] px-4 py-3 text-sm leading-6 text-[var(--nia-primary)]">{copy.progressMicrocopy}</p>
             </section>
+            {custodianState ? <GoalCustodianSection goalId={goal.id} assignmentState={custodianState} dictionary={dictionary} /> : null}
             <section className="hidden rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-5 text-[var(--nia-text-muted)] lg:block"><p className="font-serif text-xl leading-7 text-[var(--nia-text)]">{copy.disciplineQuote}</p><p className="mt-3 text-xs font-bold uppercase tracking-[0.15em] text-[var(--nia-primary)]">— NIA</p></section>
           </aside>
         </div>

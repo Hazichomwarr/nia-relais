@@ -11,6 +11,7 @@ import {
 import { initialCreateDepositState } from "@/src/actions/deposit.state";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { localizePersonalSavingsError } from "@/src/i18n/personal-savings-error-presentation";
+import { formatMoney } from "@/src/i18n/format";
 
 type DepositFormProps = {
   goalId: string;
@@ -182,10 +183,5 @@ export default function DepositForm({ goalId, goal, dictionary }: DepositFormPro
 }
 
 function formatAmount(value: string, currency: string) {
-  const [wholePart, fractionPart = ""] = value.split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const fraction = fractionPart.padEnd(2, "0");
-  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
-
-  return `${currency} ${groupedWhole}${displayedFraction}`;
+  return formatMoney(value, currency);
 }

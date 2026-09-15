@@ -10,6 +10,7 @@ import {
 import type { CustodianInboxItem } from "@/src/services/custodian.service";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
+import { formatMoney } from "@/src/i18n/format";
 
 export function CustodianAssignmentCard({ assignment, dictionary, locale }: { assignment: CustodianInboxItem; dictionary: Dictionary; locale: Locale }) {
   const copy = dictionary.custodian;
@@ -100,9 +101,7 @@ function StatusPill({ status, copy }: { status: CustodianInboxItem["status"]; co
 }
 
 function formatAmount(value: string, currency: string) {
-  const [whole, fraction = ""] = value.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${currency} ${grouped}.${fraction.padEnd(2, "0")}`;
+  return formatMoney(value, currency);
 }
 
 function formatDate(value: string, locale: Locale) {

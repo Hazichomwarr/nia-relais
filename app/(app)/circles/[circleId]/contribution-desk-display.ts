@@ -2,6 +2,7 @@ import type {
   OwnerContributionsObligationResult,
   OwnerContributionsPaymentResult,
 } from "@/src/services/contribution-owner-read.service";
+import { formatMoney } from "@/src/i18n/format";
 
 // Pure, framework-free presentation logic for the owner contribution desk
 // (7J.7) -- no React, no service/repository access, nothing async. This
@@ -90,11 +91,7 @@ export function getPaymentStatusPresentation(status: string): BadgePresentation 
  * and padding only, never re-parsing into a number and recalculating.
  */
 export function formatContributionMoney(value: string, currency: string): string {
-  const [wholePart, fractionPart = ""] = value.split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const fraction = fractionPart.padEnd(2, "0");
-  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
-  return `${currency} ${groupedWhole}${displayedFraction}`;
+  return formatMoney(value, currency);
 }
 
 export function formatContributionDateTime(value: string): string {

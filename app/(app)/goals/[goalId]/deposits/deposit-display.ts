@@ -1,7 +1,7 @@
 import type { DepositHistoryItem } from "@/src/services/deposit.service";
 import type { Locale } from "@/src/i18n/config";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
-import { formatDate } from "@/src/i18n/format";
+import { formatDate, formatMoney } from "@/src/i18n/format";
 
 export function getDepositStatusPresentation(deposit: DepositHistoryItem, dictionary: Dictionary) {
   const copy = dictionary.personalSavings;
@@ -29,12 +29,7 @@ export function getDepositStatusPresentation(deposit: DepositHistoryItem, dictio
 }
 
 export function formatDepositAmount(value: string, currency: string) {
-  const [wholePart, fractionPart = ""] = value.split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const fraction = fractionPart.padEnd(2, "0");
-  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
-
-  return `${currency} ${groupedWhole}${displayedFraction}`;
+  return formatMoney(value, currency);
 }
 
 export function formatDepositDate(value: string, locale: Locale) {

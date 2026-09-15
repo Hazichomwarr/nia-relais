@@ -1,6 +1,18 @@
 import type { Locale } from "./config";
 import type { Dictionary } from "./dictionaries/types";
 
+export function getCurrencyDisplayCode(currency: string) {
+  return currency === "XOF" ? "CFA" : currency;
+}
+
+export function formatMoney(value: string, currency: string) {
+  const [wholePart, fractionPart = ""] = value.split(".");
+  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = fractionPart.padEnd(2, "0");
+  const displayedFraction = currency === "XOF" && /^0+$/.test(fraction) ? "" : `.${fraction}`;
+  return `${getCurrencyDisplayCode(currency)} ${groupedWhole}${displayedFraction}`;
+}
+
 export function formatDate(value: string | Date, locale: Locale) {
   const date = typeof value === "string" ? new Date(`${value}T00:00:00.000Z`) : value;
   return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { day: "numeric", month: "long", timeZone: "UTC", year: "numeric" }).format(date);

@@ -90,4 +90,7 @@ test("the one-time handoff explains the three member credentials and the separat
   assert.match(fr.susu.credentialDescription, /identifiant du cercle, le code membre et le code PIN/);
   assert.match(source, /href="\/member\/login"/);
   assert.match(source, /copy\.memberSignIn/);
+  assert.match(source, /copy\.circleId/);
+  assert.match(source, /\{circleId\}/);
+  assert.match(source, /break-all/);
 });

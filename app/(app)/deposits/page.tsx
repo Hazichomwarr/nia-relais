@@ -4,14 +4,10 @@ import { requireUser } from "@/src/auth/require-user";
 import { getDictionary } from "@/src/i18n/get-dictionary";
 import { getLocale } from "@/src/i18n/locale";
 import { getPersonalGoalsForDashboard } from "@/src/services/goal.service";
+import { formatMoney } from "@/src/i18n/format";
 
 function formatAmount(amount: string, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(amount));
+  return formatMoney(amount, currency);
 }
 
 export default async function DepositsPage() {

@@ -16,10 +16,6 @@ function isValidDateOnly(value: string) {
   );
 }
 
-function todayUtcDateOnly() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 const dateOnly = z
   .string()
   .trim()
@@ -56,14 +52,6 @@ export const createPersonalGoalSchema = z
     targetAmount: money,
     weeklyAmount: money,
     startDate: dateOnly,
-  })
-  .superRefine((value, context) => {
-    const today = todayUtcDateOnly();
-
-    if (value.startDate > today) {
-      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date cannot be in the future." });
-    }
-
   });
 
 export const completePersonalGoalSchema = z.object({ goalId });

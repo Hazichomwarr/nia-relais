@@ -17,8 +17,16 @@ test("the existing nav destinations use typed shared dictionary labels", () => {
 });
 
 test("mobile navigation is compact behind an accessible menu control", () => {
-  assert.match(source, /aria-label="Open navigation"/);
+  assert.match(source, /aria-label=\{dictionary\.common\.openNavigation\}/);
   assert.match(source, /aria-controls="mobile-primary-navigation"/);
   assert.match(source, /sm:hidden/);
   assert.match(source, /id="mobile-primary-navigation"/);
+});
+
+test("mobile keeps the canonical locale switcher visible outside the hamburger menu", () => {
+  const mobileSwitcher = source.indexOf('<div className="shrink-0 sm:hidden">');
+  const menuButton = source.indexOf('aria-controls="mobile-primary-navigation"');
+  const menuPanel = source.indexOf('id="mobile-primary-navigation"');
+  assert.ok(mobileSwitcher >= 0 && mobileSwitcher < menuButton);
+  assert.doesNotMatch(source.slice(menuPanel), /LanguageSwitcher/);
 });

@@ -8,7 +8,7 @@ import { computeActivationReviewFingerprint } from "@/src/domain/circle-activati
 import type { DraftCircleActivationReviewResult } from "@/src/services/circle-activation-review.service";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
-import { formatDate } from "@/src/i18n/format";
+import { formatDate, formatMoney } from "@/src/i18n/format";
 import { presentSusuDraftError } from "@/src/i18n/susu-draft-error-presentation";
 
 // The client submits only circleId, an explicit confirmation, and the
@@ -16,12 +16,6 @@ import { presentSusuDraftError } from "@/src/i18n/susu-draft-error-presentation"
 // ids, payout order, totals, rounds, or obligations. activateCircleAction
 // re-fetches the review fresh and re-derives eligibility itself; nothing
 // computed here is trusted as authoritative (see activate-circle.ts).
-
-function formatMoney(value: string, currency: string): string {
-  const [wholePart, fractionPart = ""] = value.split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${currency} ${groupedWhole}.${fractionPart.padEnd(2, "0")}`;
-}
 
 export function ActivationReviewSection({
   circleId,
