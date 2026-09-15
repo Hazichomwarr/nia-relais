@@ -51,9 +51,23 @@ test("getRoundStatusPresentation never describes UPCOMING as active or currently
   assert.equal(getRoundStatusPresentation("CLOSED").label, "Closed");
 });
 
+test("getRoundStatusPresentation: a CLOSED round with IMPORTED_DECLARATION closureBasis never reads 'Closed'", () => {
+  const imported = getRoundStatusPresentation("CLOSED", "IMPORTED_DECLARATION");
+  assert.equal(imported.label, "Imported history");
+  const normal = getRoundStatusPresentation("CLOSED", "NIA_MANAGED");
+  assert.equal(normal.label, "Closed");
+});
+
 test("getObligationStatusPresentation reflects only the service's own fulfilled boolean", () => {
-  assert.equal(getObligationStatusPresentation({ fulfilled: true }).label, "Fulfilled");
-  assert.equal(getObligationStatusPresentation({ fulfilled: false }).label, "Outstanding");
+  assert.equal(getObligationStatusPresentation({ fulfilled: true, fulfillmentBasis: "NIA_CONFIRMED_LEDGER" }).label, "Fulfilled");
+  assert.equal(getObligationStatusPresentation({ fulfilled: false, fulfillmentBasis: "NIA_CONFIRMED_LEDGER" }).label, "Outstanding");
+});
+
+test("getObligationStatusPresentation: an IMPORTED_DECLARATION obligation never reads 'Fulfilled' or 'Outstanding'", () => {
+  const imported = getObligationStatusPresentation({ fulfilled: true, fulfillmentBasis: "IMPORTED_DECLARATION" });
+  assert.equal(imported.label, "Imported history");
+  const importedUnset = getObligationStatusPresentation({ fulfilled: false, fulfillmentBasis: "IMPORTED_DECLARATION" });
+  assert.equal(importedUnset.label, "Imported history");
 });
 
 // --- payout wording, exactly per the 7H.3 spec ---
@@ -70,6 +84,7 @@ test("getPayoutPresentation: RECORDED never claims confirmed receipt", () => {
     recordedAt: "2026-01-01T00:00:00.000Z",
     confirmedAt: null,
     disputedAt: null,
+    confirmationBasis: "MEMBER_CONFIRMED",
   });
   assert.equal(presentation.description, "Recorded by the circle owner — awaiting your confirmation.");
   assert.doesNotMatch(presentation.description.toLowerCase(), /receipt confirmed/);
@@ -83,6 +98,7 @@ test("getPayoutPresentation: CONFIRMED reads 'Receipt confirmed.'", () => {
     recordedAt: "2026-01-01T00:00:00.000Z",
     confirmedAt: "2026-01-02T00:00:00.000Z",
     disputedAt: null,
+    confirmationBasis: "MEMBER_CONFIRMED",
   });
   assert.equal(presentation.description, "Receipt confirmed.");
 });
@@ -95,17 +111,33 @@ test("getPayoutPresentation: DISPUTED reads 'Receipt disputed.'", () => {
     recordedAt: "2026-01-01T00:00:00.000Z",
     confirmedAt: null,
     disputedAt: "2026-01-02T00:00:00.000Z",
+    confirmationBasis: "MEMBER_CONFIRMED",
   });
   assert.equal(presentation.description, "Receipt disputed.");
 });
 
+test("getPayoutPresentation: an IMPORTED_DECLARATION CONFIRMED payout never claims the member confirmed receipt", () => {
+  const presentation = getPayoutPresentation({
+    roundNumber: 1,
+    amount: "100.00",
+    status: "CONFIRMED",
+    recordedAt: "2026-01-01T00:00:00.000Z",
+    confirmedAt: "2026-01-02T00:00:00.000Z",
+    disputedAt: null,
+    confirmationBasis: "IMPORTED_DECLARATION",
+  });
+  assert.equal(presentation.label, "Imported history");
+  assert.doesNotMatch(presentation.description.toLowerCase(), /you confirmed/);
+});
+
 // --- current vs. upcoming vs. historical selection ---
 
-const roundEntry = (overrides: Partial<{ roundNumber: number; dueDate: string; status: string; recipientDisplayName: string }> = {}) => ({
+const roundEntry = (overrides: Partial<{ roundNumber: number; dueDate: string; status: string; recipientDisplayName: string; closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION" }> = {}) => ({
   roundNumber: 1,
   dueDate: "2026-01-01T00:00:00.000Z",
   status: "UPCOMING",
   recipientDisplayName: "Fixture Member",
+  closureBasis: "NIA_MANAGED" as const,
   ...overrides,
 });
 

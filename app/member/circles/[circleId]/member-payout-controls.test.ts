@@ -66,8 +66,8 @@ test("both controls are cross-disabled while either action is pending", () => {
 });
 
 test("pending copy is truthful and distinct for each action", () => {
-  assert.match(source, /\{confirmPending \? "Confirming…" : "Confirm receipt"\}/);
-  assert.match(source, /\{disputePending \? "Submitting dispute…" : "Submit dispute"\}/);
+  assert.match(source, /\{confirmPending \? copy\.confirming : copy\.confirmReceipt\}/);
+  assert.match(source, /\{disputePending \? copy\.submittingDispute : copy\.submitDispute\}/);
 });
 
 test("the dispute submit button is also disabled while the reason is empty/whitespace-only", () => {

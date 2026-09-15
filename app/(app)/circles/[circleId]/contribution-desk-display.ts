@@ -24,14 +24,29 @@ const CONFIRMED_BADGE_CLASS = "bg-[#e6f0e8] text-[#35634f]";
 const PENDING_BADGE_CLASS = "bg-[#fff0d9] text-[#8a5b27]";
 const NEUTRAL_BADGE_CLASS = "bg-[#efe7db] text-[#587066]";
 const NEGATIVE_BADGE_CLASS = "bg-[#f4e6e1] text-[#8d4f42]";
+// 9G: a deliberately distinct, quiet sage -- never the same green as a
+// normal ledger-confirmed fulfillment (which implies a real
+// ContributionPayment exists; an imported obligation has none).
+const IMPORTED_BADGE_CLASS = "bg-[#e3e8df] text-[#4f6354]";
 
 /**
  * Labels an obligation's own persisted status verbatim (OPEN/FULFILLED) --
  * never infers fulfillment from confirmedAmount/outstandingAmount itself,
  * even though those are ledger-derived and available side by side. Both
  * facts are shown; this only labels the persisted one.
+ *
+ * `fulfillmentBasis`, when supplied, is the presentation authority for the
+ * one case `status` alone cannot distinguish (9G ticket §5/freeze §4): a
+ * FULFILLED obligation whose fulfillmentBasis is IMPORTED_DECLARATION was
+ * reported fulfilled by the owner when importing the circle -- there is no
+ * ContributionPayment behind it, so it is branded and worded entirely
+ * differently ("Imported history," never "Fulfilled"/"Confirmed"), and
+ * must never be shown alongside a fabricated payment row.
  */
-export function getObligationStatusPresentation(status: string): BadgePresentation {
+export function getObligationStatusPresentation(status: string, fulfillmentBasis?: string): BadgePresentation {
+  if (status === "FULFILLED" && fulfillmentBasis === "IMPORTED_DECLARATION") {
+    return { label: "Imported history", className: IMPORTED_BADGE_CLASS };
+  }
   if (status === "FULFILLED") return { label: "Fulfilled", className: CONFIRMED_BADGE_CLASS };
   if (status === "OPEN") return { label: "Open", className: PENDING_BADGE_CLASS };
   return { label: status, className: NEUTRAL_BADGE_CLASS };

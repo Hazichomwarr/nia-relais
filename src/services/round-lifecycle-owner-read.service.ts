@@ -8,6 +8,7 @@ import {
   assertRoundLifecycleStateIntegrity,
   assessContributionClosureReadiness,
   assessPayoutClosureReadiness,
+  firstLiveRoundNumber,
   RoundLifecycleFinancialIntegrityError,
   RoundLifecycleStateIntegrityError,
 } from "@/src/domain/round-lifecycle";
@@ -137,7 +138,7 @@ export type OwnerRoundLifecycleProgression = {
 
 export type OwnerRoundLifecycleResult = {
   readonly circle: { readonly id: string; readonly status: "ACTIVE" };
-  readonly phase: "NOT_STARTED" | "IN_PROGRESS" | "ALL_ROUNDS_CLOSED";
+  readonly phase: "NOT_STARTED" | "IN_PROGRESS" | "ALL_ROUNDS_CLOSED" | "IMPORTED_PREFIX_AWAITING_FIRST_ROUND";
   readonly totalRounds: number;
   readonly closedRounds: number;
   readonly currentRound: OwnerRoundLifecycleRoundResult | null;
@@ -289,15 +290,22 @@ export async function getOwnerRoundLifecycle(params: {
   const circleResult = { id: circle.id, status: "ACTIVE" as const };
 
   if (rounds.every((round) => round.status === "UPCOMING")) {
-    const roundOne = rounds.find((round) => round.roundNumber === 1);
-    if (!roundOne) throw new OwnerRoundLifecycleIntegrityError();
+    // Always round 1 in practice here (an IMPORTED circle always has at
+    // least one CLOSED historical round, 9E's own K >= 1 invariant, so
+    // "every round UPCOMING" is unreachable for one) -- derived via the
+    // same shared firstLiveRoundNumber the imported-prefix branch below
+    // uses, so this file never carries two independent definitions of
+    // "the first live round."
+    const targetRoundNumber = firstLiveRoundNumber(circle.originKind, circle.historicalCompletedRoundCount);
+    const targetRound = rounds.find((round) => round.roundNumber === targetRoundNumber);
+    if (!targetRound) throw new OwnerRoundLifecycleIntegrityError();
     return {
       circle: circleResult,
       phase: "NOT_STARTED",
       totalRounds,
       closedRounds,
       currentRound: null,
-      nextRound: serializeRound(roundOne),
+      nextRound: serializeRound(targetRound),
       progression: {
         canStartFirstRound: true,
         canAdvanceCurrentRound: false,
@@ -324,11 +332,39 @@ export async function getOwnerRoundLifecycle(params: {
     };
   }
 
-  // IN_PROGRESS: assertLifecycleStateIntegrity above already guarantees
-  // exactly one ACTIVE round exists once neither all-UPCOMING nor
-  // all-CLOSED holds.
+  // Once neither all-UPCOMING nor all-CLOSED holds, assertLifecycleStateIntegrity
+  // above guarantees exactly one of two shapes: IN_PROGRESS (exactly one
+  // ACTIVE round) or the imported-prefix shape (a CLOSED prefix
+  // immediately followed by an UPCOMING suffix, zero ACTIVE rounds --
+  // docs/product/susu-existing-import-contract-freeze.md §5/§9). 9F: the
+  // ready-to-start first live round is now derived the SAME canonical way
+  // the write side (round-lifecycle.service.ts's activateFirstRound)
+  // derives it -- firstLiveRoundNumber(originKind, K) -- never by scanning
+  // for "whichever round happens to be UPCOMING" (ticket §11's own "do not
+  // expose arbitrary next-round logic"). This is a genuinely truthful,
+  // ready-to-act state, not a corruption tolerance: closedRounds already
+  // reports how many historical rounds are recorded, and nextRound is
+  // exactly the target activateFirstRound would activate.
   const active = rounds.find((round) => round.status === "ACTIVE");
-  if (!active) throw new OwnerRoundLifecycleIntegrityError();
+  if (!active) {
+    const targetRoundNumber = firstLiveRoundNumber(circle.originKind, circle.historicalCompletedRoundCount);
+    const targetRound = rounds.find((round) => round.roundNumber === targetRoundNumber);
+    if (!targetRound || targetRound.status !== "UPCOMING") throw new OwnerRoundLifecycleIntegrityError();
+    return {
+      circle: circleResult,
+      phase: "IMPORTED_PREFIX_AWAITING_FIRST_ROUND",
+      totalRounds,
+      closedRounds,
+      currentRound: null,
+      nextRound: serializeRound(targetRound),
+      progression: {
+        canStartFirstRound: true,
+        canAdvanceCurrentRound: false,
+        blocker: null,
+        transitionKind: "START_FIRST_ROUND",
+      },
+    };
+  }
 
   const successor = rounds.find((round) => round.roundNumber === active.roundNumber + 1) ?? null;
   const transitionKind: "ADVANCE_TO_NEXT_ROUND" | "CLOSE_FINAL_ROUND" = successor

@@ -44,6 +44,8 @@ export type DraftCircleOwnerCircleResult = {
   readonly frequency: string;
   readonly startDate: string;
   readonly status: "DRAFT";
+  readonly originKind: "NEW" | "IMPORTED";
+  readonly historicalCompletedRoundCount: number;
 };
 
 export type DraftCircleOwnerMemberResult = {
@@ -51,6 +53,7 @@ export type DraftCircleOwnerMemberResult = {
   readonly displayName: string;
   readonly memberCode: string;
   readonly email: string | null;
+  readonly phone: string | null;
   readonly status: "ACTIVE" | "REMOVED";
   readonly payoutOrder: number | null;
   readonly addedAt: string;
@@ -101,6 +104,7 @@ function serializeMember(member: OwnerCircleMemberRecord): DraftCircleOwnerMembe
     displayName: member.displayName,
     memberCode: member.memberCode,
     email: member.email,
+    phone: member.phone,
     status: member.status,
     payoutOrder: member.payoutOrder,
     addedAt: member.addedAt.toISOString(),
@@ -142,6 +146,8 @@ export async function getDraftCircleForOwner(input: {
       frequency: circle.frequency,
       startDate: circle.startDate.toISOString().slice(0, 10),
       status: "DRAFT",
+      originKind: circle.originKind,
+      historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
     },
     members: orderedMembers.map(serializeMember),
   };

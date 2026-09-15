@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import { recordPayoutAction } from "@/src/actions/payout.actions";
 import { initialRecordPayoutState } from "@/src/actions/payout.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // Mirrors record-contribution-form.tsx's own proven pattern exactly
 // (7J.7 section 6/9, carried forward unchanged for payouts, 7K.9 section
@@ -29,12 +30,15 @@ export function RecordPayoutForm({
   roundId,
   amount,
   currency,
+  dictionary,
 }: {
   circleId: string;
   roundId: string;
   amount: string;
   currency: string;
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(recordPayoutAction, initialRecordPayoutState);
   const [clientOperationId, setClientOperationId] = useState(operationId);
   const formRef = useRef<HTMLFormElement>(null);
@@ -61,23 +65,22 @@ export function RecordPayoutForm({
       <input type="hidden" name="clientOperationId" value={clientOperationId} readOnly />
 
       <p className="text-sm text-[#173b32]">
-        Record the exact expected payout:{" "}
+        {copy.recordPayout}: {" "}
         <span className="font-semibold">
           {currency} {amount}
         </span>
       </p>
       <p className="mt-1 text-xs leading-5 text-[#7b8179]">
-        This records that you already paid this amount to the recipient outside NIA. NIA does not send, hold, or
-        transfer money.
+        {copy.payoutDescription}
       </p>
 
       {state.status === "success" && state.payout ? (
         <p role="status" aria-live="polite" className="mt-2 text-sm font-medium text-[#35634f]">
           {state.payout.status === "RECORDED"
-            ? "Recorded — waiting for the recipient's decision."
+            ? copy.recorded
             : state.payout.status === "CONFIRMED"
-              ? "This payout is already confirmed by the recipient."
-              : "This payout was already disputed by the recipient."}
+              ? copy.confirmed
+              : copy.disputed}
         </p>
       ) : null}
 
@@ -98,7 +101,7 @@ export function RecordPayoutForm({
         disabled={pending}
         className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-[#173b32] px-5 text-sm font-semibold text-white transition hover:bg-[#285347] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? "Recording…" : "Record payout"}
+        {pending ? copy.recording : copy.recordPayout}
       </button>
     </form>
   );

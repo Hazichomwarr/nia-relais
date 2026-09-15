@@ -62,6 +62,11 @@ export type CircleSummaryResult = {
   readonly frequency: string;
   readonly status: string;
   readonly startDate: string;
+  // 9G: circle-level import context authority for the member workspace
+  // banner -- identical purpose to circle-active-owner.service.ts's own
+  // originKind/historicalCompletedRoundCount.
+  readonly originKind: "NEW" | "IMPORTED";
+  readonly historicalCompletedRoundCount: number;
 };
 
 export type MemberSummaryResult = {
@@ -74,6 +79,10 @@ export type RoundScheduleEntry = {
   readonly dueDate: string;
   readonly status: string;
   readonly recipientDisplayName: string;
+  // 9G: presentation authority -- IMPORTED_DECLARATION means this round's
+  // CLOSED status is the owner's own historical declaration, never a
+  // normal NIA-managed closure.
+  readonly closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
 };
 
 export type MemberObligationResult = {
@@ -83,6 +92,10 @@ export type MemberObligationResult = {
   readonly confirmedAmount: string;
   readonly outstandingAmount: string;
   readonly fulfilled: boolean;
+  // 9G: presentation authority -- IMPORTED_DECLARATION means this
+  // obligation's fulfilled state is the owner's own historical
+  // declaration; no real ContributionPayment backs it.
+  readonly fulfillmentBasis: "NIA_CONFIRMED_LEDGER" | "IMPORTED_DECLARATION";
 };
 
 export type MemberContributionSummary = {
@@ -103,6 +116,10 @@ export type MemberPayoutResult = {
   readonly recordedAt: string;
   readonly confirmedAt: string | null;
   readonly disputedAt: string | null;
+  // 9G: presentation authority -- IMPORTED_DECLARATION means this payout's
+  // CONFIRMED status is the owner's own historical declaration at import
+  // time, never a real member confirmation through NIA.
+  readonly confirmationBasis: "MEMBER_CONFIRMED" | "IMPORTED_DECLARATION";
 } | null;
 
 export type MemberDashboardResult = {
@@ -123,6 +140,7 @@ function serializeRound(round: RoundScheduleRecord): RoundScheduleEntry {
     dueDate: round.dueDate.toISOString(),
     status: round.status,
     recipientDisplayName: round.recipient.displayName,
+    closureBasis: round.closureBasis,
   };
 }
 
@@ -194,6 +212,7 @@ export async function getCircleMemberDashboard(input: {
       confirmedAmount,
       outstandingAmount,
       fulfilled,
+      fulfillmentBasis: obligation.fulfillmentBasis,
     };
   });
 
@@ -210,6 +229,7 @@ export async function getCircleMemberDashboard(input: {
     confirmedAmount: toMoney(obligation.confirmedAmount),
     outstandingAmount: toMoney(obligation.outstandingAmount),
     fulfilled: obligation.fulfilled,
+    fulfillmentBasis: obligation.fulfillmentBasis,
   }));
 
   // --- circle-wide round progress: aggregate counts only, never a
@@ -241,6 +261,7 @@ export async function getCircleMemberDashboard(input: {
           recordedAt: payoutRecord.recordedAt.toISOString(),
           confirmedAt: payoutRecord.confirmedAt?.toISOString() ?? null,
           disputedAt: payoutRecord.disputedAt?.toISOString() ?? null,
+          confirmationBasis: payoutRecord.confirmationBasis,
         }
       : null;
 
@@ -253,6 +274,8 @@ export async function getCircleMemberDashboard(input: {
       frequency: circle.frequency,
       status: circle.status,
       startDate: circle.startDate.toISOString().slice(0, 10),
+      originKind: circle.originKind,
+      historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
     },
     member: { displayName: member.displayName, payoutOrder: member.payoutOrder },
     roundSchedule: rounds.map(serializeRound),

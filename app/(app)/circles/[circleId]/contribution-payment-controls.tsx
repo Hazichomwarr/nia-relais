@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { confirmContributionAction, rejectContributionAction } from "@/src/actions/circle.actions";
 import { initialConfirmContributionState, initialRejectContributionState } from "@/src/actions/circle.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // Rendered only for a RECORDED payment (the parent decides that -- see
 // contribution-desk.tsx). Confirm and reject are two independent
@@ -21,7 +22,8 @@ import { initialConfirmContributionState, initialRejectContributionState } from 
 // RECORDED -- the same "let route revalidation refresh authoritative data"
 // pattern as record-contribution-form.tsx.
 
-export function ContributionPaymentControls({ circleId, paymentId }: { circleId: string; paymentId: string }) {
+export function ContributionPaymentControls({ circleId, paymentId, dictionary }: { circleId: string; paymentId: string; dictionary: Dictionary }) {
+  const copy = dictionary.susuFinancial;
   const [confirmState, confirmAction, confirmPending] = useActionState(
     confirmContributionAction,
     initialConfirmContributionState,
@@ -37,7 +39,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs leading-5 text-[#7b8179]">
-        Confirm only if this contribution was actually received outside NIA. NIA does not hold or transfer money.
+        {copy.contributionDescription}
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -49,7 +51,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
             disabled={anyPending}
             className="inline-flex min-h-9 items-center justify-center rounded-full bg-[#35634f] px-4 text-xs font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {confirmPending ? "Confirming…" : "Confirm received"}
+            {confirmPending ? copy.recording : copy.confirmContribution}
           </button>
         </form>
 
@@ -60,7 +62,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
             disabled={anyPending}
             className="inline-flex min-h-9 items-center justify-center rounded-full border border-[#cdbda9] px-4 text-xs font-semibold text-[#8d4f42] transition hover:border-[#a53f2b] hover:bg-[#f4e6e1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Reject
+            {copy.rejectContribution}
           </button>
         ) : null}
       </div>
@@ -76,7 +78,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
           <input type="hidden" name="circleId" value={circleId} />
           <input type="hidden" name="paymentId" value={paymentId} />
           <label htmlFor={`reject-reason-${paymentId}`} className="text-xs font-semibold text-[#173b32]">
-            Rejection reason
+            {copy.rejectionReason}
           </label>
           <textarea
             id={`reject-reason-${paymentId}`}
@@ -106,7 +108,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
               disabled={anyPending || rejectionReason.trim().length === 0}
               className="inline-flex min-h-9 items-center justify-center rounded-full bg-[#a53f2b] px-4 text-xs font-semibold text-white transition hover:bg-[#8a3222] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {rejectPending ? "Rejecting…" : "Reject contribution"}
+              {rejectPending ? copy.recording : copy.rejectContribution}
             </button>
             <button
               type="button"
@@ -121,7 +123,7 @@ export function ContributionPaymentControls({ circleId, paymentId }: { circleId:
               disabled={rejectPending}
               className="inline-flex min-h-9 items-center justify-center rounded-full border border-[#cdbda9] px-4 text-xs font-semibold text-[#173b32] transition hover:border-[#b96549] hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Cancel
+              {copy.cancel}
             </button>
           </div>
         </form>

@@ -87,6 +87,11 @@ export type OwnerContributionsRoundResult = {
   readonly recipientDisplayName: string;
   readonly dueDate: string;
   readonly status: string;
+  // 9G presentation authority (docs/product/susu-existing-import-contract-freeze.md
+  // §4/§8): IMPORTED_DECLARATION means this round's CLOSED status is the
+  // owner's own historical declaration at import time, never a normal
+  // NIA-managed closure.
+  readonly closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
 };
 
 export type OwnerContributionsObligationResult = {
@@ -102,6 +107,12 @@ export type OwnerContributionsObligationResult = {
   // module comment). Returned alongside, not instead of, the ledger-
   // derived confirmedAmount/outstandingAmount below.
   readonly status: "OPEN" | "FULFILLED";
+  // 9G presentation authority: IMPORTED_DECLARATION means the owner
+  // reported this obligation fulfilled as part of the circle's imported
+  // history -- there is no ContributionPayment row behind it (9E never
+  // fabricates one), and the UI must never claim NIA confirmed a payment
+  // or that a member confirmed anything for it.
+  readonly fulfillmentBasis: "NIA_CONFIRMED_LEDGER" | "IMPORTED_DECLARATION";
   readonly fulfilledAt: string | null;
   readonly confirmedAmount: string;
   readonly outstandingAmount: string;
@@ -219,6 +230,7 @@ export async function getOwnerCircleContributions(params: {
       currency: obligation.currency,
       dueDate: obligation.dueDate.toISOString(),
       status: obligation.status,
+      fulfillmentBasis: obligation.fulfillmentBasis,
       fulfilledAt: obligation.fulfilledAt?.toISOString() ?? null,
       confirmedAmount: toMoney(confirmedAmount),
       outstandingAmount: toMoney(outstandingAmount),
@@ -233,6 +245,7 @@ export async function getOwnerCircleContributions(params: {
       recipientDisplayName: round.recipient.displayName,
       dueDate: round.dueDate.toISOString(),
       status: round.status,
+      closureBasis: round.closureBasis,
     })),
     obligations: obligationResults,
     payments: payments.map(serializePayment),

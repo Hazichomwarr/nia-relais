@@ -29,6 +29,10 @@ import {
   runSetDraftCirclePayoutOrderAction,
   type SetDraftCirclePayoutOrderActionState,
 } from "@/src/actions/set-draft-circle-payout-order";
+import {
+  runUpdateDraftCircleConfigurationAction,
+  type UpdateDraftCircleConfigurationActionState,
+} from "@/src/actions/update-draft-circle-configuration";
 
 // No `export type { ... }` re-export here, deliberately (hotfix, P1): a
 // "use server" file's export list is scanned by the Next.js/Turbopack
@@ -110,6 +114,20 @@ export async function setDraftCirclePayoutOrderAction(
 ): Promise<SetDraftCirclePayoutOrderActionState> {
   const circleId = String(formData.get("circleId") ?? "");
   const outcome = await runSetDraftCirclePayoutOrderAction(formData);
+
+  if (outcome.status === "success" && circleId.length > 0) {
+    revalidatePath(`/circles/${encodeURIComponent(circleId)}`);
+  }
+
+  return outcome;
+}
+
+export async function updateDraftCircleConfigurationAction(
+  _previousState: UpdateDraftCircleConfigurationActionState,
+  formData: FormData,
+): Promise<UpdateDraftCircleConfigurationActionState> {
+  const circleId = String(formData.get("circleId") ?? "");
+  const outcome = await runUpdateDraftCircleConfigurationAction(formData);
 
   if (outcome.status === "success" && circleId.length > 0) {
     revalidatePath(`/circles/${encodeURIComponent(circleId)}`);

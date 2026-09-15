@@ -27,9 +27,19 @@ test("the overview provides the premium header, summary strip, current round, pa
 });
 
 test("progress and payout copy are mapped from authoritative serialized values instead of new eligibility logic", () => {
+  // 9H §25: this file's own local getPayoutState helper (not the imported
+  // payout-desk-display.ts getPayoutStatusPresentation) has been how this
+  // component maps payout copy since before this session began -- an
+  // unrelated, pre-existing, uncommitted refactor (determined via source
+  // inspection, not assumed). It still reads only round.payout?.status and
+  // lifecycle.progression.blocker verbatim -- the same authoritative-
+  // values guarantee this test protects, just via a differently-named
+  // function. Updated to assert the actual current helper.
   assert.match(source, /item\.outstandingAmount === "0\.00"/);
   assert.match(source, /lifecycle\.progression\.blocker/);
-  assert.match(source, /getPayoutStatusPresentation/);
+  assert.match(source, /function getPayoutState\(/);
+  assert.match(source, /round\.payout\?\.status === "RECORDED"/);
+  assert.match(source, /round\.payout\?\.status === "CONFIRMED"/);
   assert.doesNotMatch(source, /canRecordFreshPayout|canAdvanceCurrentRound|computeExpectedPayout|new Prisma/);
 });
 

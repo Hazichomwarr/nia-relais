@@ -6,6 +6,7 @@ type RecoveryPanelProps = {
   heading: string;
   description: string;
   retry: () => void;
+  retryLabel: string;
   returnHref: string;
   returnLabel: string;
 };
@@ -14,6 +15,7 @@ export function RecoveryPanel({
   heading,
   description,
   retry,
+  retryLabel,
   returnHref,
   returnLabel,
 }: RecoveryPanelProps) {
@@ -29,7 +31,7 @@ export function RecoveryPanel({
             onClick={retry}
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
           >
-            Try again
+            {retryLabel}
           </button>
           <Link
             href={returnHref}

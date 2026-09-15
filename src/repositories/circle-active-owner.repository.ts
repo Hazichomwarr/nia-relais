@@ -30,6 +30,11 @@ const activeOwnerCircleSelect = {
   startDate: true,
   status: true,
   activatedAt: true,
+  // 9G: circle-level import context (docs/product/susu-existing-import-contract-freeze.md
+  // §8) -- originKind/historicalCompletedRoundCount are the sole authority
+  // for whether/how the "Imported history" banner renders.
+  originKind: true,
+  historicalCompletedRoundCount: true,
 } satisfies Prisma.SavingsCircleSelect;
 
 export type ActiveOwnerCircleRecord = Prisma.SavingsCircleGetPayload<{
@@ -47,6 +52,7 @@ const activeOwnerMemberSelect = {
   id: true,
   displayName: true,
   memberCode: true,
+  phone: true,
   payoutOrder: true,
 } satisfies Prisma.CircleMemberSelect;
 
@@ -75,6 +81,9 @@ const ownerRoundScheduleSelect = {
   roundNumber: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority for "was this round's closure an owner-
+  // declared import, or a normal NIA-managed closure."
+  closureBasis: true,
   recipientId: true,
   recipient: { select: { displayName: true, memberCode: true } },
 } satisfies Prisma.PayoutRoundSelect;

@@ -1,4 +1,6 @@
 import type { MemberCirclePayoutsResult } from "@/src/services/payout-member-read.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
 
 import { formatCircleDate, formatCircleDateTime, formatCircleMoney } from "./member-dashboard-display";
 import { canDecidePayout, getMemberPayoutStatusPresentation } from "./member-payout-display";
@@ -51,10 +53,15 @@ function Badge({ label, className }: { label: string; className: string }) {
 export function MemberPayoutCard({
   circleId,
   payouts,
+  dictionary,
+  locale,
 }: {
   circleId: string;
   payouts: MemberCirclePayoutsResult;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.memberWorkspace;
   // 7K.10 section 5: a member who is not the recipient of any persisted
   // round (the common case) truthfully has nothing to show here -- this
   // is not an error, and no payout is ever fabricated to fill the gap.
@@ -62,48 +69,58 @@ export function MemberPayoutCard({
   if (!round) return null;
 
   const { payout } = round;
-  const presentation = getMemberPayoutStatusPresentation(payout ? payout.status : null);
+  const presentation = getMemberPayoutStatusPresentation(payout ? payout.status : null, payout?.confirmationBasis);
+  const statusCopy = payout === null
+    ? { label: copy.payoutNotRecorded, description: copy.payoutNotRecordedDescription }
+    : payout.confirmationBasis === "IMPORTED_DECLARATION"
+      ? { label: copy.importedHistory, description: copy.importedHistoryDescription }
+      : payout.status === "RECORDED"
+        ? { label: copy.payoutAwaitingDecision, description: copy.payoutAwaitingDecisionDescription }
+        : payout.status === "CONFIRMED"
+          ? { label: copy.payoutConfirmed, description: copy.payoutConfirmedDescription }
+          : { label: copy.payoutDisputed, description: copy.payoutDisputedDescription };
   const canDecide = canDecidePayout(payout);
+  const isImportedPayout = payout?.confirmationBasis === "IMPORTED_DECLARATION";
 
   return (
-    <Card title="My payout">
+    <Card title={copy.myPayout}>
       <div className="flex flex-wrap items-center gap-3">
-        <Badge label={presentation.label} className={presentation.className} />
-        <span className="text-sm text-[#587066]">Round {round.roundNumber}</span>
+        <Badge label={statusCopy.label} className={presentation.className} />
+        <span className="text-sm text-[#587066]">{copy.round} {round.roundNumber}</span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-[#587066]">{presentation.description}</p>
+      <p className="mt-3 text-sm leading-6 text-[#587066]">{statusCopy.description}</p>
 
       <DetailList>
-        <DetailRow label="Due" value={formatCircleDate(round.dueDate)} />
+        <DetailRow label={copy.due} value={formatCircleDate(round.dueDate, locale)} />
         <DetailRow
-          label="Expected payout"
+          label={copy.expectedPayout}
           value={formatCircleMoney(round.expectedPayout.amount, round.expectedPayout.currency)}
         />
       </DetailList>
 
       {payout ? (
         <DetailList>
-          <DetailRow label="Recorded amount" value={formatCircleMoney(payout.amount, payout.currency)} />
-          <DetailRow label="Recorded" value={formatCircleDateTime(payout.recordedAt)} />
-          {payout.confirmedAt ? <DetailRow label="Confirmed" value={formatCircleDateTime(payout.confirmedAt)} /> : null}
-          {payout.disputedAt ? <DetailRow label="Disputed" value={formatCircleDateTime(payout.disputedAt)} /> : null}
+          <DetailRow label={copy.recordedAmount} value={formatCircleMoney(payout.amount, payout.currency)} />
+          <DetailRow label={copy.recorded} value={formatCircleDateTime(payout.recordedAt, locale)} />
+          {payout.confirmedAt && !isImportedPayout ? <DetailRow label={copy.confirmed} value={formatCircleDateTime(payout.confirmedAt, locale)} /> : null}
+          {payout.disputedAt ? <DetailRow label={copy.disputed} value={formatCircleDateTime(payout.disputedAt, locale)} /> : null}
         </DetailList>
       ) : null}
 
       {payout?.disputeReason ? (
         <p className="mt-3 text-sm leading-6 break-words text-[#8d4f42]">
-          <span className="font-semibold">Your reported reason:</span> {payout.disputeReason}
+          <span className="font-semibold">{copy.reportedReason}</span> {payout.disputeReason}
         </p>
       ) : null}
 
       {canDecide && payout ? (
         <div className="mt-4">
-          <MemberPayoutControls circleId={circleId} payoutId={payout.id} />
+          <MemberPayoutControls circleId={circleId} payoutId={payout.id} dictionary={dictionary} />
         </div>
       ) : null}
 
       <p className="mt-5 text-xs leading-5 text-[#7b8179]">
-        NIA records payouts that happen outside the app -- it does not send, hold, or transfer money.
+        {copy.payoutExternalDescription}
       </p>
     </Card>
   );

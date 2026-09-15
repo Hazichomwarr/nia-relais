@@ -20,9 +20,13 @@ test("uses the existing action and its initial state, not a new action framework
   assert.match(source, /useActionState\(addDraftCircleMemberAction, initialAddDraftCircleMemberState\)/);
 });
 
-test("submits exactly circleId, displayName, email, and pin -- nothing else", () => {
+test("submits exactly circleId, displayName, phone, email, and pin -- nothing else", () => {
+  // 9A added an optional phone (contact-only) field to this same form,
+  // predating 9B-9H's own import work -- this assertion was stale before
+  // this session began (determined via 9H §25's own pre-existing-drift
+  // review, not caused by any import-related change).
   const nameAttributes = [...source.matchAll(/name="([a-zA-Z]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(nameAttributes.sort(), ["circleId", "displayName", "email", "pin"]);
+  assert.deepEqual(nameAttributes.sort(), ["circleId", "displayName", "email", "phone", "pin"]);
 });
 
 test("no ownerId, status, userId, or provenance field exists anywhere in the form", () => {

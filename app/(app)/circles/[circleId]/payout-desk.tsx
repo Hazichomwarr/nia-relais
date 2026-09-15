@@ -41,55 +41,75 @@ function RoundCard({
   circleId,
   round,
   readOnly,
+  dictionary,
 }: {
   circleId: string;
   round: OwnerPayoutsRoundResult;
   readOnly: boolean;
+  dictionary: Dictionary;
 }) {
-  const roundStatus = getRoundStatusBadge(round.status);
-  const presentation = getPayoutStatusPresentation(round.payout ? round.payout.status : null);
+  const copy = dictionary.susuFinancial;
+  const isImportedRound = round.closureBasis === "IMPORTED_DECLARATION";
+  const roundStatus = getRoundStatusBadge(round.status, round.closureBasis);
+  const presentation = getPayoutStatusPresentation(round.payout ? round.payout.status : null, round.payout?.confirmationBasis);
+  const statusCopy = round.payout === null
+    ? { label: copy.unrecorded, description: copy.payoutUnrecordedDescription }
+    : round.payout.confirmationBasis === "IMPORTED_DECLARATION"
+      ? { label: copy.importedHistory, description: copy.importedHistoryDescription }
+      : round.payout.status === "RECORDED"
+        ? { label: copy.payoutRecorded, description: copy.payoutRecordedDescription }
+        : round.payout.status === "CONFIRMED"
+          ? { label: copy.payoutConfirmed, description: copy.payoutConfirmedDescription }
+          : { label: copy.disputed, description: copy.payoutDisputedDescription };
   const canRecord = !readOnly && canRecordFreshPayout(round.payout);
 
   return (
-    <Card title={`Round ${round.roundNumber} · ${round.recipient.displayName}`}>
+    <Card title={`${copy.round} ${round.roundNumber} · ${round.recipient.displayName}`}>
       <div className="flex flex-wrap items-center gap-3">
-        <Badge label={roundStatus.label} className={roundStatus.className} />
-        <p className="text-xs text-[#7b8179]">Due {formatOwnerDate(round.dueDate)}</p>
+        <Badge
+          label={isImportedRound ? roundStatus.label : round.status === "ACTIVE" ? copy.active : round.status === "UPCOMING" ? copy.upcoming : round.status === "CLOSED" ? copy.closed : roundStatus.label}
+          className={roundStatus.className}
+        />
+        <p className="text-xs text-[#7b8179]">{copy.due} {formatOwnerDate(round.dueDate)}</p>
       </div>
+      <p className="mt-1 text-xs text-[#7b8179]">{round.recipient.memberCode}</p>
+      {isImportedRound ? <p className="mt-1 text-xs leading-5 text-[#7b8179]">{copy.importedHistoryDescription}</p> : null}
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Expected payout</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.expected} {copy.payout}</dt>
           <dd className="mt-1 text-[#173b32]">
             {formatContributionMoney(round.expectedPayout.amount, round.expectedPayout.currency)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Status</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.status}</dt>
           <dd className="mt-1">
-            <Badge label={presentation.label} className={presentation.className} />
+            <Badge label={statusCopy.label} className={presentation.className} />
           </dd>
         </div>
       </dl>
-      <p className="mt-2 text-xs leading-5 text-[#7b8179]">{presentation.description}</p>
+      <p className="mt-2 text-xs leading-5 text-[#7b8179]">{statusCopy.description}</p>
 
       {round.payout ? (
         <details className="mt-3 rounded-xl bg-[#f7f1e8] p-3 text-sm">
-          <summary className="cursor-pointer text-sm font-semibold text-[#173b32]">Payout record</summary>
+          <summary className="cursor-pointer text-sm font-semibold text-[#173b32]">{copy.payoutRecord}</summary>
           <div className="mt-3">
           <p className="font-semibold text-[#173b32]">
             {formatContributionMoney(round.payout.amount, round.payout.currency)}
           </p>
-          <p className="mt-1 text-xs text-[#7b8179]">Recorded {formatContributionDateTime(round.payout.recordedAt)}</p>
-          {round.payout.confirmedAt ? (
-            <p className="text-xs text-[#7b8179]">Confirmed {formatContributionDateTime(round.payout.confirmedAt)}</p>
+          <p className="mt-1 text-xs text-[#7b8179]">{copy.payoutRecorded} {formatContributionDateTime(round.payout.recordedAt)}</p>
+          {round.payout.confirmedAt && round.payout.confirmationBasis === "IMPORTED_DECLARATION" ? (
+            <p className="text-xs text-[#7b8179]">{copy.importedHistoryDescription}</p>
+          ) : round.payout.confirmedAt ? (
+            <p className="text-xs text-[#7b8179]">{copy.payoutConfirmed} {formatContributionDateTime(round.payout.confirmedAt)}</p>
           ) : null}
           {round.payout.disputedAt ? (
-            <p className="text-xs text-[#7b8179]">Disputed {formatContributionDateTime(round.payout.disputedAt)}</p>
+            <p className="text-xs text-[#7b8179]">{copy.disputed} {formatContributionDateTime(round.payout.disputedAt)}</p>
           ) : null}
           {round.payout.disputeReason ? (
             <p className="mt-1 text-xs leading-5 break-words text-[#8d4f42]">
-              Reason: {round.payout.disputeReason}
+              {copy.reason}: {round.payout.disputeReason}
             </p>
           ) : null}
           </div>
@@ -103,6 +123,7 @@ function RoundCard({
             roundId={round.id}
             amount={round.expectedPayout.amount}
             currency={round.expectedPayout.currency}
+            dictionary={dictionary}
           />
         </div>
       ) : null}
@@ -123,6 +144,7 @@ export function PayoutDesk({
   dictionary: Dictionary;
   locale: Locale;
 }) {
+  void _locale;
   const copy = dictionary.susuFinancial;
   const { rounds, summary } = payouts;
 
@@ -138,34 +160,34 @@ export function PayoutDesk({
         </p>
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Total rounds</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.totalRounds}</dt>
             <dd className="mt-1 text-base text-[#173b32]">{summary.totalRounds}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Unrecorded</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.unrecorded}</dt>
             <dd className="mt-1 text-base text-[#173b32]">{summary.unrecordedCount}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Recorded</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.payoutRecorded}</dt>
             <dd className="mt-1 text-base text-[#173b32]">{summary.recordedCount}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Confirmed</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.payoutConfirmed}</dt>
             <dd className="mt-1 text-base text-[#173b32]">{summary.confirmedCount}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Disputed</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{copy.disputed}</dt>
             <dd className="mt-1 text-base text-[#173b32]">{summary.disputedCount}</dd>
           </div>
         </dl>
       </Card>
 
       {rounds.length === 0 ? (
-        <Card title="Rounds">
-          <p className="text-sm leading-6 text-[#587066]">No rounds exist for this circle yet.</p>
+        <Card title={copy.round}>
+          <p className="text-sm leading-6 text-[#587066]">{copy.noRounds}</p>
         </Card>
       ) : (
-        rounds.map((round) => <RoundCard key={round.id} circleId={circleId} round={round} readOnly={readOnly} />)
+        rounds.map((round) => <RoundCard key={round.id} circleId={circleId} round={round} readOnly={readOnly} dictionary={dictionary} />)
       )}
     </div>
   );

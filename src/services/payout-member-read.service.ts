@@ -130,6 +130,12 @@ export type MemberPayoutsPayoutResult = {
   readonly amount: string;
   readonly currency: string;
   readonly status: "RECORDED" | "CONFIRMED" | "DISPUTED";
+  // 9G presentation authority: IMPORTED_DECLARATION means the owner
+  // reported this historical payout when importing the circle -- never
+  // this member's own confirmation through NIA. The UI must never render
+  // Confirm/Dispute controls, and must never say "you confirmed this,"
+  // for an IMPORTED_DECLARATION payout.
+  readonly confirmationBasis: "MEMBER_CONFIRMED" | "IMPORTED_DECLARATION";
   readonly recordedAt: string;
   readonly confirmedAt: string | null;
   readonly disputedAt: string | null;
@@ -141,6 +147,10 @@ export type MemberPayoutsRecipientRoundResult = {
   readonly roundNumber: number;
   readonly dueDate: string;
   readonly status: string;
+  // 9G presentation authority: IMPORTED_DECLARATION means this round's
+  // CLOSED status is the owner's own historical declaration, never a
+  // normal NIA-managed closure.
+  readonly closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
   readonly expectedPayout: MemberPayoutsExpectedResult;
   readonly payout: MemberPayoutsPayoutResult | null;
 };
@@ -160,6 +170,7 @@ function serializePayout(payout: MemberPayoutsPayoutRecord): MemberPayoutsPayout
     amount: toMoney(payout.amount),
     currency: payout.currency,
     status: payout.status,
+    confirmationBasis: payout.confirmationBasis,
     recordedAt: payout.recordedAt.toISOString(),
     confirmedAt: payout.confirmedAt?.toISOString() ?? null,
     disputedAt: payout.disputedAt?.toISOString() ?? null,
@@ -184,6 +195,13 @@ function serializePayout(payout: MemberPayoutsPayoutRecord): MemberPayoutsPayout
  * round.recipientId is equivalent to checking them against the caller's
  * own identity -- the ticket's "=== memberId / round recipient" phrasing
  * describes one and the same check here, not two.
+ *
+ * 9G extension (mirrors payout-owner-read.service.ts's own identical
+ * extension): IMPORTED_DECLARATION is a genuinely different, EQUALLY
+ * valid coherent shape, never a laxer version of MEMBER_CONFIRMED's
+ * rules -- this member's own historical payout as a past beneficiary is
+ * CONFIRMED with NO member confirmer at all (9E never fabricates their
+ * own confirmation action), and the round's own closureBasis must agree.
  */
 function assertPayoutIntegrity(
   payout: MemberPayoutsPayoutRecord,
@@ -194,6 +212,25 @@ function assertPayoutIntegrity(
     throw new MemberPayoutsIntegrityError();
   }
   if (payout.recordedById.length === 0) {
+    throw new MemberPayoutsIntegrityError();
+  }
+
+  if (payout.confirmationBasis === "IMPORTED_DECLARATION") {
+    if (
+      round.closureBasis !== "IMPORTED_DECLARATION" ||
+      payout.status !== "CONFIRMED" ||
+      payout.confirmedAt === null ||
+      payout.confirmedByMemberId !== null ||
+      payout.disputedAt !== null ||
+      payout.disputedByMemberId !== null ||
+      payout.disputeReason !== null
+    ) {
+      throw new MemberPayoutsIntegrityError();
+    }
+    return;
+  }
+
+  if (round.closureBasis === "IMPORTED_DECLARATION") {
     throw new MemberPayoutsIntegrityError();
   }
 
@@ -308,6 +345,7 @@ export async function getCircleMemberPayouts(input: {
       roundNumber: round.roundNumber,
       dueDate: round.dueDate.toISOString(),
       status: round.status,
+      closureBasis: round.closureBasis,
       expectedPayout: serializeExpectedPayout(expected),
       payout: payout ? serializePayout(payout) : null,
     };

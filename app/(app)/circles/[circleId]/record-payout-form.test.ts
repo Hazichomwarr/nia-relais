@@ -48,7 +48,7 @@ test("the amount field is a hidden, read-only input fixed to the round's own exp
 
 test("the exact amount is displayed to the owner, not just submitted silently, and no client-side arithmetic computes it", () => {
   assert.match(source, /\{currency\}\s*\{amount\}/);
-  assert.match(source, /exact/i);
+  assert.match(source, /copy\.payoutDescription/);
   assert.doesNotMatch(source, /\breduce\(/);
   assert.doesNotMatch(source, /contributionAmount\s*\*/);
 });
@@ -84,11 +84,11 @@ test("server errors are shown as returned, never a raw/rethrown error", () => {
 });
 
 test("copy says 'Record payout' and avoids execution-implying verbs (send/pay/transfer/release/process)", () => {
-  assert.match(source, />\s*\{pending \? "Recording…" : "Record payout"\}\s*</);
+  assert.match(source, /\{pending \? copy\.recording : copy\.recordPayout\}/);
   for (const forbidden of [/send payout/i, /pay member/i, /transfer funds/i, /release money/i, /process payment/i]) {
     assert.doesNotMatch(source, forbidden);
   }
-  assert.match(source, /does not send, hold, or\s+transfer money/i);
+  assert.match(source, /copy\.payoutDescription/);
 });
 
 test("no direct Prisma reference or member-session identity import", () => {

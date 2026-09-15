@@ -46,7 +46,7 @@ export function MemberList({
                 <div>
                   <p className="text-sm font-semibold text-[#173b32]">{member.displayName}</p>
                   <p className="text-xs text-[#7b8179]">
-                    {member.email ? `${member.email} · ` : ""}{copy.memberCode}: {member.memberCode}
+                    {[member.phone, member.email, `${copy.memberCode}: ${member.memberCode}`].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export function MemberList({
                 <div>
                   <p className="text-sm font-semibold text-[#173b32]">{member.displayName}</p>
                   <p className="text-xs text-[#7b8179]">
-                    {copy.memberCode}: {member.memberCode}
+                    {[member.phone, member.email, `${copy.memberCode}: ${member.memberCode}`].filter(Boolean).join(" · ")}
                     {member.removedAt ? ` · ${copy.removedOn.replace("{date}", formatDate(member.removedAt, locale))}` : ""}
                   </p>
                 </div>

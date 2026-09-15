@@ -19,6 +19,11 @@ const circleSummarySelect = {
   frequency: true,
   status: true,
   startDate: true,
+  // 9G: circle-level import context authority for the member workspace,
+  // identical in purpose to circle-active-owner.repository.ts's own
+  // originKind/historicalCompletedRoundCount addition.
+  originKind: true,
+  historicalCompletedRoundCount: true,
 } satisfies Prisma.SavingsCircleSelect;
 
 export type CircleSummaryRecord = Prisma.SavingsCircleGetPayload<{
@@ -64,6 +69,9 @@ const roundScheduleSelect = {
   roundNumber: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority -- an IMPORTED_DECLARATION-closed round must
+  // never be rendered as though NIA managed its closure.
+  closureBasis: true,
   recipientId: true,
   recipient: { select: { displayName: true } },
 } satisfies Prisma.PayoutRoundSelect;
@@ -85,6 +93,9 @@ const memberObligationSelect = {
   expectedAmount: true,
   currency: true,
   dueDate: true,
+  // 9G: presentation authority -- an IMPORTED_DECLARATION obligation must
+  // never be rendered as though a real ContributionPayment exists for it.
+  fulfillmentBasis: true,
   round: { select: { roundNumber: true } },
 } satisfies Prisma.ContributionObligationSelect;
 
@@ -163,6 +174,9 @@ const memberPayoutSelect = {
   recordedAt: true,
   confirmedAt: true,
   disputedAt: true,
+  // 9G: presentation authority -- an IMPORTED_DECLARATION payout must never
+  // be rendered as though a member confirmed receipt through NIA.
+  confirmationBasis: true,
 } satisfies Prisma.PayoutSelect;
 
 export type MemberPayoutRecord = Prisma.PayoutGetPayload<{

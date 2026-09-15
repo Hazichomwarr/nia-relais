@@ -39,6 +39,11 @@ enum CircleStatus {
   ARCHIVED
 }
 
+enum CircleOriginKind {
+  NEW
+  IMPORTED
+}
+
 enum CircleMemberStatus {
   ACTIVE
   REMOVED
@@ -56,9 +61,19 @@ enum PayoutRoundStatus {
   CLOSED
 }
 
+enum RoundClosureBasis {
+  NIA_MANAGED
+  IMPORTED_DECLARATION
+}
+
 enum ContributionObligationStatus {
   OPEN
   FULFILLED
+}
+
+enum ContributionFulfillmentBasis {
+  NIA_CONFIRMED_LEDGER
+  IMPORTED_DECLARATION
 }
 
 enum ContributionPaymentStatus {
@@ -71,6 +86,11 @@ enum PayoutStatus {
   RECORDED
   CONFIRMED
   DISPUTED
+}
+
+enum PayoutConfirmationBasis {
+  MEMBER_CONFIRMED
+  IMPORTED_DECLARATION
 }
 
 enum CircleMemberAuthRateLimitScope {
@@ -91,6 +111,7 @@ model User {
   rejectedDeposits              Deposit[]             @relation("DepositRejector")
   recordedDeposits              Deposit[]             @relation("DepositRecorder")
   ownedCircles                  SavingsCircle[]       @relation("CircleOwner")
+  importedCircles               SavingsCircle[]       @relation("CircleImporter")
   circleMemberships             CircleMember[]        @relation("CircleMemberUser")
   activatedCircles              SavingsCircle[]       @relation("CircleActivator")
   completedCircles              SavingsCircle[]       @relation("CircleCompleter")
@@ -210,21 +231,27 @@ model SavingsCircle {
   ownerId String
   owner   User   @relation("CircleOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
-  name               String
-  currency           String                @db.Char(3)
-  contributionAmount Decimal               @db.Decimal(18, 2)
-  frequency          ContributionFrequency
-  startDate          DateTime
-  status             CircleStatus          @default(DRAFT)
-  activatedAt        DateTime?
-  activatedById      String?
-  activatedBy        User?                 @relation("CircleActivator", fields: [activatedById], references: [id], onDelete: Restrict)
-  completedAt        DateTime?
-  completedById      String?
-  completedBy        User?                 @relation("CircleCompleter", fields: [completedById], references: [id], onDelete: Restrict)
-  archivedAt         DateTime?
-  archivedById       String?
-  archivedBy         User?                 @relation("CircleArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
+  name                          String
+  currency                      String                @db.Char(3)
+  contributionAmount            Decimal               @db.Decimal(18, 2)
+  frequency                     ContributionFrequency
+  startDate                     DateTime
+  status                        CircleStatus          @default(DRAFT)
+  // Import configuration is authoritative on the circle; K is never inferred from dates or CLOSED rounds.
+  originKind                    CircleOriginKind      @default(NEW)
+  historicalCompletedRoundCount Int                   @default(0)
+  importedAt                    DateTime?
+  importedById                  String?
+  importedBy                    User?                 @relation("CircleImporter", fields: [importedById], references: [id], onDelete: Restrict)
+  activatedAt                   DateTime?
+  activatedById                 String?
+  activatedBy                   User?                 @relation("CircleActivator", fields: [activatedById], references: [id], onDelete: Restrict)
+  completedAt                   DateTime?
+  completedById                 String?
+  completedBy                   User?                 @relation("CircleCompleter", fields: [completedById], references: [id], onDelete: Restrict)
+  archivedAt                    DateTime?
+  archivedById                  String?
+  archivedBy                    User?                 @relation("CircleArchiver", fields: [archivedById], references: [id], onDelete: Restrict)
 
   members                 CircleMember[]
   rounds                  PayoutRound[]
@@ -248,6 +275,7 @@ model CircleMember {
   user        User?   @relation("CircleMemberUser", fields: [userId], references: [id], onDelete: Restrict)
   displayName String
   email       String?
+  phone       String?
   memberCode  String
   pinHash     String
 
@@ -322,9 +350,11 @@ model PayoutRound {
   circleId String
   circle   SavingsCircle @relation(fields: [circleId], references: [id], onDelete: Restrict)
 
-  roundNumber Int
-  dueDate     DateTime
-  status      PayoutRoundStatus @default(UPCOMING)
+  roundNumber  Int
+  dueDate      DateTime
+  status       PayoutRoundStatus @default(UPCOMING)
+  // CLOSED is lifecycle state; basis preserves whether its closure is NIA-managed or owner-declared import history.
+  closureBasis RoundClosureBasis @default(NIA_MANAGED)
 
   // This relation preserves the recipient for this historical round.
   recipientId String
@@ -358,11 +388,13 @@ model ContributionObligation {
   memberId String
   member   CircleMember @relation(fields: [memberId, circleId], references: [id, circleId], onDelete: Restrict)
 
-  expectedAmount Decimal                      @db.Decimal(18, 2)
-  currency       String                       @db.Char(3)
-  dueDate        DateTime
-  status         ContributionObligationStatus @default(OPEN)
-  fulfilledAt    DateTime?
+  expectedAmount   Decimal                      @db.Decimal(18, 2)
+  currency         String                       @db.Char(3)
+  dueDate          DateTime
+  status           ContributionObligationStatus @default(OPEN)
+  fulfilledAt      DateTime?
+  // Imported fulfillment is an owner declaration, never a fabricated ContributionPayment confirmation.
+  fulfillmentBasis ContributionFulfillmentBasis @default(NIA_CONFIRMED_LEDGER)
 
   payments  ContributionPayment[]
   createdAt DateTime              @default(now())
@@ -411,20 +443,22 @@ model Payout {
   roundId String
   round   PayoutRound @relation(fields: [roundId, circleId], references: [id, circleId], onDelete: Restrict)
 
-  amount              Decimal       @db.Decimal(18, 2)
-  currency            String        @db.Char(3)
-  status              PayoutStatus  @default(RECORDED)
+  amount              Decimal                 @db.Decimal(18, 2)
+  currency            String                  @db.Char(3)
+  status              PayoutStatus            @default(RECORDED)
+  // Imported declaration is distinct from a recipient confirmation through NIA.
+  confirmationBasis   PayoutConfirmationBasis @default(MEMBER_CONFIRMED)
   clientOperationId   String
-  recordedAt          DateTime      @default(now())
+  recordedAt          DateTime                @default(now())
   recordedById        String
-  recordedBy          User          @relation("PayoutRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  recordedBy          User                    @relation("PayoutRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
   confirmedAt         DateTime?
   confirmedByMemberId String?
-  confirmedByMember   CircleMember? @relation("PayoutRecipientConfirmer", fields: [confirmedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
+  confirmedByMember   CircleMember?           @relation("PayoutRecipientConfirmer", fields: [confirmedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
   disputedAt          DateTime?
   disputedByMemberId  String?
-  disputedByMember    CircleMember? @relation("PayoutRecipientDisputer", fields: [disputedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
-  disputeReason       String?       @db.VarChar(500)
+  disputedByMember    CircleMember?           @relation("PayoutRecipientDisputer", fields: [disputedByMemberId, circleId], references: [id, circleId], onDelete: Restrict)
+  disputeReason       String?                 @db.VarChar(500)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

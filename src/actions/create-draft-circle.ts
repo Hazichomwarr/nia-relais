@@ -1,8 +1,9 @@
 import {
   createDraftCircle,
+  createImportedDraftCircle,
   InvalidDraftCircleError,
 } from "@/src/services/circle.service";
-import { createDraftCircleSchema } from "@/src/validations/circle.schema";
+import { createDraftCircleSchema, createImportedDraftCircleSchema } from "@/src/validations/circle.schema";
 
 // This is the testable core of the "create SUSU circle" Server Action --
 // deliberately NOT itself a "use server" file, so it can be imported and
@@ -15,7 +16,11 @@ import { createDraftCircleSchema } from "@/src/validations/circle.schema";
 
 export type CreateDraftCircleActionState = {
   readonly fieldErrors?: Partial<
-    Record<"name" | "currency" | "contributionAmount" | "frequency" | "startDate", string[]>
+    Record<
+      "name" | "currency" | "contributionAmount" | "frequency" | "startDate"
+      | "historicalCompletedRoundCount" | "historicalTermsConfirmed" | "originKind",
+      string[]
+    >
   >;
   readonly formError?: string;
 };
@@ -29,6 +34,7 @@ export type TrustedOwner = { readonly id: string; readonly name: string };
 export type CreateDraftCircleDependencies = {
   readonly requireUser: () => Promise<TrustedOwner>;
   readonly createDraftCircle: typeof createDraftCircle;
+  readonly createImportedDraftCircle: typeof createImportedDraftCircle;
 };
 
 // requireUser() itself is not imported at the top of this file. Doing so
@@ -51,23 +57,33 @@ async function requireRealUser(): Promise<TrustedOwner> {
 const defaultDependencies: CreateDraftCircleDependencies = {
   requireUser: requireRealUser,
   createDraftCircle,
+  createImportedDraftCircle,
 };
 
 /**
  * Runs the full "create draft circle" flow for one form submission:
- * authenticate the platform User, validate exactly the five creation
- * fields, call the existing createDraftCircle service with an ownerId
- * derived solely from that authentication, and map the outcome to a
- * serializable result. Never accepts ownerId, status, activatedAt, or any
- * other provenance field from the form -- only the five fields below are
- * ever read from it, so there is nothing for a forged extra field to do.
+ * authenticate the platform User, then branch on the submitted setup-mode
+ * choice (`originKind`, 9D.1 §2) to validate either the five NEW-circle
+ * fields (unchanged since before 9D.1) or the IMPORTED fields (the same
+ * five plus historicalCompletedRoundCount and historicalTermsConfirmed,
+ * with no past-date floor on startDate), then call the matching service
+ * with an ownerId derived solely from authentication. Never accepts
+ * ownerId, status, activatedAt, importedAt, importedById, or any other
+ * provenance field from the form.
+ *
+ * `originKind` itself is read directly from the form (not through either
+ * Zod schema) purely to select which validation branch applies -- an
+ * invalid/missing value is treated as ordinary invalid input, never
+ * defaulted to NEW, so a tampered or missing setup-mode choice cannot
+ * silently fall back to different validation than what the visible form
+ * offered.
  *
  * requireUser() is called (and, in production, may redirect) BEFORE any
  * validation or service call -- an unauthenticated submission is denied
  * outright, regardless of what the form body contains, rather than first
  * revealing a validation-error shape to an unauthenticated caller. Its
  * exception (a real Next.js redirect, in production) is never caught here
- * -- the try/catch below wraps only the createDraftCircle call.
+ * -- the try/catch below wraps only the create*DraftCircle call.
  */
 export async function runCreateDraftCircleAction(
   formData: FormData,
@@ -77,13 +93,44 @@ export async function runCreateDraftCircleAction(
 
   const user = await deps.requireUser();
 
-  const parsed = createDraftCircleSchema.safeParse({
+  const originKind = String(formData.get("originKind") ?? "NEW");
+  const terms = {
     name: formData.get("name"),
     currency: formData.get("currency"),
     contributionAmount: formData.get("contributionAmount"),
     frequency: formData.get("frequency"),
     startDate: formData.get("startDate"),
-  });
+  };
+
+  if (originKind === "IMPORTED") {
+    const parsed = createImportedDraftCircleSchema.safeParse({
+      ...terms,
+      historicalCompletedRoundCount: formData.get("historicalCompletedRoundCount"),
+      historicalTermsConfirmed: formData.get("historicalTermsConfirmed"),
+    });
+    if (!parsed.success) {
+      return { ok: false, state: { fieldErrors: parsed.error.flatten().fieldErrors } };
+    }
+    try {
+      const circle = await deps.createImportedDraftCircle({ ownerId: user.id, input: parsed.data });
+      return { ok: true, circleId: circle.id };
+    } catch (error) {
+      if (error instanceof InvalidDraftCircleError) {
+        return { ok: false, state: { formError: error.message } };
+      }
+      console.error(
+        "[createDraftCircleAction] unexpected failure",
+        error instanceof Error ? error.name : "UnknownError",
+      );
+      return { ok: false, state: { formError: "We could not create your circle. Please try again." } };
+    }
+  }
+
+  if (originKind !== "NEW") {
+    return { ok: false, state: { fieldErrors: { originKind: ["Choose how you are setting up this SUSU."] } } };
+  }
+
+  const parsed = createDraftCircleSchema.safeParse(terms);
 
   if (!parsed.success) {
     return { ok: false, state: { fieldErrors: parsed.error.flatten().fieldErrors } };

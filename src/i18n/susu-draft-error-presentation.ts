@@ -16,6 +16,7 @@ export function presentSusuDraftError(message: string, copy: Dictionary["susu"])
     "This circle is no longer a draft.": copy.errorNoLongerDraft,
     "This circle's rotation could not be verified. Please refresh and try again.": copy.errorActivationIntegrity,
     "We could not activate this circle. Please try again.": copy.errorActivate,
+    "Importing a SUSU already in progress isn't ready for activation yet. This setup step is coming soon.": copy.errorImportedActivationNotReady,
   };
   return messages[message] ?? message;
 }

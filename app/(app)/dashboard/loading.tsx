@@ -1,5 +1,8 @@
-export default function DashboardLoading() {
-  return <LoadingPanel label="Loading your dashboard…" />;
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
+
+export default async function DashboardLoading() {
+  return <LoadingPanel label={getDictionary(await getLocale()).common.loadingDashboard} />;
 }
 
 function LoadingPanel({ label }: { label: string }) {

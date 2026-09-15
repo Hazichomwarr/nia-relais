@@ -102,7 +102,7 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#a95f45]">
         {dictionary.memberLogin.eyebrow}
       </p>
-      <div className="mt-3 flex items-start justify-between gap-4"><h1 className="font-serif text-4xl leading-tight tracking-[-0.02em] text-[#173b32] sm:text-5xl">{dictionary.memberLogin.title}</h1><LanguageSwitcher locale={locale} compact /></div>
+      <div className="mt-3 flex items-start justify-between gap-4"><h1 className="font-serif text-4xl leading-tight tracking-[-0.02em] text-[#173b32] sm:text-5xl">{dictionary.memberLogin.title}</h1><LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} compact /></div>
       <p className="mt-4 text-base leading-7 text-[#587066]">
         {dictionary.memberLogin.description}
       </p>

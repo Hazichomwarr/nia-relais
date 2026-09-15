@@ -6,14 +6,6 @@ export const CIRCLE_WORKSPACE_SECTIONS = ["overview", "contributions", "payouts"
 
 export type CircleWorkspaceSection = (typeof CIRCLE_WORKSPACE_SECTIONS)[number];
 
-const defaultLabels: Record<CircleWorkspaceSection, string> = {
-  overview: "Overview",
-  contributions: "Contributions",
-  payouts: "Payouts",
-  members: "Members",
-  schedule: "Schedule",
-};
-
 const icons: Record<CircleWorkspaceSection, string> = {
   overview: "◌",
   contributions: "↙",
@@ -43,14 +35,14 @@ export function CircleWorkspaceNavigation({
   status: string;
   terms: string;
   availableSections?: readonly CircleWorkspaceSection[];
-  dictionary?: Dictionary;
+  dictionary: Dictionary;
 }) {
-  const labels = dictionary ? { overview: dictionary.susuWorkspace.overview, contributions: dictionary.susuWorkspace.contributions, payouts: dictionary.susuWorkspace.payouts, members: dictionary.susuWorkspace.members, schedule: dictionary.susuWorkspace.schedule } : defaultLabels;
+  const labels = { overview: dictionary.susuWorkspace.overview, contributions: dictionary.susuWorkspace.contributions, payouts: dictionary.susuWorkspace.payouts, members: dictionary.susuWorkspace.members, schedule: dictionary.susuWorkspace.schedule };
   return (
-    <nav aria-label="Circle workspace" className="w-full min-w-0 shrink-0">
+    <nav aria-label={dictionary.susuWorkspace.navigationLabel} className="w-full min-w-0 shrink-0">
       <div className="hidden border-r border-[#e2d7c9] py-2 pr-6 md:block">
         <p className="text-lg font-semibold text-[#173b32]">{circleName}</p>
-        <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold ${status === "ACTIVE" ? "bg-[#dce9dc] text-[#35634f]" : status === "DRAFT" ? "bg-[#fff0d9] text-[#8a5b27]" : "bg-[#efe7db] text-[#587066]"}`}>{dictionary ? getStatusLabel(status, dictionary) : status}</span>
+        <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold ${status === "ACTIVE" ? "bg-[#dce9dc] text-[#35634f]" : status === "DRAFT" ? "bg-[#fff0d9] text-[#8a5b27]" : "bg-[#efe7db] text-[#587066]"}`}>{getStatusLabel(status, dictionary)}</span>
         <p className="mt-3 text-sm leading-6 text-[#587066]">{terms}</p>
         <div className="mt-7 space-y-1">
         <div className="space-y-1">
@@ -59,7 +51,7 @@ export function CircleWorkspaceNavigation({
           ))}
         </div>
         </div>
-        <Link href="/circles" className="mt-8 inline-flex min-h-11 items-center text-sm font-semibold text-[#587066] hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">← {dictionary?.susuWorkspace.backToCircles ?? "Back to my circles"}</Link>
+        <Link href="/circles" className="mt-8 inline-flex min-h-11 items-center text-sm font-semibold text-[#587066] hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">← {dictionary.susuWorkspace.backToCircles}</Link>
       </div>
 
       <div className="md:hidden">

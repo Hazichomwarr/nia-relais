@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
 import {
   CircleActivationEligibilityError,
   CircleActivationIntegrityError,
@@ -43,7 +44,17 @@ const ELIGIBLE_REVIEW = {
   expectedTotalAcrossRotation: "40.00",
 };
 
-const VALID_FINGERPRINT = "m1:1|m2:2";
+// Pre-existing fixture bug found while verifying 9D.0 tests still pass
+// (not introduced by 9D.1): this literal predated
+// computeActivationReviewFingerprint's terms-inclusion (9D.0's own "DRAFT
+// terms are now owner-editable, so they must participate" change,
+// src/domain/circle-activation-review.ts) and never matched
+// ELIGIBLE_REVIEW's real fingerprint since. Every test below submits
+// VALID_FINGERPRINT as what the owner "already reviewed" and expects
+// runActivateCircleAction's own fresh recomputation to agree -- so it must
+// be derived from the exact same function/review the action itself uses,
+// never re-typed by hand.
+const VALID_FINGERPRINT = computeActivationReviewFingerprint(ELIGIBLE_REVIEW);
 
 function formDataFor(overrides: Record<string, string> = {}) {
   const data = new FormData();
@@ -60,8 +71,9 @@ function formDataFor(overrides: Record<string, string> = {}) {
 class TestRedirectSignal extends Error {}
 
 function buildDeps(overrides: Partial<ActivateCircleDependencies> = {}) {
-  const calls = { requireUser: 0, getDraftCircleActivationReview: 0, activateCircle: 0 };
+  const calls = { requireUser: 0, getDraftCircleActivationReview: 0, activateCircle: 0, activateImportedCircle: 0 };
   let capturedActivateInput: unknown;
+  let capturedImportedActivateInput: unknown;
 
   const deps: ActivateCircleDependencies = {
     requireUser: async () => {
@@ -83,10 +95,33 @@ function buildDeps(overrides: Partial<ActivateCircleDependencies> = {}) {
         rounds: [],
       };
     },
+    activateImportedCircle: async (input) => {
+      calls.activateImportedCircle += 1;
+      capturedImportedActivateInput = input;
+      return {
+        circle: {
+          id: input.circleId,
+          status: "ACTIVE" as const,
+          activatedAt: new Date().toISOString(),
+          importedAt: new Date().toISOString(),
+          importedById: "owner-1",
+        },
+        memberCount: 3,
+        roundCount: 3,
+        obligationCount: 9,
+        historicalCompletedRoundCount: 1,
+        rounds: [],
+      };
+    },
     ...overrides,
   };
 
-  return { deps, calls, getCapturedActivateInput: () => capturedActivateInput };
+  return {
+    deps,
+    calls,
+    getCapturedActivateInput: () => capturedActivateInput,
+    getCapturedImportedActivateInput: () => capturedImportedActivateInput,
+  };
 }
 
 // L. unauthenticated activation denied
@@ -145,7 +180,9 @@ test("a different (still matching) review/cohort produces a different fingerprin
       { id: "m3", displayName: "C", memberCode: "CODE3000000000C", payoutOrder: 3 },
     ],
   };
-  const threeManFingerprint = "m1:1|m2:2|m3:3";
+  // Same pre-existing-fixture-bug class as VALID_FINGERPRINT above: derive
+  // from the real function/review, never a hand-typed literal.
+  const threeManFingerprint = computeActivationReviewFingerprint(threeManReview);
 
   const { deps, getCapturedActivateInput } = buildDeps({
     getDraftCircleActivationReview: async () => threeManReview,
@@ -220,6 +257,22 @@ test("P2. an eligibility error surfaces its own safe message", async () => {
 
   const outcome = await runActivateCircleAction(formDataFor(), deps);
   assert.equal(!outcome.ok && outcome.state.formError, "At least two active members are required to activate a circle.");
+});
+
+// 9D.1: the narrowest guard blocking IMPORTED activation until 9E exists
+// surfaces through this same, already-generic eligibility-error mapping --
+// no special-casing needed in this action, exactly like every other
+// CircleActivationEligibilityError message (P2 above).
+test("P2.1. an IMPORTED circle's activation-not-ready guard surfaces its exact, presentable message", async () => {
+  const { IMPORTED_ACTIVATION_NOT_READY_MESSAGE } = await import("@/src/services/circle.service");
+  const { deps } = buildDeps({
+    activateCircle: async () => {
+      throw new CircleActivationEligibilityError(IMPORTED_ACTIVATION_NOT_READY_MESSAGE);
+    },
+  });
+
+  const outcome = await runActivateCircleAction(formDataFor(), deps);
+  assert.equal(!outcome.ok && outcome.state.formError, IMPORTED_ACTIVATION_NOT_READY_MESSAGE);
 });
 
 test("P3. an integrity error maps to a safe generic message, not the raw internal error", async () => {

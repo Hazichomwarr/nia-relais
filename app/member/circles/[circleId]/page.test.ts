@@ -52,8 +52,8 @@ test("every MemberPayouts* not-found/authorization/not-eligible failure collapse
 });
 
 test("the existing member dashboard is still rendered, unmodified, wrapping the new payout card as a child -- not replaced", () => {
-  assert.match(source, /<MemberDashboard dashboard=\{dashboard\}>/);
-  assert.match(source, /<MemberPayoutCard circleId=\{circleId\} payouts=\{payouts\} \/>/);
+  assert.match(source, /<MemberDashboard dashboard=\{dashboard\} dictionary=\{dictionary\} locale=\{locale\}>/);
+  assert.match(source, /<MemberPayoutCard circleId=\{circleId\} payouts=\{payouts\} dictionary=\{dictionary\} locale=\{locale\} \/>/);
 });
 
 test("the FULL getCircleMemberPayouts result is passed to MemberPayoutCard -- not a single pre-filtered round, and not the raw dashboard payload reused", () => {

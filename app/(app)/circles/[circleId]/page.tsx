@@ -62,10 +62,13 @@ import { MemberList } from "./member-list";
 import { PayoutDesk } from "./payout-desk";
 import { PayoutOrderForm } from "./payout-order-form";
 import { RoundLifecycleCard } from "./round-lifecycle-card";
+import { DraftCircleConfigurationForm } from "./draft-circle-configuration-form";
 
-export const metadata: Metadata = {
-  title: "Your circle · NIA",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const dictionary = getDictionary(await getLocale());
+
+  return { title: `${dictionary.susuWorkspace.circleWorkspace} · NIA` };
+}
 
 type DraftWorkspaceData = {
   readonly kind: "draft";
@@ -247,7 +250,7 @@ export default async function OwnerCirclePage({
             {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} dictionary={dictionary} locale={locale} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
             {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
-            {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
+            {section === "members" ? <CircleMemberReadList members={data.summary.members} dictionary={dictionary} /> : null}
             {section === "schedule" ? <div className="flex max-w-3xl flex-col gap-6"><CircleSchedule rounds={data.summary.rounds} dictionary={dictionary} locale={locale} /><RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} dictionary={dictionary} /></div> : null}
           </div>
         </div>
@@ -265,7 +268,7 @@ export default async function OwnerCirclePage({
             {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} dictionary={dictionary} locale={locale} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly dictionary={dictionary} locale={locale} /> : null}
             {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly dictionary={dictionary} locale={locale} /> : null}
-            {section === "members" ? <CircleMemberReadList members={data.summary.members} /> : null}
+            {section === "members" ? <CircleMemberReadList members={data.summary.members} dictionary={dictionary} /> : null}
             {section === "schedule" ? <CircleSchedule rounds={data.payouts.rounds} dictionary={dictionary} locale={locale} /> : null}
           </div>
         </div>
@@ -289,6 +292,7 @@ export default async function OwnerCirclePage({
                 <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{circle.name}</h1>
                 <p className="mt-4 max-w-xl leading-7 text-[#587066]">{dictionary.susu.setupContribution.replace("{amount}", `${circle.currency} ${circle.contributionAmount}`).replace("{frequency}", getFrequencyLabel(circle.frequency, locale))}</p>
                 <p className="mt-5 text-sm leading-6 text-[#587066]">{dictionary.susu.setupInstructions}</p>
+                <DraftCircleConfigurationForm circle={circle} dictionary={dictionary} locale={locale} />
               </section>
             </div>
           ) : null}

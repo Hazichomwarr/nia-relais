@@ -39,10 +39,10 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
         <Link
           href="/dashboard"
-          aria-label="NIA dashboard, powered by RELAIS"
+          aria-label={dictionary.common.niaDashboard}
           className="group flex shrink-0 items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]"
         >
-          <Image src="/images/nia-logo.png" alt="NIA logo" width={40} height={40} priority className="size-10" />
+          <Image src="/images/nia-logo.png" alt={dictionary.common.niaLogo} width={40} height={40} priority className="size-10" />
           <span className="flex flex-col leading-none">
             <span className="font-serif text-lg font-semibold tracking-[0.12em] text-[var(--nia-text)] transition-colors group-hover:text-[var(--nia-primary)]">
               NIA
@@ -55,7 +55,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
 
         <button
           type="button"
-          aria-label="Open navigation"
+          aria-label={dictionary.common.openNavigation}
           aria-expanded={menuOpen}
           aria-controls="mobile-primary-navigation"
           onClick={() => setMenuOpen((open) => !open)}
@@ -65,7 +65,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
         </button>
 
         <div className="hidden min-w-0 flex-1 items-center justify-end gap-x-5 sm:flex">
-          <nav aria-label="Primary navigation" className="flex items-center gap-1">
+          <nav aria-label={dictionary.common.primaryNavigation} className="flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -81,7 +81,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
               </Link>
             ))}
           </nav>
-          <LanguageSwitcher locale={locale} />
+          <LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} />
           <span className="max-w-[9rem] truncate text-sm text-[var(--nia-text-muted)]" title={`${dictionary.common.greeting}, ${userName}`}>
             {dictionary.common.greeting}, {userName}
           </span>
@@ -98,7 +98,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
 
       {menuOpen ? (
         <div id="mobile-primary-navigation" className="mx-auto mt-3 max-w-7xl border-t border-[var(--nia-border)] pt-3 sm:hidden">
-          <nav aria-label="Primary navigation" className="grid gap-1">
+          <nav aria-label={dictionary.common.primaryNavigation} className="grid gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -113,7 +113,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
           </nav>
           <div className="mt-3 flex items-center justify-between border-t border-[var(--nia-border)] pt-3">
             <span className="max-w-[12rem] truncate text-sm text-[var(--nia-text-muted)]">{dictionary.common.greeting}, {userName}</span>
-            <LanguageSwitcher locale={locale} compact />
+            <LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} compact />
             <form action={logoutAction}>
               <button type="submit" className="min-h-11 rounded-full border border-[var(--nia-border)] px-4 text-sm font-semibold text-[var(--nia-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nia-primary)]">{dictionary.common.signOut}</button>
             </form>

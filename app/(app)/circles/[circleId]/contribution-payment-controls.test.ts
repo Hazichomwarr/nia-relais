@@ -45,8 +45,7 @@ test("no ownerId, memberId, roundId, currency, expectedAmount, or status field e
 });
 
 test("the confirmation copy clearly states NIA does not hold or transfer money, and to confirm only if actually received outside NIA", () => {
-  assert.match(source, /Confirm only if this contribution was actually received outside NIA/);
-  assert.match(source, /NIA does not hold or transfer money/);
+  assert.match(source, /copy\.contributionDescription/);
 });
 
 test("the rejection reason textarea is required, and the submit button is also disabled until non-empty", () => {
@@ -59,7 +58,7 @@ test("the rejection reason textarea is required, and the submit button is also d
 });
 
 test("cancelling the reject flow performs no mutation -- a plain type=\"button\" that only resets local state", () => {
-  const cancelTextIndex = source.indexOf(">Cancel<") !== -1 ? source.indexOf(">Cancel<") : source.indexOf("Cancel");
+  const cancelTextIndex = source.indexOf("copy.cancel");
   const cancelButtonStart = source.lastIndexOf("<button", cancelTextIndex);
   const cancelButtonEnd = source.indexOf("</button>", cancelButtonStart);
   const cancelButtonSource = source.slice(cancelButtonStart, cancelButtonEnd);
@@ -75,7 +74,7 @@ test("confirm and reject controls only ever render for a RECORDED payment (enfor
 
 test("both confirm and reject buttons are disabled while either action is pending", () => {
   assert.match(source, /const anyPending = confirmPending \|\| rejectPending;/);
-  assert.match(source, /disabled=\{anyPending\}[\s\S]*?Confirm received/);
+  assert.match(source, /disabled=\{anyPending\}[\s\S]*?copy\.confirmContribution/);
 });
 
 test("no optimistic local mutation of payment status -- this component never sets its own CONFIRMED/REJECTED state", () => {

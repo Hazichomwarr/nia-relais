@@ -25,8 +25,10 @@ Use the shared `formatDate` helper with UTC semantics for date-only values. It r
 
 Money remains in the existing V1 currency-code-first display convention in this foundation ticket. Amount values and Decimal arithmetic are untouched. Frequency and status dictionaries are available for future screen migrations; do not create page-local translations.
 
-## Migration scope
+## Covered surfaces
 
-This foundation migrates landing, platform login, registration, SUSU member login, and the shared authenticated header. Dashboard, Personal Savings, SUSU workspaces, member workspace, and Trusted Person body content remain intentionally untranslated until their dedicated migrations.
+The EN/FR presentation layer covers public/auth routes, the authenticated platform shell and dashboard, Personal Savings, Trusted Person workflows, owner SUSU workspaces, and membership-scoped SUSU login/workspaces. Localization is presentation-only: it does not change authentication, authorization, financial calculations, lifecycle rules, persisted schema, or migration state.
+
+Canonical terminology includes: Dashboard / Tableau de bord; My savings / Mon épargne; Goal / Objectif; Savings / Épargne; Trusted person / Personne de confiance; Contribution / Cotisation; Payout / Versement; Recipient / Bénéficiaire; Round / Tour; Payout order / Ordre des versements; Circle ID / Identifiant du cercle; Member Code / Code membre; PIN / Code PIN.
 
 The landing image `public/images/nia-hero.png` is shared across locales and was not changed. If it contains embedded English text, that remains a known asset-level limitation for a future image-specific ticket.

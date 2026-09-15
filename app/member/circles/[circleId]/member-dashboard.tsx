@@ -1,4 +1,6 @@
 import type { MemberDashboardResult } from "@/src/services/circle-member-dashboard.service";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import type { Locale } from "@/src/i18n/config";
 
 import {
   formatCircleDate,
@@ -23,9 +25,13 @@ import {
 
 export function MemberDashboard({
   dashboard,
+  dictionary,
+  locale,
   children,
 }: {
   dashboard: MemberDashboardResult;
+  dictionary: Dictionary;
+  locale: Locale;
   // Additive slot only (7K.10): the richer recipient payout card
   // (member-payout-card.tsx, backed by getCircleMemberPayouts, 7K.8) is
   // composed in here by the page rather than this component reaching out
@@ -37,25 +43,38 @@ export function MemberDashboard({
   children?: React.ReactNode;
 }) {
   const roundHeading = selectRoundHeading(dashboard);
+  const copy = dictionary.memberWorkspace;
 
   return (
     <main className="min-h-screen bg-[#fbf7ef] px-5 py-10 text-[#173b32] sm:px-8">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
         <header>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">
-            SUSU circle member
+            {copy.eyebrow}
           </p>
           <h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">{dashboard.circle.name}</h1>
           <p className="mt-2 text-sm text-[#587066]">
-            Signed in as <span className="font-semibold text-[#173b32]">{dashboard.member.displayName}</span>
+            {copy.signedInAs} <span className="font-semibold text-[#173b32]">{dashboard.member.displayName}</span>
           </p>
         </header>
 
-        <CircleSummaryCard dashboard={dashboard} />
-        <CurrentRoundCard dashboard={dashboard} roundHeading={roundHeading} />
-        <MyContributionsCard dashboard={dashboard} />
-        <MyPayoutCard dashboard={dashboard} />
-        <RotationScheduleCard dashboard={dashboard} />
+        <CircleSummaryCard dashboard={dashboard} dictionary={dictionary} locale={locale} />
+        {dashboard.circle.originKind === "IMPORTED" ? (
+          <section className="rounded-2xl border border-[#dbe2d6] bg-[#eef1ea] p-5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex w-fit rounded-full bg-[#e3e8df] px-3 py-1 text-xs font-semibold text-[#4f6354]">
+                {copy.importedCircleContextTitle}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#4f6354]">
+              {copy.importedCircleContextDescription.replace("{count}", String(dashboard.circle.historicalCompletedRoundCount))}
+            </p>
+          </section>
+        ) : null}
+        <CurrentRoundCard dashboard={dashboard} roundHeading={roundHeading} dictionary={dictionary} locale={locale} />
+        <MyContributionsCard dashboard={dashboard} dictionary={dictionary} locale={locale} />
+        <MyPayoutCard dashboard={dashboard} dictionary={dictionary} locale={locale} />
+        <RotationScheduleCard dashboard={dashboard} dictionary={dictionary} locale={locale} />
         {children}
       </div>
     </main>
@@ -88,22 +107,22 @@ function Badge({ label, className }: { label: string; className: string }) {
   return <span className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${className}`}>{label}</span>;
 }
 
-function CircleSummaryCard({ dashboard }: { dashboard: MemberDashboardResult }) {
+function CircleSummaryCard({ dashboard, dictionary, locale }: { dashboard: MemberDashboardResult; dictionary: Dictionary; locale: Locale }) {
   const { circle } = dashboard;
+  const copy = dictionary.memberWorkspace;
 
   return (
-    <Card title="Circle terms">
+    <Card title={copy.circleTerms}>
       <DetailList>
         <DetailRow
-          label="Contribution"
-          value={`${formatCircleMoney(circle.contributionAmount, circle.currency)} · ${getFrequencyLabel(circle.frequency)}`}
+          label={copy.contribution}
+          value={`${formatCircleMoney(circle.contributionAmount, circle.currency)} · ${getFrequencyLabel(circle.frequency, locale)}`}
         />
-        <DetailRow label="Started" value={formatCircleDate(circle.startDate)} />
-        <DetailRow label="Status" value={<Badge {...getCircleStatusBadge(circle.status)} />} />
+        <DetailRow label={copy.started} value={formatCircleDate(circle.startDate, locale)} />
+        <DetailRow label={copy.status} value={<Badge label={circle.status === "ACTIVE" ? dictionary.susuFinancial.active : circle.status === "COMPLETED" ? dictionary.susuWorkspace.completed : circle.status} className={getCircleStatusBadge(circle.status).className} />} />
       </DetailList>
       <p className="mt-5 text-sm leading-6 text-[#587066]">
-        NIA tracks this circle&apos;s contributions and payouts as a shared ledger. It does not hold or
-        transfer money on anyone&apos;s behalf.
+        {copy.ledgerDescription}
       </p>
     </Card>
   );
@@ -121,17 +140,22 @@ function getCircleStatusBadge(status: string) {
 function CurrentRoundCard({
   dashboard,
   roundHeading,
+  dictionary,
+  locale,
 }: {
   dashboard: MemberDashboardResult;
   roundHeading: ReturnType<typeof selectRoundHeading>;
+  dictionary: Dictionary;
+  locale: Locale;
 }) {
+  const copy = dictionary.memberWorkspace;
   if (roundHeading.kind === "historical") {
     return (
-      <Card title="Rotation complete">
+      <Card title={copy.rotationComplete}>
         <p className="text-sm leading-6 text-[#587066]">
           {dashboard.circle.status === "COMPLETED"
-            ? "This circle has completed its full rotation. Your activity below reflects its final state."
-            : "This circle has been archived. Your activity below reflects its final state."}
+            ? copy.completedDescription
+            : copy.archivedDescription}
         </p>
       </Card>
     );
@@ -139,74 +163,97 @@ function CurrentRoundCard({
 
   if (roundHeading.kind === "none") {
     return (
-      <Card title="Rotation">
-        <p className="text-sm leading-6 text-[#587066]">There is no round to show yet.</p>
+      <Card title={copy.rotation}>
+        <p className="text-sm leading-6 text-[#587066]">{copy.noRound}</p>
       </Card>
     );
   }
 
   const { round } = roundHeading;
-  const statusBadge = getRoundStatusPresentation(round.status);
+  const statusBadge = getRoundStatusPresentation(round.status, round.closureBasis);
+  const statusLabel =
+    round.closureBasis === "IMPORTED_DECLARATION"
+      ? dictionary.susuFinancial.importedHistory
+      : round.status === "ACTIVE"
+        ? dictionary.susuFinancial.active
+        : round.status === "CLOSED"
+          ? dictionary.susuFinancial.closed
+          : dictionary.susuFinancial.upcoming;
+  const awaitingFirstLiveRound = dashboard.circle.originKind === "IMPORTED" && dashboard.currentRound === null;
 
   return (
-    <Card title={roundHeading.kind === "current" ? "Current round" : "Next round"}>
+    <Card title={roundHeading.kind === "current" ? copy.currentRound : copy.nextRound}>
       <div className="flex flex-wrap items-center gap-3">
-        <Badge {...statusBadge} />
-        <span className="text-sm text-[#587066]">Round {round.roundNumber}</span>
+        <Badge label={statusLabel} className={statusBadge.className} />
+        <span className="text-sm text-[#587066]">{copy.round} {round.roundNumber}</span>
       </div>
       <DetailList>
-        <DetailRow label="Due" value={formatCircleDate(round.dueDate)} />
-        <DetailRow label="Recipient" value={round.recipientDisplayName} />
+        <DetailRow label={copy.due} value={formatCircleDate(round.dueDate, locale)} />
+        <DetailRow label={copy.recipient} value={round.recipientDisplayName} />
       </DetailList>
       {dashboard.roundProgress ? (
         <p className="mt-4 text-sm text-[#587066]">
-          {dashboard.roundProgress.confirmedMemberCount} of {dashboard.roundProgress.totalMemberCount} members have
-          confirmed their contribution for this round.
+          {copy.progress.replace("{confirmed}", String(dashboard.roundProgress.confirmedMemberCount)).replace("{total}", String(dashboard.roundProgress.totalMemberCount))}
         </p>
+      ) : null}
+      {awaitingFirstLiveRound ? (
+        <p className="mt-4 text-xs leading-5 text-[#7b8179]">{copy.awaitingFirstLiveRound}</p>
       ) : null}
     </Card>
   );
 }
 
-function MyContributionsCard({ dashboard }: { dashboard: MemberDashboardResult }) {
+function MyContributionsCard({ dashboard, dictionary, locale }: { dashboard: MemberDashboardResult; dictionary: Dictionary; locale: Locale }) {
   const { summary, obligations, circle } = dashboard;
+  const copy = dictionary.memberWorkspace;
 
   return (
-    <Card title="My contributions">
+    <Card title={copy.myContributions}>
       <DetailList>
         <DetailRow
-          label="Confirmed so far"
+          label={copy.confirmedSoFar}
           value={formatCircleMoney(summary.confirmedContributionTotal, circle.currency)}
         />
         <DetailRow
-          label="Rounds fulfilled"
+          label={copy.roundsFulfilled}
           value={`${summary.fulfilledObligationCount} of ${summary.totalObligationCount}`}
         />
       </DetailList>
 
       {obligations.length === 0 ? (
-        <p className="mt-5 text-sm text-[#587066]">You have no contribution rounds yet.</p>
+        <p className="mt-5 text-sm text-[#587066]">{copy.noContributions}</p>
       ) : (
         <ul className="mt-5 divide-y divide-[#efe6d8]">
           {obligations.map((obligation) => {
             const status = getObligationStatusPresentation(obligation);
+            const isImported = obligation.fulfillmentBasis === "IMPORTED_DECLARATION";
+            const label = isImported
+              ? dictionary.susuFinancial.importedHistory
+              : obligation.fulfilled
+                ? dictionary.susuFinancial.fulfilled
+                : dictionary.susuFinancial.outstanding;
             return (
               <li key={obligation.roundNumber} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-[#173b32]">Round {obligation.roundNumber}</p>
-                  <p className="text-xs text-[#7b8179]">Due {formatCircleDate(obligation.dueDate)}</p>
+                  <p className="text-sm font-semibold text-[#173b32]">{copy.round} {obligation.roundNumber}</p>
+                  <p className="text-xs text-[#7b8179]">{copy.due} {formatCircleDate(obligation.dueDate, locale)}</p>
+                  {isImported ? (
+                    <p className="mt-1 text-xs leading-5 text-[#7b8179]">{dictionary.susuFinancial.importedHistoryDescription}</p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                  <span className="text-sm text-[#587066]">
-                    {formatCircleMoney(obligation.confirmedAmount, circle.currency)} confirmed of{" "}
-                    {formatCircleMoney(obligation.expectedAmount, circle.currency)}
-                  </span>
-                  {!obligation.fulfilled ? (
-                    <span className="text-sm text-[#8a5b27]">
-                      {formatCircleMoney(obligation.outstandingAmount, circle.currency)} outstanding
+                  {!isImported ? (
+                    <span className="text-sm text-[#587066]">
+                      {formatCircleMoney(obligation.confirmedAmount, circle.currency)} {copy.confirmedOf}{" "}
+                      {formatCircleMoney(obligation.expectedAmount, circle.currency)}
                     </span>
                   ) : null}
-                  <Badge {...status} />
+                  {!isImported && !obligation.fulfilled ? (
+                    <span className="text-sm text-[#8a5b27]">
+                      {formatCircleMoney(obligation.outstandingAmount, circle.currency)} {copy.outstanding}
+                    </span>
+                  ) : null}
+                  <Badge label={label} className={status.className} />
                 </div>
               </li>
             );
@@ -217,37 +264,57 @@ function MyContributionsCard({ dashboard }: { dashboard: MemberDashboardResult }
   );
 }
 
-function MyPayoutCard({ dashboard }: { dashboard: MemberDashboardResult }) {
+function MyPayoutCard({ dashboard, dictionary, locale }: { dashboard: MemberDashboardResult; dictionary: Dictionary; locale: Locale }) {
   const { payout, circle } = dashboard;
   const presentation = getPayoutPresentation(payout);
+  const copy = dictionary.memberWorkspace;
+  const isImported = payout !== null && payout.confirmationBasis === "IMPORTED_DECLARATION";
+  const payoutCopy = isImported
+    ? { label: dictionary.susuFinancial.importedHistory, description: dictionary.susuFinancial.importedHistoryDescription }
+    : payout === null
+      ? { label: copy.payoutNotRecorded, description: copy.payoutNotRecordedDescription }
+      : payout.status === "RECORDED"
+        ? { label: copy.payoutAwaitingDecision, description: copy.payoutAwaitingDecisionDescription }
+        : payout.status === "CONFIRMED"
+          ? { label: copy.payoutConfirmed, description: copy.payoutConfirmedDescription }
+          : { label: copy.payoutDisputed, description: copy.payoutDisputedDescription };
 
   return (
-    <Card title="My payout">
+    <Card title={copy.myPayout}>
       <div className="flex flex-wrap items-center gap-3">
-        <Badge label={presentation.label} className={presentation.className} />
-        {payout ? <span className="text-sm text-[#587066]">Round {payout.roundNumber}</span> : null}
+        <Badge label={payoutCopy.label} className={presentation.className} />
+        {payout ? <span className="text-sm text-[#587066]">{copy.round} {payout.roundNumber}</span> : null}
       </div>
-      <p className="mt-3 text-sm leading-6 text-[#587066]">{presentation.description}</p>
+      <p className="mt-3 text-sm leading-6 text-[#587066]">{payoutCopy.description}</p>
 
       {payout ? (
         <DetailList>
-          <DetailRow label="Amount" value={formatCircleMoney(payout.amount, circle.currency)} />
-          <DetailRow label="Recorded" value={formatCircleDateTime(payout.recordedAt)} />
-          {payout.confirmedAt ? <DetailRow label="Confirmed" value={formatCircleDateTime(payout.confirmedAt)} /> : null}
-          {payout.disputedAt ? <DetailRow label="Disputed" value={formatCircleDateTime(payout.disputedAt)} /> : null}
+          <DetailRow label={copy.amount} value={formatCircleMoney(payout.amount, circle.currency)} />
+          {!isImported ? <DetailRow label={copy.recorded} value={formatCircleDateTime(payout.recordedAt, locale)} /> : null}
+          {!isImported && payout.confirmedAt ? <DetailRow label={copy.confirmed} value={formatCircleDateTime(payout.confirmedAt, locale)} /> : null}
+          {payout.disputedAt ? <DetailRow label={copy.disputed} value={formatCircleDateTime(payout.disputedAt, locale)} /> : null}
         </DetailList>
       ) : null}
     </Card>
   );
 }
 
-function RotationScheduleCard({ dashboard }: { dashboard: MemberDashboardResult }) {
+function RotationScheduleCard({ dashboard, dictionary, locale }: { dashboard: MemberDashboardResult; dictionary: Dictionary; locale: Locale }) {
+  const copy = dictionary.memberWorkspace;
   return (
-    <Card title="Full rotation schedule">
+    <Card title={copy.fullSchedule}>
       <ol className="divide-y divide-[#efe6d8]">
         {dashboard.roundSchedule.map((round) => {
           const isOwnRound = isMemberRecipientRound(round, dashboard.member.payoutOrder);
-          const status = getRoundStatusPresentation(round.status);
+          const status = getRoundStatusPresentation(round.status, round.closureBasis);
+          const label =
+            round.closureBasis === "IMPORTED_DECLARATION"
+              ? dictionary.susuFinancial.importedHistory
+              : round.status === "ACTIVE"
+                ? dictionary.susuFinancial.active
+                : round.status === "CLOSED"
+                  ? dictionary.susuFinancial.closed
+                  : dictionary.susuFinancial.upcoming;
 
           return (
             <li
@@ -256,14 +323,14 @@ function RotationScheduleCard({ dashboard }: { dashboard: MemberDashboardResult 
             >
               <div>
                 <p className="text-sm font-semibold text-[#173b32]">
-                  Round {round.roundNumber}
-                  {isOwnRound ? <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-[#a95f45]">Your round</span> : null}
+                  {copy.round} {round.roundNumber}
+                  {isOwnRound ? <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-[#a95f45]">{copy.yourRound}</span> : null}
                 </p>
                 <p className="text-xs text-[#7b8179]">
-                  Due {formatCircleDate(round.dueDate)} · Recipient: {round.recipientDisplayName}
+                  {copy.due} {formatCircleDate(round.dueDate, locale)} · {copy.recipient}: {round.recipientDisplayName}
                 </p>
               </div>
-              <Badge {...status} />
+              <Badge label={label} className={status.className} />
             </li>
           );
         })}

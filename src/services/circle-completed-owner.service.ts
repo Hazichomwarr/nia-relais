@@ -56,12 +56,18 @@ export type CompletedCircleOwnerCircleResult = {
   readonly startDate: string;
   readonly status: "COMPLETED";
   readonly completedAt: string;
+  // 9G (ticket §12): imported history remains imported history after
+  // completion -- these are frozen, immutable facts, never rewritten by
+  // completeCircle.
+  readonly originKind: "NEW" | "IMPORTED";
+  readonly historicalCompletedRoundCount: number;
 };
 
 export type CompletedCircleOwnerMemberResult = {
   readonly id: string;
   readonly displayName: string;
   readonly memberCode: string;
+  readonly phone: string | null;
   readonly payoutOrder: number;
 };
 
@@ -102,11 +108,14 @@ export async function getCompletedCircleSummaryForOwner(input: {
       startDate: circle.startDate.toISOString().slice(0, 10),
       status: "COMPLETED",
       completedAt: circle.completedAt.toISOString(),
+      originKind: circle.originKind,
+      historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
     },
     members: members.map((member) => ({
       id: member.id,
       displayName: member.displayName,
       memberCode: member.memberCode,
+      phone: member.phone,
       // Every member who was ever ACTIVE at completion time has a
       // permanent, non-null payoutOrder frozen at activation (identical
       // fallback rationale to getActiveCircleSummaryForOwner's own).

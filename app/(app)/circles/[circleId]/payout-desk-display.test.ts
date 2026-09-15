@@ -15,6 +15,7 @@ function payout(overrides: Partial<OwnerPayoutsPayoutResult> = {}): OwnerPayouts
     amount: "75.00",
     currency: "USD",
     status: "RECORDED",
+    confirmationBasis: "MEMBER_CONFIRMED",
     clientOperationId: "op-1",
     recordedAt: "2026-01-01T00:00:00.000Z",
     recordedById: "owner-1",
@@ -63,6 +64,34 @@ test("every status presentation carries a distinct badge class -- never the same
     ),
   );
   assert.equal(classes.size, 4);
+});
+
+// --- 9G: imported history presentation (ticket §6) ---
+
+test("a CONFIRMED payout with confirmationBasis IMPORTED_DECLARATION is presented as imported history, never as a recipient confirmation", () => {
+  const presentation = getPayoutStatusPresentation("CONFIRMED", "IMPORTED_DECLARATION");
+  assert.equal(presentation.label, "Imported history");
+  assert.doesNotMatch(presentation.description, /recipient confirmed/i);
+  assert.doesNotMatch(presentation.description, /NIA confirmed/i);
+});
+
+test("the imported badge class is distinct from the normal CONFIRMED (recipient-confirmed) class", () => {
+  const imported = getPayoutStatusPresentation("CONFIRMED", "IMPORTED_DECLARATION");
+  const normal = getPayoutStatusPresentation("CONFIRMED", "MEMBER_CONFIRMED");
+  assert.notEqual(imported.className, normal.className);
+});
+
+test("a CONFIRMED payout with confirmationBasis MEMBER_CONFIRMED (or omitted) keeps the normal presentation unchanged", () => {
+  const withBasis = getPayoutStatusPresentation("CONFIRMED", "MEMBER_CONFIRMED");
+  const withoutBasis = getPayoutStatusPresentation("CONFIRMED");
+  assert.equal(withBasis.label, "Confirmed");
+  assert.equal(withoutBasis.label, "Confirmed");
+});
+
+test("RECORDED/DISPUTED/null are never reinterpreted as imported history regardless of confirmationBasis (only a CONFIRMED payout can legitimately be IMPORTED_DECLARATION)", () => {
+  assert.equal(getPayoutStatusPresentation("RECORDED", "IMPORTED_DECLARATION").label, "Recorded");
+  assert.equal(getPayoutStatusPresentation("DISPUTED", "IMPORTED_DECLARATION").label, "Disputed");
+  assert.equal(getPayoutStatusPresentation(null, "IMPORTED_DECLARATION").label, "Unrecorded");
 });
 
 // --- canRecordFreshPayout ---

@@ -48,6 +48,7 @@ function buildDeps(overrides: Partial<AddDraftCircleMemberDependencies> = {}) {
         circleId: input.circleId,
         displayName: input.input.displayName,
         email: input.input.email ?? null,
+        phone: input.input.phone ?? null,
         memberCode: "ABCDEF0123456789",
         payoutOrder: null,
         status: "ACTIVE",
@@ -94,7 +95,7 @@ test("forged ownerId/status/userId/provenance form fields never reach the servic
 
   const captured = getCapturedInput() as { ownerId: string; circleId: string; input: Record<string, unknown> };
   assert.equal(captured.ownerId, "owner-1");
-  assert.deepEqual(Object.keys(captured.input).sort(), ["displayName", "email", "pin"]);
+  assert.deepEqual(Object.keys(captured.input).sort(), ["displayName", "email", "phone", "pin"]);
 });
 
 test("ownerId passed to the service is exactly requireUser's id, never from the form", async () => {
@@ -120,6 +121,24 @@ test("an invalid email is rejected with a field error", async () => {
   const result = await runAddDraftCircleMemberAction(validFormData({ email: "not-an-email" }), deps);
 
   assert.ok(result.fieldErrors?.email);
+  assert.equal(calls.addDraftCircleMember, 0);
+});
+
+test("a phone number is passed through unchanged, while blank phone input becomes undefined", async () => {
+  const withPhone = buildDeps();
+  await runAddDraftCircleMemberAction(validFormData({ phone: "+226 70 00 00 00" }), withPhone.deps);
+  assert.equal((withPhone.getCapturedInput() as { input: { phone?: string } }).input.phone, "+226 70 00 00 00");
+
+  const blankPhone = buildDeps();
+  await runAddDraftCircleMemberAction(validFormData({ phone: "   " }), blankPhone.deps);
+  assert.equal((blankPhone.getCapturedInput() as { input: { phone?: string } }).input.phone, undefined);
+});
+
+test("an invalid phone number is rejected with a field error", async () => {
+  const { deps, calls } = buildDeps();
+  const result = await runAddDraftCircleMemberAction(validFormData({ phone: "call me" }), deps);
+
+  assert.ok(result.fieldErrors?.phone);
   assert.equal(calls.addDraftCircleMember, 0);
 });
 

@@ -25,13 +25,21 @@ test("the form uses the existing action and its initial state, not a new action 
   assert.match(formSource, /from ["']@\/src\/actions\/circle\.state["']/);
 });
 
-test("the form submits exactly the five expected fields, nothing else", () => {
+// 9D.1: the form now also carries the setup-mode choice and its two
+// IMPORTED-only fields (historicalCompletedRoundCount,
+// historicalTermsConfirmed, both conditionally rendered only when
+// originKind === "IMPORTED", but still present as `name="..."` attributes
+// in the source regardless of which branch renders at runtime).
+test("the form submits exactly the five NEW-circle fields plus the setup-mode and IMPORTED-only fields, nothing else", () => {
   const nameAttributes = [...formSource.matchAll(/name="([a-zA-Z]+)"/g)].map((match) => match[1]);
   assert.deepEqual(nameAttributes.sort(), [
     "contributionAmount",
     "currency",
     "frequency",
+    "historicalCompletedRoundCount",
+    "historicalTermsConfirmed",
     "name",
+    "originKind",
     "startDate",
   ]);
 });

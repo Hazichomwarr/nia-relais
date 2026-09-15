@@ -15,6 +15,12 @@ const lifecycleCircleSelect = {
   id: true,
   ownerId: true,
   status: true,
+  // 9F: originKind/historicalCompletedRoundCount are the sole authority
+  // for deriving the first NIA-managed round (src/domain/round-lifecycle.ts's
+  // firstLiveRoundNumber) -- both frozen, immutable, persisted circle facts,
+  // never re-derived from round statuses or elapsed time.
+  originKind: true,
+  historicalCompletedRoundCount: true,
 } satisfies Prisma.SavingsCircleSelect;
 
 export type LifecycleCircleRecord = Prisma.SavingsCircleGetPayload<{
@@ -35,6 +41,10 @@ const lifecycleRoundSelect = {
   recipientId: true,
   dueDate: true,
   status: true,
+  // 9F: needed so the generalized fresh-start precondition can verify a
+  // historical round's CLOSED status is genuinely IMPORTED_DECLARATION
+  // (never merely trusting status alone -- ticket 9F §5).
+  closureBasis: true,
   activatedAt: true,
   activatedById: true,
   closedAt: true,

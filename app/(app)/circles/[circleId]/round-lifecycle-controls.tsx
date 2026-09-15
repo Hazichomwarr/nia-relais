@@ -22,9 +22,24 @@ import { getAdvanceCtaLabel } from "./round-lifecycle-display";
 // page's server-rendered lifecycle data -- neither form ever sets a
 // local optimistic phase/round/status of its own.
 
-export function StartFirstRoundForm({ circleId, dictionary }: { circleId: string; dictionary: Dictionary }) {
+export function StartFirstRoundForm({
+  circleId,
+  dictionary,
+  variant = "new",
+}: {
+  circleId: string;
+  dictionary: Dictionary;
+  // 9F: the same activateFirstRoundAction/activateFirstRound now targets
+  // round 1 for a NEW circle or round K+1 for an IMPORTED circle
+  // (src/domain/round-lifecycle.ts's firstLiveRoundNumber) -- this prop
+  // only selects truthful presentation copy; it changes no submitted
+  // field and no eligibility. "imported" must never imply the historical
+  // rounds themselves were managed by NIA (ticket 9F §12).
+  variant?: "new" | "imported";
+}) {
   const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(activateFirstRoundAction, initialActivateFirstRoundState);
+  const isImported = variant === "imported";
 
   return (
     <form action={formAction} className="mt-4">
@@ -32,13 +47,13 @@ export function StartFirstRoundForm({ circleId, dictionary }: { circleId: string
 
       {state.status === "success" && state.message ? (
         <p role="status" aria-live="polite" className="mb-2 text-sm font-medium text-[#35634f]">
-          {state.message}
+          {copy.lifecycleSuccess}
         </p>
       ) : null}
 
       {state.formError ? (
         <p role="alert" className="mb-2 text-sm font-medium text-[#b3261e]">
-          {state.formError}
+          {copy.lifecycleError}
         </p>
       ) : null}
 
@@ -47,7 +62,7 @@ export function StartFirstRoundForm({ circleId, dictionary }: { circleId: string
         disabled={pending}
         className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#35634f] px-5 text-sm font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35634f] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {pending ? copy.startingRound : copy.startFirstRound}
+        {isImported ? (pending ? copy.startingNiaTracking : copy.startNiaTracking) : pending ? copy.startingRound : copy.startFirstRound}
       </button>
     </form>
   );
@@ -70,7 +85,7 @@ export function AdvanceRoundForm({
 }) {
   const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(advanceRoundAction, initialAdvanceRoundState);
-  const ctaLabel = getAdvanceCtaLabel(transitionKind, currentRoundNumber, nextRoundNumber);
+  void getAdvanceCtaLabel(transitionKind, currentRoundNumber, nextRoundNumber);
   const isFinalRound = transitionKind === "CLOSE_FINAL_ROUND";
 
   return (
@@ -86,13 +101,13 @@ export function AdvanceRoundForm({
 
       {state.status === "success" && state.message ? (
         <p role="status" aria-live="polite" className="mb-2 text-sm font-medium text-[#35634f]">
-          {state.message}
+          {copy.lifecycleSuccess}
         </p>
       ) : null}
 
       {state.formError ? (
         <p role="alert" className="mb-2 text-sm font-medium text-[#b3261e]">
-          {state.formError}
+          {copy.lifecycleError}
         </p>
       ) : null}
 

@@ -122,6 +122,24 @@ export function AddMemberForm({ circleId, dictionary }: { circleId: string; dict
       </div>
 
       <div>
+        <label htmlFor="phone" className="block text-sm font-semibold text-[#173b32]">
+          {copy.phoneNumber} <span className="font-normal text-[#7b8179]">({copy.optional})</span>
+        </label>
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          maxLength={32}
+          aria-invalid={Boolean(state.fieldErrors?.phone)}
+          aria-describedby="phone-error"
+          className={inputClassName}
+        />
+        <FieldError id="phone-error" errors={state.fieldErrors?.phone} />
+      </div>
+
+      <div>
         <label htmlFor="email" className="block text-sm font-semibold text-[#173b32]">
           {dictionary.common.email} <span className="font-normal text-[#7b8179]">({copy.optional})</span>
         </label>

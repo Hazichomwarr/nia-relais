@@ -4,13 +4,17 @@ import test from "node:test";
 import { Prisma } from "@prisma/client";
 
 import {
+  assertImportedRoundClosureCoherence,
   assertRotationSequenceIntegrity,
   assertRoundLifecycleStateIntegrity,
   assessContributionClosureReadiness,
   assessPayoutClosureReadiness,
+  firstLiveRoundNumber,
   RoundLifecycleFinancialIntegrityError,
   RoundLifecycleStateIntegrityError,
   type ContributionClosureObligation,
+  type ImportedRoundClosureObligation,
+  type ImportedRoundClosurePayout,
   type PayoutClosurePayout,
   type RoundLifecycleRoundRecord,
 } from "./round-lifecycle";
@@ -50,6 +54,23 @@ function closed(roundNumber: number): RoundLifecycleRoundRecord {
     closedById: "owner-1",
   });
 }
+
+// -------------------------------------------------------------------
+// firstLiveRoundNumber (9F, docs/product/susu-existing-import-contract-freeze.md §6)
+// -------------------------------------------------------------------
+
+test("NEW (K=0) always derives round 1", () => {
+  assert.equal(firstLiveRoundNumber("NEW", 0), 1);
+});
+
+test("IMPORTED derives K+1", () => {
+  assert.equal(firstLiveRoundNumber("IMPORTED", 1), 2);
+  assert.equal(firstLiveRoundNumber("IMPORTED", 4), 5);
+});
+
+test("IMPORTED K=N-1 derives the final round number", () => {
+  assert.equal(firstLiveRoundNumber("IMPORTED", 4), 5); // e.g. N=5, K=4 -> round 5
+});
 
 // -------------------------------------------------------------------
 // assertRotationSequenceIntegrity
@@ -102,6 +123,23 @@ test("order in the input array does not matter -- sorted internally by roundNumb
   );
 });
 
+// D. Imported prefix (9E, docs/product/susu-existing-import-contract-freeze.md
+// §5/§9): a CLOSED prefix immediately followed by an UPCOMING suffix, zero
+// ACTIVE rounds -- exactly what activateImportedCircle produces for rounds
+// 1..K/K+1..N. Genuinely new since 9E; see round-lifecycle.ts's own
+// updated doc comment for why this is legitimate and not corruption.
+test("D. imported prefix: CLOSED prefix immediately followed by UPCOMING suffix, zero ACTIVE rounds, is valid", () => {
+  assert.doesNotThrow(() => assertRoundLifecycleStateIntegrity([closed(1), closed(2), upcoming(3), upcoming(4)]));
+});
+
+test("D (K=1 of N=2): a single CLOSED round followed by a single UPCOMING round is valid", () => {
+  assert.doesNotThrow(() => assertRoundLifecycleStateIntegrity([closed(1), upcoming(2)]));
+});
+
+test("D (K=N-1): every round but the last CLOSED, exactly one UPCOMING, is valid", () => {
+  assert.doesNotThrow(() => assertRoundLifecycleStateIntegrity([closed(1), closed(2), closed(3), upcoming(4)]));
+});
+
 // -------------------------------------------------------------------
 // assertRoundLifecycleStateIntegrity -- rejected shapes
 // -------------------------------------------------------------------
@@ -130,13 +168,6 @@ test("rejects a CLOSED round appearing after an UPCOMING round", () => {
 test("rejects an ACTIVE round with an earlier UPCOMING round (out-of-sequence activation)", () => {
   assert.throws(
     () => assertRoundLifecycleStateIntegrity([upcoming(1), active(2)]),
-    RoundLifecycleStateIntegrityError,
-  );
-});
-
-test("rejects a mid-rotation mix of CLOSED and UPCOMING with zero ACTIVE rounds", () => {
-  assert.throws(
-    () => assertRoundLifecycleStateIntegrity([closed(1), closed(2), upcoming(3), upcoming(4)]),
     RoundLifecycleStateIntegrityError,
   );
 });
@@ -375,6 +406,152 @@ test("rejects a CONFIRMED payout with an empty recordedById", () => {
 test("rejects a payout with an unrecognized status", () => {
   assert.throws(
     () => assessPayoutClosureReadiness(confirmedPayout({ status: "SOMETHING_ELSE" }), RECIPIENT_ID, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+// ---------------------------------------------------------------------
+// assertImportedRoundClosureCoherence (9H P0 fix: circle-completion.service
+// .ts previously ran every round -- imported and NIA-managed alike --
+// through assessPayoutClosureReadiness's confirmedByMemberId===recipientId
+// check, which an imported payout (confirmedByMemberId always null, by
+// design) can never satisfy. completeCircle could therefore never succeed
+// for ANY circle with an imported prefix. This predicate is the dedicated,
+// basis-aware replacement for exactly that one round shape.)
+// ---------------------------------------------------------------------
+
+function importedObligation(
+  overrides: Partial<ImportedRoundClosureObligation> = {},
+): ImportedRoundClosureObligation {
+  return {
+    status: "FULFILLED",
+    fulfillmentBasis: "IMPORTED_DECLARATION",
+    fulfilledAt: now,
+    confirmedAmount: d("0"),
+    ...overrides,
+  };
+}
+
+function importedPayout(overrides: Partial<ImportedRoundClosurePayout> = {}): ImportedRoundClosurePayout {
+  return {
+    status: "CONFIRMED",
+    confirmationBasis: "IMPORTED_DECLARATION",
+    currency: EXPECTED.currency,
+    amount: EXPECTED.amount,
+    confirmedByMemberId: null,
+    disputedAt: null,
+    disputedByMemberId: null,
+    disputeReason: null,
+    ...overrides,
+  };
+}
+
+test("assertImportedRoundClosureCoherence: accepts the exact frozen 9E reconstruction shape", () => {
+  assert.doesNotThrow(() =>
+    assertImportedRoundClosureCoherence([importedObligation(), importedObligation()], importedPayout(), EXPECTED),
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects an empty obligation set", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([], importedPayout(), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects an obligation that is not FULFILLED", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation({ status: "OPEN" })], importedPayout(), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects an obligation whose fulfillmentBasis is NIA_CONFIRMED_LEDGER (mixed-basis corruption)", () => {
+  assert.throws(
+    () =>
+      assertImportedRoundClosureCoherence(
+        [importedObligation({ fulfillmentBasis: "NIA_CONFIRMED_LEDGER" })],
+        importedPayout(),
+        EXPECTED,
+      ),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects an obligation missing fulfilledAt", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation({ fulfilledAt: null })], importedPayout(), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a non-zero confirmed-ledger amount (a fabricated ContributionPayment would be corruption, never silently accepted)", () => {
+  assert.throws(
+    () =>
+      assertImportedRoundClosureCoherence(
+        [importedObligation({ confirmedAmount: d("50.00") })],
+        importedPayout(),
+        EXPECTED,
+      ),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a missing payout", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation()], null, EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a payout whose confirmationBasis is MEMBER_CONFIRMED (mixed-basis corruption)", () => {
+  assert.throws(
+    () =>
+      assertImportedRoundClosureCoherence(
+        [importedObligation()],
+        importedPayout({ confirmationBasis: "MEMBER_CONFIRMED" }),
+        EXPECTED,
+      ),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a payout with a fabricated member confirmer", () => {
+  assert.throws(
+    () =>
+      assertImportedRoundClosureCoherence(
+        [importedObligation()],
+        importedPayout({ confirmedByMemberId: "someone" }),
+        EXPECTED,
+      ),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a payout carrying dispute provenance", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation()], importedPayout({ disputedAt: now }), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects an amount drift", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation()], importedPayout({ amount: d("1.00") }), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a currency drift", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation()], importedPayout({ currency: "EUR" }), EXPECTED),
+    RoundLifecycleFinancialIntegrityError,
+  );
+});
+
+test("assertImportedRoundClosureCoherence: rejects a non-CONFIRMED payout status (e.g. a stray RECORDED row)", () => {
+  assert.throws(
+    () => assertImportedRoundClosureCoherence([importedObligation()], importedPayout({ status: "RECORDED" }), EXPECTED),
     RoundLifecycleFinancialIntegrityError,
   );
 });

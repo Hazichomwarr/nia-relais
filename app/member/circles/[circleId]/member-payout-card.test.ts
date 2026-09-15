@@ -42,13 +42,18 @@ test("round information (round number, due date, expected payout) is shown -- ne
 });
 
 test("payout status is derived via getMemberPayoutStatusPresentation from payout.status or null -- never guessed from round.status", () => {
-  assert.match(source, /getMemberPayoutStatusPresentation\(payout \? payout\.status : null\)/);
+  // 9G: the call site gained a second argument (payout?.confirmationBasis) --
+  // the presentation authority for imported history -- so this now matches
+  // loosely on the first argument only, still asserting it is never any
+  // round.status field.
+  assert.match(source, /getMemberPayoutStatusPresentation\(payout \? payout\.status : null/);
+  assert.doesNotMatch(source, /getMemberPayoutStatusPresentation\([^)]*round\.status/i);
 });
 
 test("decision controls are rendered only when canDecidePayout allows it, and take no round.status argument", () => {
   assert.match(source, /const canDecide = canDecidePayout\(payout\);/);
   assert.match(source, /\{canDecide && payout \? \(/);
-  assert.match(source, /<MemberPayoutControls circleId=\{circleId\} payoutId=\{payout\.id\} \/>/);
+  assert.match(source, /<MemberPayoutControls circleId=\{circleId\} payoutId=\{payout\.id\} dictionary=\{dictionary\} \/>/);
 });
 
 test("a recorded payout's disputeReason is rendered exactly, when present", () => {
@@ -94,8 +99,7 @@ test("no owner-facing payout read model is imported into member UI", () => {
 });
 
 test("copy positions NIA as a recorder of external payouts, not a money sender/holder/mover", () => {
-  assert.match(source, /NIA records payouts that happen\s+outside the app/);
-  assert.match(source, /does not send, hold, or\s+transfer money/i);
+  assert.match(source, /copy\.payoutExternalDescription/);
   for (const forbidden of [/send payout/i, /pay member/i, /transfer funds/i, /release money/i, /process payment/i, /receive money in nia/i, /funds sent/i, /transfer complete/i, /money released/i]) {
     assert.doesNotMatch(source, forbidden);
   }

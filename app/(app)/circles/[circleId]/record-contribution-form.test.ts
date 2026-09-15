@@ -45,7 +45,7 @@ test("the amount field is a hidden, read-only input fixed to the obligation's ow
 
 test("the exact amount is displayed to the owner, not just submitted silently", () => {
   assert.match(source, /\{currency\}\s*\{amount\}/);
-  assert.match(source, /exact/i);
+  assert.match(source, /copy\.expected/);
 });
 
 test("clientOperationId is generated on the client, once, via crypto.randomUUID (never in the Server Action)", () => {

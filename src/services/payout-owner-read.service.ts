@@ -108,6 +108,12 @@ export type OwnerPayoutsPayoutResult = {
   readonly amount: string;
   readonly currency: string;
   readonly status: "RECORDED" | "CONFIRMED" | "DISPUTED";
+  // 9G presentation authority (docs/product/susu-existing-import-contract-freeze.md
+  // §4/§8): IMPORTED_DECLARATION means the owner reported this historical
+  // payout when importing the circle -- never a recipient's own
+  // confirmation through NIA. A future UI must brand on this field, never
+  // on `status` alone or on roundNumber <= K.
+  readonly confirmationBasis: "MEMBER_CONFIRMED" | "IMPORTED_DECLARATION";
   readonly clientOperationId: string;
   readonly recordedAt: string;
   readonly recordedById: string;
@@ -123,6 +129,10 @@ export type OwnerPayoutsRoundResult = {
   readonly roundNumber: number;
   readonly dueDate: string;
   readonly status: string;
+  // 9G presentation authority: IMPORTED_DECLARATION means this round's
+  // CLOSED status is the owner's own historical declaration at import
+  // time, never a normal NIA-managed closure (advanceRound).
+  readonly closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
   readonly recipient: OwnerPayoutsRecipientResult;
   readonly expectedPayout: OwnerPayoutsExpectedResult;
   readonly payout: OwnerPayoutsPayoutResult | null;
@@ -156,6 +166,7 @@ function serializePayout(payout: OwnerPayoutsPayoutRecord): OwnerPayoutsPayoutRe
     amount: toMoney(payout.amount),
     currency: payout.currency,
     status: payout.status,
+    confirmationBasis: payout.confirmationBasis,
     clientOperationId: payout.clientOperationId,
     recordedAt: payout.recordedAt.toISOString(),
     recordedById: payout.recordedById,
@@ -169,11 +180,22 @@ function serializePayout(payout: OwnerPayoutsPayoutRecord): OwnerPayoutsPayoutRe
 
 /**
  * Read-time integrity of one persisted Payout row against its own round
- * (7K.7 ticket section 8) -- never repaired, only refused. The caller
- * already knows payout.roundId === round.id (this function is only ever
- * invoked with a payout already grouped under its own round) and
- * payout.circleId === circle.id (structurally guaranteed by the
- * repository's own circleId-scoped query), so neither is re-checked here.
+ * (7K.7 ticket section 8, extended 9G for imported history -- ticket
+ * §16/freeze §4/§7) -- never repaired, only refused. The caller already
+ * knows payout.roundId === round.id (this function is only ever invoked
+ * with a payout already grouped under its own round) and payout.circleId
+ * === circle.id (structurally guaranteed by the repository's own
+ * circleId-scoped query), so neither is re-checked here.
+ *
+ * IMPORTED_DECLARATION is a genuinely different, EQUALLY valid coherent
+ * shape (frozen by 9E's own reconstruction contract), never a laxer
+ * version of MEMBER_CONFIRMED's rules: it requires status CONFIRMED with
+ * NO member confirmer/disputer at all (confirmedByMemberId is always
+ * null -- 9E never fabricates a recipient action), and this round's own
+ * closureBasis must agree (an imported payout can only ever belong to an
+ * imported round). A MEMBER_CONFIRMED payout on an IMPORTED_DECLARATION
+ * round, or vice versa, is exactly the "impossible combination" ticket
+ * §16 requires this layer to refuse, never silently normalize.
  */
 function assertPayoutIntegrity(
   payout: OwnerPayoutsPayoutRecord,
@@ -184,6 +206,29 @@ function assertPayoutIntegrity(
     throw new OwnerPayoutsIntegrityError();
   }
   if (payout.recordedById.length === 0) {
+    throw new OwnerPayoutsIntegrityError();
+  }
+
+  if (payout.confirmationBasis === "IMPORTED_DECLARATION") {
+    if (
+      round.closureBasis !== "IMPORTED_DECLARATION" ||
+      payout.status !== "CONFIRMED" ||
+      payout.confirmedAt === null ||
+      payout.confirmedByMemberId !== null ||
+      payout.disputedAt !== null ||
+      payout.disputedByMemberId !== null ||
+      payout.disputeReason !== null
+    ) {
+      throw new OwnerPayoutsIntegrityError();
+    }
+    return;
+  }
+
+  // MEMBER_CONFIRMED -- the normal, NIA-managed shape, unchanged since 7K.7.
+  if (round.closureBasis === "IMPORTED_DECLARATION") {
+    // An imported round's payout must itself be IMPORTED_DECLARATION --
+    // a MEMBER_CONFIRMED payout on a round NIA never managed is exactly
+    // the impossible combination this read must refuse, not normalize.
     throw new OwnerPayoutsIntegrityError();
   }
 
@@ -307,6 +352,7 @@ export async function getOwnerCirclePayouts(params: {
       roundNumber: round.roundNumber,
       dueDate: round.dueDate.toISOString(),
       status: round.status,
+      closureBasis: round.closureBasis,
       recipient: {
         memberId: round.recipient.id,
         displayName: round.recipient.displayName,

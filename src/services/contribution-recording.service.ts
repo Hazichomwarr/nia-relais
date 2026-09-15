@@ -82,6 +82,25 @@ export class ContributionObligationAlreadyFulfilledError extends Error {
   }
 }
 
+// 9H P0 fix (docs/product/susu-existing-import-contract-freeze.md §8, found
+// by the 9H adversarial audit): an obligation whose fulfillmentBasis is
+// IMPORTED_DECLARATION was owner-declared fulfilled as part of the
+// circle's imported history and has, by design, NO ContributionPayment
+// ledger row behind it (freeze §4) -- so the existing
+// findActiveOrConfirmedPaymentForObligation "already fulfilled" guard,
+// which is entirely ledger-based, never sees it and never blocks a fresh
+// recording. Without this explicit check, an owner could record a live
+// ContributionPayment against an already-CLOSED historical round,
+// fabricating a real financial event on top of a declared one -- exactly
+// what freeze §8 forbids ("No writer may create/confirm/reject a
+// contribution against an imported CLOSED historical round").
+export class ContributionObligationImportedError extends Error {
+  constructor() {
+    super("This contribution is part of this circle's imported history and cannot be recorded again.");
+    this.name = "ContributionObligationImportedError";
+  }
+}
+
 export class ContributionObligationAlreadyRecordedError extends Error {
   constructor() {
     super("This obligation already has a recorded payment awaiting confirmation or rejection.");
@@ -259,6 +278,14 @@ export async function recordContribution(params: {
       // and due dates neither authorize nor prohibit recording.
       const obligation = await findObligationForRecording(transaction, circleId, input.obligationId);
       if (!obligation) throw new ContributionObligationNotFoundError();
+
+      // 9H: an imported-declaration obligation has no payment ledger to
+      // check "already fulfilled" against (see ContributionObligationImportedError
+      // above) -- this must be rejected explicitly, before the ledger-based
+      // checks below, which would otherwise silently allow it through.
+      if (obligation.fulfillmentBasis === "IMPORTED_DECLARATION") {
+        throw new ContributionObligationImportedError();
+      }
 
       if (!amountMatchesObligation(amount, obligation.expectedAmount)) {
         throw new ContributionAmountMismatchError();

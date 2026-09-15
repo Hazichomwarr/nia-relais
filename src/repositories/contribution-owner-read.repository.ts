@@ -35,6 +35,9 @@ const ownerContributionsRoundSelect = {
   roundNumber: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority for "was this round's closure an owner-
+  // declared import, or a normal NIA-managed closure."
+  closureBasis: true,
   recipient: { select: { displayName: true } },
 } satisfies Prisma.PayoutRoundSelect;
 
@@ -66,6 +69,10 @@ const ownerContributionsObligationSelect = {
   currency: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority distinguishing an owner-declared imported
+  // historical fulfillment from a normal confirmed-payment-ledger one --
+  // never fabricates or implies a ContributionPayment exists.
+  fulfillmentBasis: true,
   fulfilledAt: true,
 } satisfies Prisma.ContributionObligationSelect;
 

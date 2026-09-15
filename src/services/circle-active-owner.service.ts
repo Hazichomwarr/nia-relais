@@ -53,12 +53,19 @@ export type ActiveCircleOwnerCircleResult = {
   readonly startDate: string;
   readonly status: "ACTIVE";
   readonly activatedAt: string;
+  // 9G presentation authority (freeze §8): whether/how the owner workspace
+  // shows the "Imported history" circle-level context. historicalCompletedRoundCount
+  // is always 0 for a NEW circle and always >= 1 for IMPORTED (frozen,
+  // immutable post-activation).
+  readonly originKind: "NEW" | "IMPORTED";
+  readonly historicalCompletedRoundCount: number;
 };
 
 export type ActiveCircleOwnerMemberResult = {
   readonly id: string;
   readonly displayName: string;
   readonly memberCode: string;
+  readonly phone: string | null;
   readonly payoutOrder: number;
 };
 
@@ -69,6 +76,10 @@ export type ActiveCircleOwnerRoundResult = {
   readonly recipientMemberCode: string;
   readonly dueDate: string;
   readonly status: string;
+  // 9G presentation authority: IMPORTED_DECLARATION means this round's
+  // CLOSED status is the owner's own historical declaration, never a
+  // normal NIA-managed closure.
+  readonly closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
 };
 
 export type ActiveCircleOwnerSummaryResult = {
@@ -86,6 +97,7 @@ function serializeRound(round: {
   roundNumber: number;
   dueDate: Date;
   status: string;
+  closureBasis: "NIA_MANAGED" | "IMPORTED_DECLARATION";
   recipient: { displayName: string; memberCode: string };
 }): ActiveCircleOwnerRoundResult {
   return {
@@ -94,6 +106,7 @@ function serializeRound(round: {
     recipientDisplayName: round.recipient.displayName,
     recipientMemberCode: round.recipient.memberCode,
     dueDate: round.dueDate.toISOString(),
+    closureBasis: round.closureBasis,
     status: round.status,
   };
 }
@@ -136,11 +149,14 @@ export async function getActiveCircleSummaryForOwner(input: {
       startDate: circle.startDate.toISOString().slice(0, 10),
       status: "ACTIVE",
       activatedAt: circle.activatedAt.toISOString(),
+      originKind: circle.originKind,
+      historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
     },
     members: members.map((member) => ({
       id: member.id,
       displayName: member.displayName,
       memberCode: member.memberCode,
+      phone: member.phone,
       // Every ACTIVE member has a non-null payoutOrder once activated
       // (frozen at activation; nothing can clear it afterward) -- the
       // fallback is only for TypeScript's benefit against the field's

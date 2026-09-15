@@ -7,8 +7,8 @@ import type { Dictionary } from "@/src/i18n/dictionaries/types";
 export function LandingHeader({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   return (
     <header className="flex items-center justify-between gap-6">
-      <Link href="/" aria-label="NIA, powered by RELAIS" className="group flex items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]">
-        <Image src="/images/nia-logo.png" alt="NIA logo" width={44} height={44} priority className="size-11 shrink-0" />
+      <Link href="/" aria-label={dictionary.landing.niaBrand} className="group flex items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]">
+        <Image src="/images/nia-logo.png" alt={dictionary.landing.niaLogo} width={44} height={44} priority className="size-11 shrink-0" />
         <span className="flex flex-col leading-none">
           <span className="font-serif text-xl font-semibold tracking-[0.12em] text-[#173b32] transition-colors group-hover:text-[#a95f45]">
             NIA
@@ -19,8 +19,8 @@ export function LandingHeader({ locale, dictionary }: { locale: Locale; dictiona
         </span>
       </Link>
 
-      <nav aria-label="Main navigation" className="flex items-center gap-2 sm:gap-5">
-        <span className="hidden sm:inline-flex"><LanguageSwitcher locale={locale} /></span>
+      <nav aria-label={dictionary.landing.mainNavigation} className="flex items-center gap-2 sm:gap-5">
+        <span className="hidden sm:inline-flex"><LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} /></span>
         <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-[#587066] transition-colors hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] sm:px-4">
           {dictionary.common.signIn}
         </Link>

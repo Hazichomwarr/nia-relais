@@ -15,6 +15,7 @@ function payout(overrides: Partial<MemberPayoutsPayoutResult> = {}): MemberPayou
     amount: "75.00",
     currency: "USD",
     status: "RECORDED",
+    confirmationBasis: "MEMBER_CONFIRMED",
     recordedAt: "2026-01-01T00:00:00.000Z",
     confirmedAt: null,
     disputedAt: null,
@@ -60,6 +61,25 @@ test("every status presentation carries a distinct badge class", () => {
     ),
   );
   assert.equal(classes.size, 4);
+});
+
+// --- 9G: imported history presentation (ticket §6/§9) ---
+
+test("a CONFIRMED payout with confirmationBasis IMPORTED_DECLARATION never claims the member confirmed anything themselves", () => {
+  const presentation = getMemberPayoutStatusPresentation("CONFIRMED", "IMPORTED_DECLARATION");
+  assert.equal(presentation.label, "Imported history");
+  assert.doesNotMatch(presentation.description, /you confirmed/i);
+});
+
+test("the imported badge class is distinct from the normal receipt-confirmed class", () => {
+  const imported = getMemberPayoutStatusPresentation("CONFIRMED", "IMPORTED_DECLARATION");
+  const normal = getMemberPayoutStatusPresentation("CONFIRMED", "MEMBER_CONFIRMED");
+  assert.notEqual(imported.className, normal.className);
+});
+
+test("a CONFIRMED payout with confirmationBasis MEMBER_CONFIRMED (or omitted) keeps the normal 'you confirmed' presentation unchanged", () => {
+  assert.equal(getMemberPayoutStatusPresentation("CONFIRMED", "MEMBER_CONFIRMED").label, "Receipt confirmed");
+  assert.equal(getMemberPayoutStatusPresentation("CONFIRMED").label, "Receipt confirmed");
 });
 
 // --- canDecidePayout ---

@@ -3,7 +3,6 @@ import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 import { formatOwnerDate, getRoundStatusBadge } from "./circle-workspace-display";
 import { CompleteCircleForm } from "./complete-circle-controls";
-import { getBlockerMessage } from "./round-lifecycle-display";
 import { AdvanceRoundForm, StartFirstRoundForm } from "./round-lifecycle-controls";
 
 // Owner-only round-lifecycle card (7K.16): renders exactly what
@@ -41,18 +40,20 @@ function Badge({ label, className }: { label: string; className: string }) {
 function RoundSummary({
   label,
   round,
+  dictionary,
 }: {
   label: string;
   round: OwnerRoundLifecycleResult["currentRound"];
+  dictionary: Dictionary;
 }) {
   if (!round) return null;
   const status = getRoundStatusBadge(round.status);
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{label}</span>
-      <Badge {...status} />
-      <p className="text-sm text-[#173b32]">Round {round.roundNumber} · {round.recipient.displayName}</p>
-      <p className="text-xs text-[#7b8179]">Scheduled date {formatOwnerDate(round.dueDate)}</p>
+      <Badge label={round.status === "ACTIVE" ? dictionary.susuFinancial.active : round.status === "UPCOMING" ? dictionary.susuFinancial.upcoming : round.status === "CLOSED" ? dictionary.susuFinancial.closed : status.label} className={status.className} />
+      <p className="text-sm text-[#173b32]">{dictionary.susuFinancial.round} {round.roundNumber} · {round.recipient.displayName}</p>
+      <p className="text-xs text-[#7b8179]">{dictionary.susuFinancial.scheduledDate} {formatOwnerDate(round.dueDate)}</p>
     </div>
   );
 }
@@ -72,27 +73,38 @@ export function RoundLifecycleCard({
   return (
     <Card title={copy.advanceRound}>
       <p className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">
-        {closedRounds} / {totalRounds} rounds closed
+        {closedRounds} / {totalRounds} {copy.roundsClosed}
       </p>
 
       {phase === "NOT_STARTED" ? (
         <div className="mt-4 flex flex-col gap-4">
           <p className="text-sm leading-6 text-[#587066]">
-            This circle is active, but its rotation has not started yet. Round 1 will begin only when you explicitly
-            start it — nothing happens automatically.
+            {copy.notStartedDescription}
           </p>
-          {nextRound ? <RoundSummary label="Round 1" round={nextRound} /> : null}
+          {nextRound ? <RoundSummary label={`${copy.round} 1`} round={nextRound} dictionary={dictionary} /> : null}
           {progression.canStartFirstRound ? <StartFirstRoundForm circleId={circleId} dictionary={dictionary} /> : null}
+        </div>
+      ) : null}
+
+      {phase === "IMPORTED_PREFIX_AWAITING_FIRST_ROUND" ? (
+        <div className="mt-4 flex flex-col gap-4">
+          <p className="text-sm leading-6 text-[#587066]">
+            {nextRound
+              ? copy.importedPrefixDescription.replace("{count}", String(closedRounds)).replace("{number}", String(nextRound.roundNumber))
+              : null}
+          </p>
+          {nextRound ? <RoundSummary label={`${copy.round} ${nextRound.roundNumber}`} round={nextRound} dictionary={dictionary} /> : null}
+          {progression.canStartFirstRound ? <StartFirstRoundForm circleId={circleId} dictionary={dictionary} variant="imported" /> : null}
         </div>
       ) : null}
 
       {phase === "IN_PROGRESS" ? (
         <div className="mt-4 flex flex-col gap-4">
-          <RoundSummary label="Current round" round={currentRound} />
-          {nextRound ? <RoundSummary label="Next round" round={nextRound} /> : null}
+          <RoundSummary label={copy.currentRound} round={currentRound} dictionary={dictionary} />
+          {nextRound ? <RoundSummary label={copy.nextRound} round={nextRound} dictionary={dictionary} /> : null}
 
           {progression.blocker ? (
-            <p className="text-sm leading-6 text-[#587066]">{getBlockerMessage(progression.blocker)}</p>
+            <p className="text-sm leading-6 text-[#587066]">{progression.blocker === "CONTRIBUTIONS_INCOMPLETE" ? copy.waitingContributions : progression.blocker === "PAYOUT_DISPUTED" ? copy.payoutDisputed : copy.waitingPayout}</p>
           ) : null}
 
           {progression.canAdvanceCurrentRound && currentRound ? (
@@ -111,7 +123,7 @@ export function RoundLifecycleCard({
       {phase === "ALL_ROUNDS_CLOSED" ? (
         <div className="mt-4">
           <p className="text-sm leading-6 text-[#587066]">{copy.allRoundsClosed}</p>
-          <p className="mt-2 text-sm leading-6 text-[#587066]">The circle has not yet been marked complete in NIA.</p>
+          <p className="mt-2 text-sm leading-6 text-[#587066]">{copy.completionPending}</p>
           <CompleteCircleForm circleId={circleId} dictionary={dictionary} />
         </div>
       ) : null}

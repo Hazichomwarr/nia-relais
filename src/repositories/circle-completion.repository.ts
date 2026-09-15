@@ -45,6 +45,10 @@ const completionObligationSelect = {
   currency: true,
   status: true,
   fulfilledAt: true,
+  // 9H: presentation-neutral, structural authority for which closure
+  // predicate applies to this obligation's own round (see
+  // assertImportedRoundClosureCoherence, src/domain/round-lifecycle.ts).
+  fulfillmentBasis: true,
 } satisfies Prisma.ContributionObligationSelect;
 
 export type CompletionObligationRecord = Prisma.ContributionObligationGetPayload<{
@@ -108,6 +112,10 @@ const completionPayoutSelect = {
   disputedAt: true,
   disputedByMemberId: true,
   disputeReason: true,
+  // 9H: presentation-neutral, structural authority for which closure
+  // predicate applies to this payout's own round (see
+  // assertImportedRoundClosureCoherence, src/domain/round-lifecycle.ts).
+  confirmationBasis: true,
 } satisfies Prisma.PayoutSelect;
 
 export type CompletionPayoutRecord = Prisma.PayoutGetPayload<{

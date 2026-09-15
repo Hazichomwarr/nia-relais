@@ -60,7 +60,26 @@ test("StartFirstRoundForm contains no ownerId/status/actor/timestamp/recipient/r
 
 test("StartFirstRoundForm shows truthful pending copy and disables its submit while pending", () => {
   assert.match(startFirstRoundSource, /type="submit"[\s\S]*?disabled=\{pending\}/);
-  assert.match(startFirstRoundSource, />\s*\{pending \? "Starting round…" : "Start round 1"\}\s*</);
+  assert.match(startFirstRoundSource, /pending \? copy\.startingRound : copy\.startFirstRound/);
+});
+
+// 9F: the same button now also presents truthful IMPORTED-origin copy
+// ("Start NIA tracking") for the identical activateFirstRoundAction/
+// activateFirstRound operation, which now targets round K+1 for an
+// IMPORTED circle -- selected by a display-only `variant` prop, never a
+// second form/action/eligibility path.
+test("StartFirstRoundForm's variant prop selects presentation copy only -- never a second submitted field or a different action", () => {
+  assert.match(startFirstRoundSource, /variant\?: "new" \| "imported"/);
+  assert.match(startFirstRoundSource, /pending \? copy\.startingNiaTracking : copy\.startNiaTracking/);
+  const nameAttributes = [...startFirstRoundSource.matchAll(/name="([a-zA-Z]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(nameAttributes, ["circleId"]);
+  assert.match(startFirstRoundSource, /useActionState\(activateFirstRoundAction, initialActivateFirstRoundState\)/);
+});
+
+test("StartFirstRoundForm never implies the historical (imported) rounds themselves were managed by NIA", () => {
+  for (const forbidden of [/NIA confirmed/i, /NIA managed the historical/i, /NIA tracked the past/i]) {
+    assert.doesNotMatch(startFirstRoundSource, forbidden);
+  }
 });
 
 test("StartFirstRoundForm renders the server-returned success message and error, never a fabricated local one", () => {
@@ -105,12 +124,12 @@ test("AdvanceRoundForm derives its CTA label from getAdvanceCtaLabel, never a ha
 
 test("AdvanceRoundForm shows truthful pending copy and disables its submit while pending", () => {
   assert.match(advanceRoundSource, /type="submit"[\s\S]*?disabled=\{pending\}/);
-  assert.match(advanceRoundSource, /\{pending \? "Updating round…" : ctaLabel\}/);
+  assert.match(advanceRoundSource, /\{pending \? copy\.updatingRound : isFinalRound \? copy\.closeFinalRound : copy\.advanceRound\}/);
 });
 
 test("AdvanceRoundForm's supporting copy never implies two independent operations, and the final-round copy never implies circle completion", () => {
-  assert.match(advanceRoundSource, /one operation, not two/);
-  assert.match(advanceRoundSource, /This closes the final rotation round\./);
+  assert.match(advanceRoundSource, /copy\.advanceNotice/);
+  assert.match(advanceRoundSource, /copy\.finalRoundNotice/);
   for (const forbidden of [/complete circle/i, /finish susu/i, /archive circle/i, /circle completed/i]) {
     assert.doesNotMatch(advanceRoundSource, forbidden);
   }

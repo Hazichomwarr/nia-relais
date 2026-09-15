@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { confirmPayoutAction, disputePayoutAction } from "@/src/actions/payout.actions";
 import { initialConfirmPayoutState, initialDisputePayoutState } from "@/src/actions/payout.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // Rendered only for a RECORDED payout (the parent decides that -- see
 // member-payout-card.tsx). Mirrors contribution-payment-controls.tsx's
@@ -26,7 +27,8 @@ import { initialConfirmPayoutState, initialDisputePayoutState } from "@/src/acti
 // already CONFIRMED/DISPUTED) rather than this component guessing who
 // won.
 
-export function MemberPayoutControls({ circleId, payoutId }: { circleId: string; payoutId: string }) {
+export function MemberPayoutControls({ circleId, payoutId, dictionary }: { circleId: string; payoutId: string; dictionary: Dictionary }) {
+  const copy = dictionary.memberWorkspace;
   const [confirmState, confirmAction, confirmPending] = useActionState(
     confirmPayoutAction,
     initialConfirmPayoutState,
@@ -42,7 +44,7 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs leading-5 text-[#7b8179]">
-        Confirm receipt only if you actually received this payout outside NIA. Dispute it if you did not.
+        {copy.confirmReceiptHelp}
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -54,7 +56,7 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
             disabled={anyPending}
             className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#35634f] px-4 text-sm font-semibold text-white transition hover:bg-[#274a3a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {confirmPending ? "Confirming…" : "Confirm receipt"}
+            {confirmPending ? copy.confirming : copy.confirmReceipt}
           </button>
         </form>
 
@@ -65,14 +67,14 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
             disabled={anyPending}
             className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#cdbda9] px-4 text-sm font-semibold text-[#8d4f42] transition hover:border-[#a53f2b] hover:bg-[#f4e6e1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Dispute
+            {copy.dispute}
           </button>
         ) : null}
       </div>
 
       {confirmState.formError ? (
         <p role="alert" className="text-sm font-medium text-[#b3261e]">
-          {confirmState.formError}
+          {copy.genericActionError}
         </p>
       ) : null}
 
@@ -84,7 +86,7 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
           <input type="hidden" name="circleId" value={circleId} />
           <input type="hidden" name="payoutId" value={payoutId} />
           <label htmlFor={`dispute-reason-${payoutId}`} className="text-xs font-semibold text-[#173b32]">
-            Tell us what was wrong with this payout
+            {copy.disputePrompt}
           </label>
           <textarea
             id={`dispute-reason-${payoutId}`}
@@ -100,12 +102,12 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
           />
           {disputeState.fieldErrors?.disputeReason?.length ? (
             <p id={`dispute-reason-${payoutId}-error`} role="alert" className="text-xs text-[#b3261e]">
-              {disputeState.fieldErrors.disputeReason.join(" ")}
+              {copy.disputePrompt}
             </p>
           ) : null}
           {disputeState.formError ? (
             <p role="alert" className="text-sm font-medium text-[#b3261e]">
-              {disputeState.formError}
+              {copy.genericActionError}
             </p>
           ) : null}
           <div className="flex gap-2">
@@ -114,7 +116,7 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
               disabled={anyPending || disputeReason.trim().length === 0}
               className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#a53f2b] px-4 text-sm font-semibold text-white transition hover:bg-[#8a3222] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {disputePending ? "Submitting dispute…" : "Submit dispute"}
+              {disputePending ? copy.submittingDispute : copy.submitDispute}
             </button>
             <button
               type="button"
@@ -131,7 +133,7 @@ export function MemberPayoutControls({ circleId, payoutId }: { circleId: string;
               disabled={disputePending}
               className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#cdbda9] px-4 text-sm font-semibold text-[#173b32] transition hover:border-[#b96549] hover:bg-[#f7eee4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Cancel
+              {copy.cancel}
             </button>
           </div>
         </form>

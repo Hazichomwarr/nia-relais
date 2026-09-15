@@ -10,21 +10,18 @@ import { formatContributionMoney } from "./[circleId]/contribution-desk-display"
 
 type CircleStatus = OwnerCircleIndexItem["status"];
 
-const STATUS_PRESENTATION: Record<CircleStatus, { badgeClassName: string; iconClassName: string; stateSentence: string }> = {
+const STATUS_PRESENTATION: Record<CircleStatus, { badgeClassName: string; iconClassName: string }> = {
   DRAFT: {
     badgeClassName: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]",
     iconClassName: "bg-[var(--nia-draft-soft)] text-[var(--nia-draft-accent)]",
-    stateSentence: "Not active yet. Finish setup to get started.",
   },
   ACTIVE: {
     badgeClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]",
     iconClassName: "bg-[var(--nia-active-soft)] text-[var(--nia-primary)]",
-    stateSentence: "Circle is running. Keep track of contributions and upcoming payouts.",
   },
   COMPLETED: {
     badgeClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]",
     iconClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]",
-    stateSentence: "This circle is complete. Its history is still available.",
   },
 };
 

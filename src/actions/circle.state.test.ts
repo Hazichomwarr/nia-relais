@@ -41,6 +41,7 @@ const ORIGIN_MODULES = [
   "@/src/actions/record-contribution",
   "@/src/actions/reject-contribution",
   "@/src/actions/set-draft-circle-payout-order",
+  "@/src/actions/update-draft-circle-configuration",
 ];
 
 test("no import of any kind exists from circle.actions.ts (a \"use server\" file) -- every type comes from its own owning core module instead", () => {
@@ -56,7 +57,7 @@ test("each *ActionState type is imported as `import type` directly from its own 
 
 test("every initial*State constant is a plain empty object, never a call into the action module", () => {
   const constants = [...source.matchAll(/export const (\w+): (\w+) = (\{\});/g)];
-  assert.equal(constants.length, 7, "expected exactly 7 initial-state constants");
+  assert.equal(constants.length, 8, "expected exactly 8 initial-state constants");
   for (const [, name] of constants) {
     assert.match(name, /^initial[A-Z]/);
   }

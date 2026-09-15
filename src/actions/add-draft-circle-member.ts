@@ -15,7 +15,7 @@ import { addDraftCircleMemberSchema } from "@/src/validations/circle.schema";
 
 export type AddDraftCircleMemberActionState = {
   readonly status?: "success";
-  readonly fieldErrors?: Partial<Record<"displayName" | "email" | "pin", string[]>>;
+  readonly fieldErrors?: Partial<Record<"displayName" | "phone" | "email" | "pin", string[]>>;
   readonly formError?: string;
   readonly member?: {
     readonly id: string;
@@ -56,7 +56,7 @@ const defaultDependencies: AddDraftCircleMemberDependencies = {
  * owner and is still DRAFT, so a forged circleId from someone else's
  * circle is rejected there, not trusted here). Nothing about ownerId,
  * status, userId, or any other provenance is ever read from the form --
- * only displayName, email, and pin are, and only those three are passed
+ * only displayName, phone, email, and pin are, and only those four are passed
  * to the service.
  *
  * The service's own DraftCircleMemberResult never contains pinHash or any
@@ -80,6 +80,7 @@ export async function runAddDraftCircleMemberAction(
   const circleId = String(formData.get("circleId") ?? "").trim();
   const parsed = addDraftCircleMemberSchema.safeParse({
     displayName: formData.get("displayName"),
+    phone: formData.get("phone") ?? "",
     email: formData.get("email"),
     pin: formData.get("pin"),
   });

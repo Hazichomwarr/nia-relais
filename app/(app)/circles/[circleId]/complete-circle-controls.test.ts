@@ -40,7 +40,7 @@ test("contains no ownerId/status/completedAt/completedById/roundId/archive field
 
 test("shows truthful pending copy and disables its submit while pending", () => {
   assert.match(source, /type="submit"[\s\S]*?disabled=\{pending\}/);
-  assert.match(source, />\s*\{pending \? "Completing circle…" : "Complete circle"\}\s*</);
+  assert.match(source, /\{pending \? copy\.completingCircle : copy\.completeCircle\}/);
 });
 
 test("renders the server-returned success message and error, never a fabricated local one", () => {

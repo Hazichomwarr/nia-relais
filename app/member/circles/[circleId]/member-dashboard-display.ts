@@ -4,6 +4,7 @@ import type {
   MemberPayoutResult,
   RoundScheduleEntry,
 } from "@/src/services/circle-member-dashboard.service";
+import type { Locale } from "@/src/i18n/config";
 
 // Pure, framework-free presentation logic -- no React, no "use client",
 // nothing async. This module only formats and labels values the 7H.2
@@ -19,7 +20,8 @@ const FREQUENCY_LABELS: Record<string, string> = {
   MONTHLY: "Every month",
 };
 
-export function getFrequencyLabel(frequency: string): string {
+export function getFrequencyLabel(frequency: string, locale: Locale = "en"): string {
+  if (locale === "fr") return ({ WEEKLY: "Chaque semaine", BIWEEKLY: "Toutes les deux semaines", MONTHLY: "Chaque mois" }[frequency] ?? frequency);
   return FREQUENCY_LABELS[frequency] ?? frequency;
 }
 
@@ -44,16 +46,40 @@ const CONFIRMED_BADGE_CLASS = "bg-[#e6f0e8] text-[#35634f]";
 const PENDING_BADGE_CLASS = "bg-[#fff0d9] text-[#8a5b27]";
 const NEUTRAL_BADGE_CLASS = "bg-[#efe7db] text-[#587066]";
 const NEGATIVE_BADGE_CLASS = "bg-[#f4e6e1] text-[#8d4f42]";
+// 9G: a deliberately distinct, quiet sage -- never the same green as a
+// real NIA-managed closure/confirmation, never a warning/red treatment.
+const IMPORTED_BADGE_CLASS = "bg-[#e3e8df] text-[#4f6354]";
 
-export function getRoundStatusPresentation(status: string): BadgePresentation {
+/**
+ * 9G: `closureBasis`, when supplied, is the presentation authority for a
+ * CLOSED round that is actually the owner's own historical declaration at
+ * import time -- never a normal NIA-managed closure. Every other status is
+ * unchanged from the 7H.3 wording.
+ */
+export function getRoundStatusPresentation(status: string, closureBasis?: string): BadgePresentation {
+  if (status === "CLOSED" && closureBasis === "IMPORTED_DECLARATION") {
+    return { label: "Imported history", className: IMPORTED_BADGE_CLASS };
+  }
   if (status === "ACTIVE") return { label: "Active", className: CONFIRMED_BADGE_CLASS };
   if (status === "CLOSED") return { label: "Closed", className: NEUTRAL_BADGE_CLASS };
   return { label: "Upcoming", className: PENDING_BADGE_CLASS };
 }
 
+/**
+ * 9G: `fulfillmentBasis` is the presentation authority for the one case
+ * the `fulfilled` boolean alone must never speak for -- an obligation the
+ * owner declared fulfilled as part of the circle's imported history, with
+ * no real ContributionPayment behind it. It is worded and branded
+ * distinctly ("Imported history"), never "Fulfilled" (which would imply a
+ * real NIA-confirmed payment) and never "Outstanding" (which would falsely
+ * suggest money is still owed on an already-closed historical round).
+ */
 export function getObligationStatusPresentation(
-  obligation: Pick<MemberObligationResult, "fulfilled">,
+  obligation: Pick<MemberObligationResult, "fulfilled" | "fulfillmentBasis">,
 ): BadgePresentation {
+  if (obligation.fulfillmentBasis === "IMPORTED_DECLARATION") {
+    return { label: "Imported history", className: IMPORTED_BADGE_CLASS };
+  }
   return obligation.fulfilled
     ? { label: "Fulfilled", className: CONFIRMED_BADGE_CLASS }
     : { label: "Outstanding", className: PENDING_BADGE_CLASS };
@@ -63,10 +89,23 @@ export function getObligationStatusPresentation(
  * Wording exactly per the 7H.3 spec. Branches ONLY on payout.status (or
  * null) -- never on round status, and RECORDED is never described as
  * confirmed receipt.
+ *
+ * 9G: `confirmationBasis` is the presentation authority for the one case a
+ * member must never see worded as their own action -- a CONFIRMED payout
+ * whose confirmationBasis is IMPORTED_DECLARATION means the owner declared
+ * it when importing the circle; this member never confirmed anything
+ * through NIA for it, even for their own historical round.
  */
 export function getPayoutPresentation(payout: MemberPayoutResult): BadgePresentation & { description: string } {
   if (!payout) {
     return { label: "Not yet recorded", description: "Not yet recorded.", className: NEUTRAL_BADGE_CLASS };
+  }
+  if (payout.status === "CONFIRMED" && payout.confirmationBasis === "IMPORTED_DECLARATION") {
+    return {
+      label: "Imported history",
+      description: "Reported when this circle was imported into NIA.",
+      className: IMPORTED_BADGE_CLASS,
+    };
   }
   if (payout.status === "RECORDED") {
     return {
@@ -99,8 +138,8 @@ function toUtcDateOnly(value: string): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-export function formatCircleDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatCircleDate(value: string, locale: Locale = "en"): string {
+  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -108,8 +147,8 @@ export function formatCircleDate(value: string): string {
   }).format(toUtcDateOnly(value));
 }
 
-export function formatCircleDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
+export function formatCircleDateTime(value: string, locale: Locale = "en"): string {
+  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
 }
 
 export type RoundHeading =

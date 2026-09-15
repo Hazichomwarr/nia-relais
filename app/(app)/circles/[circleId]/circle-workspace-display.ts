@@ -18,6 +18,11 @@ const ROUND_STATUS_BADGES: Record<string, RoundStatusBadge> = {
   UPCOMING: { label: "Upcoming", className: "bg-[#fff0d9] text-[#8a5b27]" },
 };
 
+// 9G: a deliberately distinct, quiet sage -- never the same "Closed"
+// taupe (which would silently blend an owner-declared historical round
+// into an ordinary NIA-managed one), never a warning/red treatment.
+const IMPORTED_ROUND_BADGE: RoundStatusBadge = { label: "Imported history", className: "bg-[#e3e8df] text-[#4f6354]" };
+
 /**
  * Labels a round's own persisted status verbatim -- never infers ACTIVE
  * from a due date having passed, and UPCOMING is never worded as
@@ -25,7 +30,16 @@ const ROUND_STATUS_BADGES: Record<string, RoundStatusBadge> = {
  * convention in app/member/circles/[circleId]/member-dashboard-display.ts,
  * kept as a separate small copy rather than a cross-tree import since
  * these are two different audiences' presentation layers).
+ *
+ * 9G (docs/product/susu-existing-import-contract-freeze.md §8, ticket
+ * §2/§4): `closureBasis`, when supplied, is the presentation authority
+ * for the one case `status` alone cannot distinguish -- a CLOSED round
+ * whose closureBasis is IMPORTED_DECLARATION is the owner's own
+ * historical declaration at import time, never a normal NIA-managed
+ * closure (advanceRound). It is branded and worded entirely differently
+ * ("Imported history," never "Closed"). Every other status is unchanged.
  */
-export function getRoundStatusBadge(status: string): RoundStatusBadge {
+export function getRoundStatusBadge(status: string, closureBasis?: string): RoundStatusBadge {
+  if (status === "CLOSED" && closureBasis === "IMPORTED_DECLARATION") return IMPORTED_ROUND_BADGE;
   return ROUND_STATUS_BADGES[status] ?? { label: status, className: "bg-[#efe7db] text-[#587066]" };
 }

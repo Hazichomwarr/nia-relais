@@ -28,6 +28,7 @@ function obligation(overrides: Partial<OwnerContributionsObligationResult> = {})
     currency: "USD",
     dueDate: "2026-01-01T00:00:00.000Z",
     status: "OPEN",
+    fulfillmentBasis: "NIA_CONFIRMED_LEDGER",
     fulfilledAt: null,
     confirmedAmount: "0.00",
     outstandingAmount: "50.00",
@@ -76,6 +77,20 @@ test("formatContributionDateTime renders a real date and time, not raw ISO text"
 test("getObligationStatusPresentation labels OPEN and FULFILLED verbatim", () => {
   assert.equal(getObligationStatusPresentation("OPEN").label, "Open");
   assert.equal(getObligationStatusPresentation("FULFILLED").label, "Fulfilled");
+});
+
+// 9G (ticket §5): a FULFILLED obligation with fulfillmentBasis
+// IMPORTED_DECLARATION must never be labeled/branded the same as a normal
+// ledger-confirmed fulfillment.
+test("a FULFILLED obligation with fulfillmentBasis IMPORTED_DECLARATION is presented as imported history, with a distinct badge class", () => {
+  const imported = getObligationStatusPresentation("FULFILLED", "IMPORTED_DECLARATION");
+  const normal = getObligationStatusPresentation("FULFILLED", "NIA_CONFIRMED_LEDGER");
+  assert.equal(imported.label, "Imported history");
+  assert.notEqual(imported.className, normal.className);
+});
+
+test("OPEN is never reinterpreted as imported history regardless of fulfillmentBasis (only a FULFILLED obligation can legitimately be IMPORTED_DECLARATION)", () => {
+  assert.equal(getObligationStatusPresentation("OPEN", "IMPORTED_DECLARATION").label, "Open");
 });
 
 test("getPaymentStatusPresentation gives distinct wording for RECORDED, CONFIRMED, and REJECTED", () => {

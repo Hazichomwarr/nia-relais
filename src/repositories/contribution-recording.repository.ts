@@ -32,6 +32,12 @@ const contributionObligationSelect = {
   id: true,
   expectedAmount: true,
   currency: true,
+  // 9H: presentation-neutral, structural authority for whether this
+  // obligation is an owner-declared imported-history fact (with no
+  // ContributionPayment ledger behind it, by design) rather than a real
+  // NIA-managed obligation -- see contribution-recording.service.ts's own
+  // guard against recording a fresh payment against one.
+  fulfillmentBasis: true,
 } satisfies Prisma.ContributionObligationSelect;
 
 export type ContributionObligationForRecordingRecord = Prisma.ContributionObligationGetPayload<{

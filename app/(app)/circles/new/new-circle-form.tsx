@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 
 import { createDraftCircleAction } from "@/src/actions/circle.actions";
 import { initialCreateDraftCircleState } from "@/src/actions/circle.state";
-import { DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES } from "@/src/validations/circle.schema";
+import { CIRCLE_ORIGIN_KINDS, DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES } from "@/src/validations/circle.schema";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
 import { getFrequencyLabel as getLocalizedFrequencyLabel } from "@/src/i18n/format";
@@ -39,7 +39,9 @@ export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; 
   const [currency, setCurrency] = useState<(typeof DRAFT_CIRCLE_CURRENCIES)[number]>(DRAFT_CIRCLE_CURRENCIES[0]);
   const [contributionAmount, setContributionAmount] = useState("");
   const [frequency, setFrequency] = useState<(typeof DRAFT_CIRCLE_FREQUENCIES)[number]>(DRAFT_CIRCLE_FREQUENCIES[2]);
+  const [originKind, setOriginKind] = useState<(typeof CIRCLE_ORIGIN_KINDS)[number]>("NEW");
   const today = todayDate();
+  const isImported = originKind === "IMPORTED";
 
   const restatement = buildContributionRestatement({ contributionAmount, currency, frequency });
 
@@ -57,6 +59,25 @@ export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; 
         action={formAction}
         className="mt-8 space-y-5 rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"
       >
+        <fieldset>
+          <legend className="block text-sm font-semibold text-[#173b32]">{copy.setupModeQuestion}</legend>
+          <div className="mt-2 space-y-2">
+            {CIRCLE_ORIGIN_KINDS.map((option) => (
+              <label key={option} className="flex items-center gap-2 text-sm text-[#173b32]">
+                <input
+                  type="radio"
+                  name="originKind"
+                  value={option}
+                  checked={originKind === option}
+                  onChange={() => setOriginKind(option)}
+                />
+                {option === "NEW" ? copy.setupModeNew : copy.setupModeImported}
+              </label>
+            ))}
+          </div>
+          <FieldError id="originKind-error" errors={state.fieldErrors?.originKind} />
+        </fieldset>
+
         <div>
           <label htmlFor="name" className="block text-sm font-semibold text-[#173b32]">
             {copy.circleName}
@@ -150,14 +171,47 @@ export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; 
             name="startDate"
             type="date"
             required
-            min={today}
+            min={isImported ? undefined : today}
             defaultValue={today}
             aria-invalid={Boolean(state.fieldErrors?.startDate)}
             aria-describedby="startDate-error"
             className={inputClassName}
           />
+          {isImported ? <p className="mt-1.5 text-sm text-[#7b8179]">{copy.importedStartDateHelp}</p> : null}
           <FieldError id="startDate-error" errors={state.fieldErrors?.startDate} />
         </div>
+
+        {isImported ? (
+          <>
+            <div>
+              <label htmlFor="historicalCompletedRoundCount" className="block text-sm font-semibold text-[#173b32]">
+                {copy.historicalCompletedRoundCount}
+              </label>
+              <p className="mt-1 text-sm text-[#7b8179]">{copy.historicalCompletedRoundCountHelp}</p>
+              <input
+                id="historicalCompletedRoundCount"
+                name="historicalCompletedRoundCount"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                required
+                aria-invalid={Boolean(state.fieldErrors?.historicalCompletedRoundCount)}
+                aria-describedby="historicalCompletedRoundCount-error"
+                className={inputClassName}
+              />
+              <FieldError id="historicalCompletedRoundCount-error" errors={state.fieldErrors?.historicalCompletedRoundCount} />
+            </div>
+
+            <div>
+              <label className="flex items-start gap-2 text-sm text-[#173b32]">
+                <input type="checkbox" name="historicalTermsConfirmed" required className="mt-0.5" />
+                {copy.historicalTermsConfirmed}
+              </label>
+              <FieldError id="historicalTermsConfirmed-error" errors={state.fieldErrors?.historicalTermsConfirmed} />
+            </div>
+          </>
+        ) : null}
 
         {restatement ? (
           <p role="status" className="rounded-2xl bg-[#f7eee4] p-4 text-sm leading-6 text-[#587066]">

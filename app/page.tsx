@@ -15,7 +15,7 @@ export default async function HomePage() {
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12">
         <div className="pt-5 sm:pt-8">
           <LandingHeader locale={locale} dictionary={dictionary} />
-          <div className="mt-4 flex justify-end sm:hidden"><LandingLanguageToggle locale={locale} /></div>
+          <div className="mt-4 flex justify-end sm:hidden"><LandingLanguageToggle locale={locale} dictionary={dictionary} /></div>
         </div>
         <LandingHero dictionary={dictionary} />
         <LandingBenefits dictionary={dictionary} />

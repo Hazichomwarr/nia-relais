@@ -63,6 +63,27 @@ export type RoundLifecycleRoundRecord = {
 };
 
 /**
+ * The canonical, single-source derivation of "the first NIA-managed round"
+ * (9F, docs/product/susu-existing-import-contract-freeze.md §6): a pure
+ * function of two immutable, persisted circle facts only --
+ * `originKind` and `historicalCompletedRoundCount` ("K") -- never of round
+ * statuses, due dates, or elapsed time. For a NEW circle (K frozen at 0,
+ * 9D.1), this is always round 1, byte-identical to the pre-9F contract. For
+ * an IMPORTED circle (K frozen at activation, 9E, always 1 <= K < N), this
+ * is round K+1 -- the first round activation never witnessed as historical.
+ * Both the write side (round-lifecycle.service.ts's activateFirstRound)
+ * and the read side (round-lifecycle-owner-read.service.ts) call this same
+ * function, so "which round is next to start" can never silently diverge
+ * between what a mutation targets and what a read model reports.
+ */
+export function firstLiveRoundNumber(
+  originKind: "NEW" | "IMPORTED",
+  historicalCompletedRoundCount: number,
+): number {
+  return originKind === "IMPORTED" ? historicalCompletedRoundCount + 1 : 1;
+}
+
+/**
  * The activation-time rotation-count/sequence invariant every validly
  * activated V1 circle must satisfy, independent of lifecycle progression:
  * at least two rounds (the same "at least two active members" floor
@@ -88,12 +109,14 @@ export function assertRotationSequenceIntegrity(
 }
 
 /**
- * The frozen V1 lifecycle-state machine (7K.11 §21.6/§21.8): exactly
- * three shapes are ever valid, in roundNumber order --
+ * The frozen V1 lifecycle-state machine (7K.11 §21.6/§21.8, extended 9E
+ * for imported activation -- docs/product/susu-existing-import-contract-freeze.md
+ * §5/§9): four shapes are valid, in roundNumber order --
  *
- *   A. Pre-start:        UPCOMING, UPCOMING, ..., UPCOMING
- *   B. In progress:      CLOSED, ..., CLOSED, ACTIVE, UPCOMING, ..., UPCOMING
- *   C. Final pre-completion: CLOSED, CLOSED, ..., CLOSED
+ *   A. Pre-start:             UPCOMING, UPCOMING, ..., UPCOMING
+ *   B. In progress:           CLOSED, ..., CLOSED, ACTIVE, UPCOMING, ..., UPCOMING
+ *   C. Final pre-completion:  CLOSED, CLOSED, ..., CLOSED
+ *   D. Imported prefix (9E):  CLOSED, ..., CLOSED, UPCOMING, ..., UPCOMING  (zero ACTIVE)
  *
  * Modeled as three ordered phases a round's own status may only ever
  * move FORWARD through in roundNumber order -- CLOSED phase, then at most
@@ -102,15 +125,36 @@ export function assertRotationSequenceIntegrity(
  * impossible shapes: more than one ACTIVE round; a CLOSED round
  * appearing after a non-CLOSED one (out-of-order closure); an ACTIVE
  * round with an earlier non-CLOSED round (skipped/out-of-sequence
- * activation); and, via the final zero-ACTIVE check below, a mid-rotation
- * state with no ACTIVE round at all (progression "stuck" without an
- * ACTIVE round to advance) -- the one legitimate zero-ACTIVE states being
- * exclusively "every round UPCOMING" or "every round CLOSED" (7K.11
- * §21.8).
+ * activation).
+ *
+ * Shape D did not exist before 9E: normal (7K.13) round progression
+ * always activates a non-final round's successor in the SAME atomic step
+ * that closes it, so a CLOSED-prefix with no ACTIVE round and an
+ * UPCOMING-suffix remaining was genuinely unreachable, and the original
+ * zero-ACTIVE check below correctly rejected it as corruption. Imported
+ * activation (9E) legitimately produces exactly this shape: rounds 1..K
+ * commit already-CLOSED (an owner's historical declaration, not a
+ * lifecycle transition this module ever witnessed), and round K+1 is
+ * deliberately left UPCOMING -- starting it is a separate, later, explicit
+ * act (the next lifecycle ticket), never inferred here or at activation
+ * time. No new scanning logic was needed to permit it: the phase-order
+ * loop above already proves that a zero-ACTIVE-round result can only ever
+ * be one of exactly three shapes -- every round UPCOMING, every round
+ * CLOSED, or a CLOSED-prefix immediately followed by an UPCOMING-suffix
+ * (the loop's own guards make "UPCOMING before CLOSED," any interleaving,
+ * or more than one CLOSED/UPCOMING boundary structurally impossible to
+ * reach this point) -- so zero-ACTIVE is now always a legitimate outcome
+ * of this function, and the additional rejection this block used to
+ * perform is removed rather than re-implemented with new boundary logic.
  *
  * Also verifies per-round provenance coherence: UPCOMING carries no
  * activation/closure provenance at all; ACTIVE carries activation
- * provenance and no closure provenance; CLOSED carries both.
+ * provenance and no closure provenance; CLOSED carries both -- for an
+ * imported round, both provenance pairs are the owner's own import
+ * declaration actor/time, not a real activation/closure event (see
+ * circle.service.ts's activateImportedCircle for the full reasoning);
+ * this function has no opinion on WHY a CLOSED round's provenance is
+ * present, only that it IS present and coherent.
  */
 export function assertRoundLifecycleStateIntegrity(
   rounds: readonly RoundLifecycleRoundRecord[],
@@ -155,16 +199,6 @@ export function assertRoundLifecycleStateIntegrity(
     } else {
       // UPCOMING
       phase = "UPCOMING";
-    }
-  }
-
-  if (activeCount === 0) {
-    const allClosed = sorted.every((round) => round.status === "CLOSED");
-    const allUpcoming = sorted.every((round) => round.status === "UPCOMING");
-    if (!allClosed && !allUpcoming) {
-      throw new RoundLifecycleStateIntegrityError(
-        "A mid-rotation circle with no ACTIVE round must have every round either CLOSED or UPCOMING, never a mix with zero ACTIVE.",
-      );
     }
   }
 }
@@ -224,6 +258,83 @@ export function assessContributionClosureReadiness(
   }
 
   return allFulfilled ? "READY" : "INCOMPLETE";
+}
+
+export type ImportedRoundClosureObligation = {
+  readonly status: string;
+  readonly fulfillmentBasis: string;
+  readonly fulfilledAt: Date | null;
+  readonly confirmedAmount: Prisma.Decimal;
+};
+
+export type ImportedRoundClosurePayout = {
+  readonly status: string;
+  readonly confirmationBasis: string;
+  readonly currency: string;
+  readonly amount: Prisma.Decimal;
+  readonly confirmedByMemberId: string | null;
+  readonly disputedAt: Date | null;
+  readonly disputedByMemberId: string | null;
+  readonly disputeReason: string | null;
+};
+
+/**
+ * Basis-aware closure-readiness for one already-CLOSED,
+ * `closureBasis = IMPORTED_DECLARATION` round (freeze §7, discovered by the
+ * 9H adversarial audit): an owner-declared historical round's readiness is
+ * satisfied only when its persisted shape is EXACTLY the frozen 9E
+ * reconstruction shape -- never merely because `round.status === "CLOSED"`.
+ *
+ * This is deliberately a DIFFERENT predicate from
+ * assessContributionClosureReadiness/assessPayoutClosureReadiness just
+ * above: those verify a NIA-MANAGED round's real confirmed-payment ledger
+ * and recipient-confirmed payout (`confirmedByMemberId === recipientId`).
+ * An imported round has neither by design (freeze §4: `confirmedByMemberId`
+ * is null; there is no member action to invent) -- applying the
+ * NIA-managed predicate to an imported round always throws it as
+ * "not confirmed by recipient," a false corruption signal, not a true one.
+ * This was exactly the P0 9H found: `circle-completion.service.ts`
+ * previously ran every round (imported and NIA-managed alike) through the
+ * NIA-managed-only predicate, so `completeCircle` could never succeed for
+ * any circle with an imported prefix.
+ */
+export function assertImportedRoundClosureCoherence(
+  obligations: readonly ImportedRoundClosureObligation[],
+  payout: ImportedRoundClosurePayout | null,
+  expected: ExpectedPayoutAmount,
+): void {
+  if (obligations.length === 0) {
+    throw new RoundLifecycleFinancialIntegrityError(
+      "No contribution obligations exist for this imported round; closure coherence cannot be determined.",
+    );
+  }
+  for (const obligation of obligations) {
+    if (
+      obligation.status !== "FULFILLED"
+      || obligation.fulfillmentBasis !== "IMPORTED_DECLARATION"
+      || obligation.fulfilledAt === null
+      || !obligation.confirmedAmount.isZero()
+    ) {
+      throw new RoundLifecycleFinancialIntegrityError(
+        "An imported round's obligation is not a coherent owner-declared historical fulfillment.",
+      );
+    }
+  }
+  if (
+    !payout
+    || payout.status !== "CONFIRMED"
+    || payout.confirmationBasis !== "IMPORTED_DECLARATION"
+    || payout.currency !== expected.currency
+    || !amountMatchesExpectedPayout(payout.amount, expected.amount)
+    || payout.confirmedByMemberId !== null
+    || payout.disputedAt !== null
+    || payout.disputedByMemberId !== null
+    || payout.disputeReason !== null
+  ) {
+    throw new RoundLifecycleFinancialIntegrityError(
+      "An imported round's payout is not a coherent owner-declared historical confirmation.",
+    );
+  }
 }
 
 export type PayoutClosurePayout = {

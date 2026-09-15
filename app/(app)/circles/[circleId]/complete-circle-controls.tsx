@@ -28,13 +28,13 @@ export function CompleteCircleForm({ circleId, dictionary }: { circleId: string;
 
       {state.status === "success" && state.message ? (
         <p role="status" aria-live="polite" className="mb-2 text-sm font-medium text-[#35634f]">
-          {state.message}
+          {copy.lifecycleSuccess}
         </p>
       ) : null}
 
       {state.formError ? (
         <p role="alert" className="mb-2 text-sm font-medium text-[#b3261e]">
-          {state.formError}
+          {copy.lifecycleError}
         </p>
       ) : null}
 

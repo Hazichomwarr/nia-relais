@@ -59,34 +59,44 @@ function PaymentHistoryItem({
   circleId,
   payment,
   readOnly,
+  dictionary,
 }: {
   circleId: string;
   payment: OwnerContributionsPaymentResult;
   readOnly: boolean;
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susuFinancial;
   const presentation = getPaymentStatusPresentation(payment.status);
+  const statusCopy = payment.status === "RECORDED"
+    ? { label: copy.recorded, description: copy.contributionRecordedDescription }
+    : payment.status === "CONFIRMED"
+      ? { label: copy.confirmed, description: copy.contributionConfirmedDescription }
+      : payment.status === "REJECTED"
+        ? { label: copy.rejected, description: copy.contributionRejectedDescription }
+        : { label: payment.status, description: "" };
 
   return (
     <li className="rounded-lg bg-[#f7f1e8] p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold text-[#173b32]">{formatContributionMoney(payment.amount, payment.currency)}</span>
-        <Badge label={presentation.label} className={presentation.className} />
+        <Badge label={statusCopy.label} className={presentation.className} />
       </div>
-      <p className="mt-1 text-xs text-[#7b8179]">{presentation.description}</p>
-      <p className="mt-1 text-xs text-[#7b8179]">Recorded {formatContributionDateTime(payment.recordedAt)}</p>
+      <p className="mt-1 text-xs text-[#7b8179]">{statusCopy.description}</p>
+      <p className="mt-1 text-xs text-[#7b8179]">{copy.recorded} {formatContributionDateTime(payment.recordedAt)}</p>
       {payment.confirmedAt ? (
-        <p className="text-xs text-[#7b8179]">Confirmed {formatContributionDateTime(payment.confirmedAt)}</p>
+        <p className="text-xs text-[#7b8179]">{copy.confirmed} {formatContributionDateTime(payment.confirmedAt)}</p>
       ) : null}
       {payment.rejectedAt ? (
-        <p className="text-xs text-[#7b8179]">Rejected {formatContributionDateTime(payment.rejectedAt)}</p>
+        <p className="text-xs text-[#7b8179]">{copy.rejected} {formatContributionDateTime(payment.rejectedAt)}</p>
       ) : null}
       {payment.rejectionReason ? (
-        <p className="mt-1 text-xs text-[#8d4f42]">Reason: {payment.rejectionReason}</p>
+        <p className="mt-1 text-xs text-[#8d4f42]">{copy.reason}: {payment.rejectionReason}</p>
       ) : null}
 
       {!readOnly && payment.status === "RECORDED" ? (
         <div className="mt-3">
-          <ContributionPaymentControls circleId={circleId} paymentId={payment.id} />
+          <ContributionPaymentControls circleId={circleId} paymentId={payment.id} dictionary={dictionary} />
         </div>
       ) : null}
     </li>
@@ -98,15 +108,25 @@ function ObligationCard({
   obligation,
   payments,
   readOnly,
+  dictionary,
 }: {
   circleId: string;
   obligation: OwnerContributionsObligationResult;
   payments: readonly OwnerContributionsPaymentResult[];
   readOnly: boolean;
+  dictionary: Dictionary;
 }) {
   const canRecord = !readOnly && canRecordFreshContribution(obligation, payments);
   const history = sortPaymentsNewestFirst(payments);
-  const statusPresentation = getObligationStatusPresentation(obligation.status);
+  const isImported = obligation.fulfillmentBasis === "IMPORTED_DECLARATION";
+  const statusPresentation = getObligationStatusPresentation(obligation.status, obligation.fulfillmentBasis);
+  const statusLabel = isImported
+    ? dictionary.susuFinancial.importedHistory
+    : obligation.status === "FULFILLED"
+      ? dictionary.susuFinancial.fulfilled
+      : obligation.status === "OPEN"
+        ? dictionary.susuFinancial.open
+        : obligation.status;
 
   return (
     <li className="border-b border-[#e7ded1] py-4 last:border-b-0">
@@ -114,24 +134,25 @@ function ObligationCard({
         <p className="text-sm font-semibold text-[#173b32]">
           {obligation.memberDisplayName}
         </p>
-        <Badge label={statusPresentation.label} className={statusPresentation.className} />
+        <Badge label={statusLabel} className={statusPresentation.className} />
       </div>
+      <p className="mt-1 text-xs text-[#7b8179]">{obligation.memberCode}</p>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Expected</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{dictionary.susuFinancial.expected}</dt>
           <dd className="mt-1 text-[#173b32]">{formatContributionMoney(obligation.expectedAmount, obligation.currency)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Confirmed</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{dictionary.susuFinancial.confirmed}</dt>
           <dd className="mt-1 text-[#173b32]">{formatContributionMoney(obligation.confirmedAmount, obligation.currency)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Outstanding</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{dictionary.susuFinancial.outstanding}</dt>
           <dd className="mt-1 text-[#173b32]">{formatContributionMoney(obligation.outstandingAmount, obligation.currency)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">Due</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-[#7b8179]">{dictionary.susuFinancial.due}</dt>
           <dd className="mt-1 text-[#173b32]">{formatOwnerDate(obligation.dueDate)}</dd>
         </div>
       </dl>
@@ -143,16 +164,19 @@ function ObligationCard({
             obligationId={obligation.id}
             amount={obligation.expectedAmount}
             currency={obligation.currency}
+            dictionary={dictionary}
           />
         </div>
       ) : null}
 
-      {history.length > 0 ? (
+      {isImported ? (
+        <p className="mt-4 text-xs leading-5 text-[#7b8179]">{dictionary.susuFinancial.importedHistoryDescription}</p>
+      ) : history.length > 0 ? (
         <details className="mt-4 rounded-xl bg-[#f7f1e8] px-3 py-2">
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#587066]">Payment history ({history.length})</summary>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-[#587066]">{dictionary.susuFinancial.paymentHistory} ({history.length})</summary>
           <ul className="mt-3 flex flex-col gap-2">
             {history.map((payment) => (
-              <PaymentHistoryItem key={payment.id} circleId={circleId} payment={payment} readOnly={readOnly} />
+              <PaymentHistoryItem key={payment.id} circleId={circleId} payment={payment} readOnly={readOnly} dictionary={dictionary} />
             ))}
           </ul>
         </details>
@@ -174,6 +198,7 @@ export function ContributionDesk({
   dictionary: Dictionary;
   locale: Locale;
 }) {
+  void _locale;
   const copy = dictionary.susuFinancial;
   const { rounds, obligations, payments } = contributions;
   const obligationsByRoundId = groupObligationsByRoundId(obligations);
@@ -192,23 +217,23 @@ export function ContributionDesk({
       </Card>
 
       {rounds.length === 0 ? (
-        <Card title="Rounds">
-          <p className="text-sm leading-6 text-[#587066]">No rounds exist for this circle yet.</p>
+        <Card title={copy.rounds}>
+          <p className="text-sm leading-6 text-[#587066]">{copy.noRounds}</p>
         </Card>
       ) : (
         rounds.map((round) => {
           const roundObligations = obligationsByRoundId.get(round.id) ?? [];
-          const roundStatus = getRoundStatusBadge(round.status);
+          const roundStatus = getRoundStatusBadge(round.status, round.closureBasis);
 
           return (
-            <Card key={round.id} title={`Round ${round.roundNumber} · ${round.recipientDisplayName}`}>
+            <Card key={round.id} title={`${copy.round} ${round.roundNumber} · ${round.recipientDisplayName}`}>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge label={roundStatus.label} className={roundStatus.className} />
-                <p className="text-xs text-[#7b8179]">Due {formatOwnerDate(round.dueDate)}</p>
+                <p className="text-xs text-[#7b8179]">{copy.due} {formatOwnerDate(round.dueDate)}</p>
               </div>
 
               {roundObligations.length === 0 ? (
-                <p className="mt-4 text-sm leading-6 text-[#587066]">No obligations exist for this round.</p>
+                <p className="mt-4 text-sm leading-6 text-[#587066]">{copy.noObligations}</p>
               ) : (
                 <ul className="mt-4 flex flex-col gap-4">
                   {roundObligations.map((obligation) => (
@@ -218,6 +243,7 @@ export function ContributionDesk({
                       obligation={obligation}
                       payments={paymentsByObligationId.get(obligation.id) ?? []}
                       readOnly={readOnly}
+                      dictionary={dictionary}
                     />
                   ))}
                 </ul>

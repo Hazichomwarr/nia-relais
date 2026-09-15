@@ -4,10 +4,10 @@ import { MemberLoginForm } from "./member-login-form";
 import { getDictionary } from "@/src/i18n/get-dictionary";
 import { getLocale } from "@/src/i18n/locale";
 
-export const metadata: Metadata = {
-  title: "Circle member sign in · NIA",
-  description: "Sign in to your SUSU circle with your Circle ID, member code, and PIN.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const dictionary = getDictionary(await getLocale());
+  return { title: `${dictionary.memberLogin.eyebrow} · NIA`, description: dictionary.memberLogin.description };
+}
 
 export default async function MemberLoginPage() {
   const locale = await getLocale();

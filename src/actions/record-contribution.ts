@@ -2,6 +2,7 @@ import {
   ContributionAmountMismatchError,
   ContributionObligationAlreadyFulfilledError,
   ContributionObligationAlreadyRecordedError,
+  ContributionObligationImportedError,
   ContributionObligationNotFoundError,
   ContributionOperationConflictError,
   ContributionRecordingAuthorizationError,
@@ -135,6 +136,7 @@ export async function runRecordContributionAction(
       error instanceof ContributionAmountMismatchError ||
       error instanceof ContributionObligationAlreadyFulfilledError ||
       error instanceof ContributionObligationAlreadyRecordedError ||
+      error instanceof ContributionObligationImportedError ||
       error instanceof ContributionOperationConflictError ||
       error instanceof ContributionRecordingConflictError
     ) {

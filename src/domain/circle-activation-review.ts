@@ -31,6 +31,13 @@ export type DraftCircleActivationReviewCircle = {
   readonly frequency: string;
   readonly startDate: string;
   readonly status: "DRAFT";
+  // Optional: existing pure-domain tests construct a circle literal without
+  // these two fields, and computeActivationReviewFingerprint tolerates that
+  // (see below) -- every real runtime caller (circle-draft-owner.service.ts,
+  // circle.service.ts's assertFreshReviewMatches) always supplies both, so
+  // the staleness guarantee below holds in practice for every live review.
+  readonly originKind?: "NEW" | "IMPORTED";
+  readonly historicalCompletedRoundCount?: number;
 };
 
 export type DraftCircleActivationReviewResult = {
@@ -46,13 +53,10 @@ export type DraftCircleActivationReviewResult = {
 };
 
 /**
- * A deterministic fingerprint of exactly the two things that can go stale
- * between loading a review and submitting activation: the active cohort
- * and its payout order. Contribution terms (amount/currency/frequency/
- * startDate) are immutable from circle creation onward -- no service
- * exists anywhere in this codebase to edit them post-creation -- so they
- * are deliberately excluded from the fingerprint; only membership/order
- * can actually drift while a review is on screen.
+ * A deterministic fingerprint of the terms, active cohort, and payout order
+ * shown in an activation review. DRAFT terms are now owner-editable, so they
+ * must participate alongside membership/order: activation may never proceed
+ * against terms different from the review the owner confirmed.
  *
  * Used by the review UI (to submit what it displayed) and by
  * activateCircleAction (to recompute the CURRENT fingerprint fresh at
@@ -61,9 +65,29 @@ export type DraftCircleActivationReviewResult = {
  * activate-circle.ts for how this is used to require a fresh review
  * rather than silently activating a materially different configuration
  * than the one the owner actually confirmed.
+ *
+ * 9D.1 (docs/product/susu-existing-import-contract-freeze.md §11):
+ * originKind and historicalCompletedRoundCount ("K") now participate
+ * alongside the other terms -- a change to either between the owner's
+ * review and activation must invalidate that review exactly like a
+ * changed contributionAmount or startDate already does. Imported
+ * activation itself remains blocked (circle.service.ts's activateCircle),
+ * but the fingerprint must still reflect K/origin now so a future 9E does
+ * not inherit a staleness gap.
  */
 export function computeActivationReviewFingerprint(
-  review: Pick<DraftCircleActivationReviewResult, "orderedActiveMembers">,
+  review: Pick<DraftCircleActivationReviewResult, "orderedActiveMembers"> & Partial<Pick<DraftCircleActivationReviewResult, "circle">>,
 ): string {
-  return review.orderedActiveMembers.map((member) => `${member.id}:${member.payoutOrder}`).join("|");
+  const terms = review.circle
+    ? [
+        review.circle.name,
+        review.circle.currency,
+        review.circle.contributionAmount,
+        review.circle.frequency,
+        review.circle.startDate,
+        review.circle.originKind ?? "",
+        review.circle.historicalCompletedRoundCount ?? "",
+      ].join("|")
+    : "";
+  return `${terms}::${review.orderedActiveMembers.map((member) => `${member.id}:${member.payoutOrder}`).join("|")}`;
 }

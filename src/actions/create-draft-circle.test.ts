@@ -33,7 +33,7 @@ function validFormData(overrides: Record<string, string> = {}) {
 class TestRedirectSignal extends Error {}
 
 function buildDeps(overrides: Partial<CreateDraftCircleDependencies> = {}) {
-  const calls = { requireUser: 0, createDraftCircle: 0 };
+  const calls = { requireUser: 0, createDraftCircle: 0, createImportedDraftCircle: 0 };
   let capturedInput: unknown;
 
   const deps: CreateDraftCircleDependencies = {
@@ -54,10 +54,35 @@ function buildDeps(overrides: Partial<CreateDraftCircleDependencies> = {}) {
         status: "DRAFT",
       };
     },
+    createImportedDraftCircle: async (input) => {
+      calls.createImportedDraftCircle += 1;
+      capturedInput = input;
+      return {
+        id: "circle-1",
+        name: input.input.name,
+        currency: input.input.currency,
+        contributionAmount: input.input.contributionAmount,
+        frequency: input.input.frequency,
+        startDate: input.input.startDate,
+        status: "DRAFT",
+        originKind: "IMPORTED",
+        historicalCompletedRoundCount: Number(input.input.historicalCompletedRoundCount),
+      };
+    },
     ...overrides,
   };
 
   return { deps, calls, getCapturedInput: () => capturedInput };
+}
+
+function validImportedFormData(overrides: Record<string, string> = {}) {
+  return validFormData({
+    startDate: "2000-01-01",
+    historicalCompletedRoundCount: "3",
+    historicalTermsConfirmed: "on",
+    originKind: "IMPORTED",
+    ...overrides,
+  });
 }
 
 // A. unauthenticated request denied
@@ -207,4 +232,79 @@ test("this module references no Prisma client and no other circle-mutating servi
   for (const forbidden of ["addDraftCircleMember", "removeDraftCircleMember", "setDraftCirclePayoutOrder", "activateCircle"]) {
     assert.ok(!source.includes(forbidden), `expected no reference to "${forbidden}"`);
   }
+});
+
+// 9D.1: IMPORTED setup mode
+test("choosing 'Importing a SUSU already in progress' with a historical start date and K>=1 succeeds via createImportedDraftCircle", async () => {
+  const { deps, calls } = buildDeps();
+  const result = await runCreateDraftCircleAction(validImportedFormData(), deps);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.createImportedDraftCircle, 1);
+  assert.equal(calls.createDraftCircle, 0);
+});
+
+test("an IMPORTED submission's historical start date is never rejected as a past date", async () => {
+  const { deps, calls } = buildDeps();
+  const result = await runCreateDraftCircleAction(validImportedFormData({ startDate: "2020-01-01" }), deps);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.createImportedDraftCircle, 1);
+});
+
+test("an IMPORTED submission with K=0 is rejected with a field error, never reaching the service", async () => {
+  const { deps, calls } = buildDeps();
+  const result = await runCreateDraftCircleAction(validImportedFormData({ historicalCompletedRoundCount: "0" }), deps);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.state.fieldErrors?.historicalCompletedRoundCount);
+  assert.equal(calls.createImportedDraftCircle, 0);
+});
+
+test("an IMPORTED submission with a negative or non-integer K is rejected with a field error", async () => {
+  const { deps, calls } = buildDeps();
+  const negative = await runCreateDraftCircleAction(validImportedFormData({ historicalCompletedRoundCount: "-1" }), deps);
+  const fractional = await runCreateDraftCircleAction(validImportedFormData({ historicalCompletedRoundCount: "1.5" }), deps);
+
+  assert.equal(negative.ok, false);
+  assert.equal(fractional.ok, false);
+  assert.equal(calls.createImportedDraftCircle, 0);
+});
+
+test("an IMPORTED submission missing the term-consistency acknowledgement is rejected with a field error", async () => {
+  const { deps, calls } = buildDeps();
+  const data = validImportedFormData();
+  data.delete("historicalTermsConfirmed");
+  const result = await runCreateDraftCircleAction(data, deps);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.state.fieldErrors?.historicalTermsConfirmed);
+  assert.equal(calls.createImportedDraftCircle, 0);
+});
+
+test("ownerId for an IMPORTED submission comes only from requireUser, never the form", async () => {
+  const { deps, getCapturedInput } = buildDeps();
+  await runCreateDraftCircleAction(validImportedFormData({ ownerId: "attacker-supplied-owner" }), deps);
+
+  const captured = getCapturedInput() as { ownerId: string; input: Record<string, unknown> };
+  assert.equal(captured.ownerId, "owner-1");
+  assert.deepEqual(Object.keys(captured.input).sort(), [
+    "contributionAmount",
+    "currency",
+    "frequency",
+    "historicalCompletedRoundCount",
+    "historicalTermsConfirmed",
+    "name",
+    "startDate",
+  ]);
+});
+
+test("an unrecognized originKind is rejected as invalid setup-mode input, never defaulted to NEW", async () => {
+  const { deps, calls } = buildDeps();
+  const result = await runCreateDraftCircleAction(validFormData({ originKind: "SOMETHING_ELSE" }), deps);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.state.fieldErrors?.originKind);
+  assert.equal(calls.createDraftCircle, 0);
+  assert.equal(calls.createImportedDraftCircle, 0);
 });

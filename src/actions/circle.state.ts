@@ -10,10 +10,12 @@ import type { CreateDraftCircleActionState } from "@/src/actions/create-draft-ci
 import type { RecordContributionActionState } from "@/src/actions/record-contribution";
 import type { RejectContributionActionState } from "@/src/actions/reject-contribution";
 import type { SetDraftCirclePayoutOrderActionState } from "@/src/actions/set-draft-circle-payout-order";
+import type { UpdateDraftCircleConfigurationActionState } from "@/src/actions/update-draft-circle-configuration";
 
 export const initialCreateDraftCircleState: CreateDraftCircleActionState = {};
 export const initialAddDraftCircleMemberState: AddDraftCircleMemberActionState = {};
 export const initialSetDraftCirclePayoutOrderState: SetDraftCirclePayoutOrderActionState = {};
+export const initialUpdateDraftCircleConfigurationState: UpdateDraftCircleConfigurationActionState = {};
 export const initialActivateCircleState: ActivateCircleActionState = {};
 export const initialRecordContributionState: RecordContributionActionState = {};
 export const initialConfirmContributionState: ConfirmContributionActionState = {};

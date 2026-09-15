@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { en } from "@/src/i18n/dictionaries/en";
+
 // Structural checks only -- mirrors active-circle-summary.test.ts's own
 // identical methodology for the sibling terminal-state summary.
+//
+// 9H §25: the badge/copy assertions below were stale before this session
+// began, from an unrelated, pre-existing, uncommitted localization pass
+// (see active-circle-summary.test.ts's own identical note) -- updated to
+// assert the dictionary-driven equivalent.
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
@@ -14,7 +21,8 @@ const source = stripComments(rawSource);
 
 test("renders circle name, COMPLETED badge, contribution terms, start date, and completion date", () => {
   assert.match(source, /circle\.name/);
-  assert.match(source, />\s*COMPLETED\s*</);
+  assert.match(source, /dictionary\.susuWorkspace\.completed/);
+  assert.equal(en.susuWorkspace.completed, "Completed");
   assert.match(source, /circle\.contributionAmount/);
   assert.match(source, /formatOwnerDate\(circle\.startDate\)/);
   assert.match(source, /formatOwnerDate\(circle\.completedAt\)/);
@@ -27,7 +35,11 @@ test("renders member count and the ordered member list", () => {
 });
 
 test("uses the frozen product copy: 'Circle complete' -- never a celebratory or financial-transfer claim", () => {
-  assert.match(source, /Circle complete\. All rotation rounds were closed and this circle was marked complete\./);
+  assert.match(source, /copy\.completedCircleDescription/);
+  assert.equal(
+    en.susuOwner.completedCircleDescription,
+    "Circle complete. All rotation rounds were closed and this circle was marked complete.",
+  );
   for (const forbidden of [
     /funds transferred/i,
     /money (was )?sent/i,

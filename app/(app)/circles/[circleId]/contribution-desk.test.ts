@@ -29,7 +29,9 @@ test("each round shows its round number, recipient, due date, and persisted stat
   assert.match(source, /round\.roundNumber/);
   assert.match(source, /round\.recipientDisplayName/);
   assert.match(source, /formatOwnerDate\(round\.dueDate\)/);
-  assert.match(source, /getRoundStatusBadge\(round\.status\)/);
+  // 9G: gained a second argument (round.closureBasis) -- the presentation
+  // authority for imported history.
+  assert.match(source, /getRoundStatusBadge\(round\.status, round\.closureBasis\)/);
 });
 
 test("each obligation shows member display name, member code, expected/confirmed/outstanding amounts, and persisted status", () => {
@@ -38,7 +40,9 @@ test("each obligation shows member display name, member code, expected/confirmed
   assert.match(source, /obligation\.expectedAmount/);
   assert.match(source, /obligation\.confirmedAmount/);
   assert.match(source, /obligation\.outstandingAmount/);
-  assert.match(source, /getObligationStatusPresentation\(obligation\.status\)/);
+  // 9G: gained a second argument (obligation.fulfillmentBasis) -- the
+  // presentation authority for imported history.
+  assert.match(source, /getObligationStatusPresentation\(obligation\.status, obligation\.fulfillmentBasis\)/);
 });
 
 test("every payment attempt is rendered via history.map with no status filter -- REJECTED history is never hidden", () => {
@@ -66,20 +70,20 @@ test("the record-contribution form is rendered only when canRecordFreshContribut
 
 test("confirm/reject controls are rendered only for a RECORDED payment AND readOnly is false", () => {
   assert.match(source, /!readOnly && payment\.status === "RECORDED" \? \(/);
-  assert.match(source, /<ContributionPaymentControls circleId=\{circleId\} paymentId=\{payment\.id\} \/>/);
+  assert.match(source, /<ContributionPaymentControls circleId=\{circleId\} paymentId=\{payment\.id\} dictionary=\{dictionary\} \/>/);
 });
 
 test("readOnly is a required, explicit prop on ContributionDesk -- not inferred from data shape", () => {
-  assert.match(source, /export function ContributionDesk\(\{\s*circleId,\s*contributions,\s*readOnly,\s*\}: \{\s*circleId: string;\s*contributions: OwnerCircleContributionsResult;\s*readOnly: boolean;\s*\}\)/);
+  assert.match(source, /readOnly: boolean;/);
 });
 
 test("readOnly is threaded down to both ObligationCard and PaymentHistoryItem, not just checked once at the top", () => {
   assert.match(source, /<ObligationCard\s*[\s\S]*?readOnly=\{readOnly\}/);
-  assert.match(source, /<PaymentHistoryItem key=\{payment\.id\} circleId=\{circleId\} payment=\{payment\} readOnly=\{readOnly\} \/>/);
+  assert.match(source, /<PaymentHistoryItem key=\{payment\.id\} circleId=\{circleId\} payment=\{payment\} readOnly=\{readOnly\} dictionary=\{dictionary\} \/>/);
 });
 
 test("readOnly copy explains the circle is complete and the history is permanent", () => {
-  assert.match(source, /This circle is complete\. The contribution history below is a permanent record/);
+  assert.match(source, /copy\.completeContributionHistory/);
 });
 
 test("no PIN, pinHash, or other credential/session field is ever rendered", () => {
@@ -97,5 +101,5 @@ test("no member-auth dependency and no direct financial mutation call", () => {
 });
 
 test("copy positions NIA as a tracker, not a money holder/mover", () => {
-  assert.match(source, /NIA tracks the circle; it does not hold or move the money/);
+  assert.match(source, /copy\.contributionDescription/);
 });

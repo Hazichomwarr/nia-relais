@@ -7,6 +7,7 @@ import {
 } from "@/src/services/circle-activation-review.service";
 import {
   activateCircle,
+  activateImportedCircle,
   CircleActivationEligibilityError,
   CircleActivationIntegrityError,
   CircleActivationStaleReviewError,
@@ -44,8 +45,19 @@ import {
 //
 // Both checks compare against the SAME fingerprint the client submitted
 // (`submittedFingerprint`, passed through unchanged as expectedFingerprint
-// to activateCircle) -- this action never computes a second, different
-// fingerprint of its own.
+// to activateCircle/activateImportedCircle) -- this action never computes
+// a second, different fingerprint of its own.
+//
+// 9E routing (docs/product/susu-existing-import-contract-freeze.md §5,
+// evolving 9D.1's own IMPORTED_ACTIVATION_NOT_READY guard into routing, per
+// this ticket's own explicit instruction): the SAME "Activate circle"
+// button, form, and review the owner already sees now dispatches to
+// whichever of the two canonical activation functions matches the fresh
+// review's own persisted originKind -- never a second, imported-only
+// button/page. activateCircle's own internal IMPORTED guard is
+// deliberately left completely unchanged (never deleted): it remains a
+// defense-in-depth backstop for any caller that reaches it directly,
+// bypassing this router.
 
 export type TrustedOwner = { readonly id: string; readonly name: string };
 
@@ -53,6 +65,7 @@ export type ActivateCircleDependencies = {
   readonly requireUser: () => Promise<TrustedOwner>;
   readonly getDraftCircleActivationReview: typeof getDraftCircleActivationReview;
   readonly activateCircle: typeof activateCircle;
+  readonly activateImportedCircle: typeof activateImportedCircle;
 };
 
 async function requireRealUser(): Promise<TrustedOwner> {
@@ -64,6 +77,7 @@ const defaultDependencies: ActivateCircleDependencies = {
   requireUser: requireRealUser,
   getDraftCircleActivationReview,
   activateCircle,
+  activateImportedCircle,
 };
 
 export type ActivateCircleActionState = {
@@ -121,11 +135,17 @@ export async function runActivateCircleAction(
   }
 
   try {
-    const result = await deps.activateCircle({
-      ownerId: user.id,
-      circleId,
-      expectedFingerprint: submittedFingerprint,
-    });
+    const result = currentReview.circle.originKind === "IMPORTED"
+      ? await deps.activateImportedCircle({
+          ownerId: user.id,
+          circleId,
+          expectedFingerprint: submittedFingerprint,
+        })
+      : await deps.activateCircle({
+          ownerId: user.id,
+          circleId,
+          expectedFingerprint: submittedFingerprint,
+        });
     return { ok: true, circleId: result.circle.id };
   } catch (error) {
     if (error instanceof DraftCircleMemberNotFoundError || error instanceof DraftCircleMembershipAuthorizationError) {

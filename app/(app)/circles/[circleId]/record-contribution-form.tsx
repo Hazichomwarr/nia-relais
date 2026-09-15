@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import { recordContributionAction } from "@/src/actions/circle.actions";
 import { initialRecordContributionState } from "@/src/actions/circle.state";
+import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
 // clientOperationId is generated ONCE per submission intent, client-side
 // only -- never in the Server Action (7J.7 section 6). It stays stable
@@ -29,12 +30,15 @@ export function RecordContributionForm({
   obligationId,
   amount,
   currency,
+  dictionary,
 }: {
   circleId: string;
   obligationId: string;
   amount: string;
   currency: string;
+  dictionary: Dictionary;
 }) {
+  const copy = dictionary.susuFinancial;
   const [state, formAction, pending] = useActionState(recordContributionAction, initialRecordContributionState);
   const [clientOperationId, setClientOperationId] = useState(operationId);
   const formRef = useRef<HTMLFormElement>(null);
@@ -61,22 +65,22 @@ export function RecordContributionForm({
       <input type="hidden" name="clientOperationId" value={clientOperationId} readOnly />
 
       <p className="text-sm text-[#173b32]">
-        Record the exact expected contribution:{" "}
+        {copy.recordContribution}: {" "}
         <span className="font-semibold">
           {currency} {amount}
         </span>
       </p>
       <p className="mt-1 text-xs text-[#7b8179]">
-        NIA does not support partial payments -- only this exact amount can be recorded.
+        {copy.expected}: {currency} {amount}
       </p>
 
       {state.status === "success" && state.payment ? (
         <p role="status" aria-live="polite" className="mt-2 text-sm font-medium text-[#35634f]">
           {state.payment.status === "RECORDED"
-            ? "Recorded — awaiting your confirmation."
+            ? copy.recorded
             : state.payment.status === "CONFIRMED"
-              ? "This contribution is already confirmed."
-              : "This contribution was already rejected."}
+              ? copy.confirmed
+              : copy.rejected}
         </p>
       ) : null}
 
@@ -97,7 +101,7 @@ export function RecordContributionForm({
         disabled={pending}
         className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-[#173b32] px-5 text-sm font-semibold text-white transition hover:bg-[#285347] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? "Recording…" : "Record contribution"}
+        {pending ? copy.recording : copy.recordContribution}
       </button>
     </form>
   );

@@ -26,9 +26,14 @@ test("the ACTIVE overview uses existing authoritative read models and detailed o
 });
 
 test("completed circles retain navigation but contribution and payout views are explicitly read-only", () => {
+  // Both call sites gained dictionary/locale props from an unrelated,
+  // pre-existing localization pass (predating 9B-9H's own import work,
+  // determined via 9H §25's own pre-existing-drift review) -- readOnly is
+  // still passed as a bare boolean prop (shorthand for readOnly={true}),
+  // which is the actual behavioral fact this test protects.
   assert.match(source, /CompletedCircleWorkspaceOverview/);
-  assert.match(source, /<ContributionDesk circleId=\{circleId\} contributions=\{data\.contributions\} readOnly \/>/);
-  assert.match(source, /<PayoutDesk circleId=\{circleId\} payouts=\{data\.payouts\} readOnly \/>/);
+  assert.match(source, /<ContributionDesk circleId=\{circleId\} contributions=\{data\.contributions\} readOnly dictionary=\{dictionary\} locale=\{locale\} \/>/);
+  assert.match(source, /<PayoutDesk circleId=\{circleId\} payouts=\{data\.payouts\} readOnly dictionary=\{dictionary\} locale=\{locale\} \/>/);
   assert.doesNotMatch(source, /completedSections[\s\S]*RoundLifecycleCard/);
 });
 

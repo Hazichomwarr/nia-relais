@@ -43,7 +43,7 @@ export function LandingHero({ dictionary }: { dictionary: Dictionary }) {
       <div className="relative mx-auto w-full max-w-[38rem]">
         <Image
           src="/images/nia-hero.png"
-          alt="NIA savings"
+          alt={dictionary.landing.heroImageAlt}
           width={900}
           height={900}
           priority

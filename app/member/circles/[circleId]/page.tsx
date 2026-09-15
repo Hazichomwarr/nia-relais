@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { requireCircleMember } from "@/src/auth/require-circle-member";
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
 import {
   CircleMemberDashboardCircleNotEligibleError,
   CircleMemberDashboardCircleNotFoundError,
@@ -20,9 +22,9 @@ import {
 import { MemberDashboard } from "./member-dashboard";
 import { MemberPayoutCard } from "./member-payout-card";
 
-export const metadata: Metadata = {
-  title: "Your circle · NIA",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: `${getDictionary(await getLocale()).memberWorkspace.metadataTitle} · NIA` };
+}
 
 // The read-only SUSU member dashboard (7H.3), replacing the 7G.5
 // placeholder. Authorization and data access are two separate, already-
@@ -40,6 +42,8 @@ export default async function MemberCirclePage({
   params: Promise<{ circleId: string }>;
 }) {
   const { circleId } = await params;
+  const locale = await getLocale();
+  const dictionary = getDictionary(locale);
 
   // requireCircleMember redirects to /member/login on any failure -- no
   // session, expired/revoked, removed member, ineligible circle, or a
@@ -89,8 +93,8 @@ export default async function MemberCirclePage({
   }
 
   return (
-    <MemberDashboard dashboard={dashboard}>
-      <MemberPayoutCard circleId={circleId} payouts={payouts} />
+    <MemberDashboard dashboard={dashboard} dictionary={dictionary} locale={locale}>
+      <MemberPayoutCard circleId={circleId} payouts={payouts} dictionary={dictionary} locale={locale} />
     </MemberDashboard>
   );
 }

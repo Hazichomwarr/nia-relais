@@ -7,6 +7,7 @@ import {
   type ExpectedPayoutAmount,
 } from "@/src/domain/payout-accounting";
 import {
+  assertImportedRoundClosureCoherence,
   assertRotationSequenceIntegrity,
   assertRoundLifecycleStateIntegrity,
   assessContributionClosureReadiness,
@@ -134,9 +135,21 @@ function assertRotationIntegrityForCompletion(rounds: readonly LifecycleRoundRec
  * here is impossible for a round already persisted CLOSED -- so any
  * outcome other than READY is reported as CircleCompletionIntegrityError,
  * never as "rounds incomplete."
+ *
+ * 9H P0 fix (freeze §7, found by the 9H adversarial audit): a round with
+ * `closureBasis = IMPORTED_DECLARATION` is an owner-declared historical
+ * round, never a NIA-managed one -- it has no confirmed-payment ledger and
+ * no recipient payout confirmation by design (freeze §4). Running it
+ * through the NIA-managed predicates above always threw
+ * (`confirmedByMemberId === null`, "not confirmed by recipient"), so
+ * `completeCircle` could never succeed for ANY circle with an imported
+ * prefix, even after its entire live suffix legitimately closed. This
+ * branches to the dedicated basis-aware predicate
+ * (`assertImportedRoundClosureCoherence`) for exactly that shape, and
+ * leaves the NIA-managed path byte-unchanged for every other round.
  */
 function assertRoundFinanciallyReadyForCompletion(
-  round: Pick<LifecycleRoundRecord, "recipientId">,
+  round: Pick<LifecycleRoundRecord, "recipientId" | "closureBasis">,
   obligations: readonly CompletionObligationRecord[],
   confirmedByObligationId: ReadonlyMap<string, Prisma.Decimal>,
   payout: CompletionPayoutRecord | null,
@@ -147,6 +160,36 @@ function assertRoundFinanciallyReadyForCompletion(
   // round-lifecycle.service.ts's own loadRoundObligations, which never
   // catches it either.
   const expected: ExpectedPayoutAmount = computeExpectedPayoutAmount(obligations);
+
+  if (round.closureBasis === "IMPORTED_DECLARATION") {
+    try {
+      assertImportedRoundClosureCoherence(
+        obligations.map((obligation) => ({
+          status: obligation.status,
+          fulfillmentBasis: obligation.fulfillmentBasis,
+          fulfilledAt: obligation.fulfilledAt,
+          confirmedAmount: confirmedByObligationId.get(obligation.id) ?? new Prisma.Decimal(0),
+        })),
+        payout
+          ? {
+              status: payout.status,
+              confirmationBasis: payout.confirmationBasis,
+              currency: payout.currency,
+              amount: payout.amount,
+              confirmedByMemberId: payout.confirmedByMemberId,
+              disputedAt: payout.disputedAt,
+              disputedByMemberId: payout.disputedByMemberId,
+              disputeReason: payout.disputeReason,
+            }
+          : null,
+        expected,
+      );
+    } catch (error) {
+      if (error instanceof RoundLifecycleFinancialIntegrityError) throw new CircleCompletionIntegrityError();
+      throw error;
+    }
+    return;
+  }
 
   let contributionReadiness: "READY" | "INCOMPLETE";
   try {

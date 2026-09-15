@@ -36,6 +36,9 @@ const ownerPayoutsRoundSelect = {
   roundNumber: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority for "was this round's closure an owner-
+  // declared import, or a normal NIA-managed closure."
+  closureBasis: true,
   recipientId: true,
   recipient: {
     select: {
@@ -101,6 +104,10 @@ const ownerPayoutsPayoutSelect = {
   amount: true,
   currency: true,
   status: true,
+  // 9G: the presentation authority distinguishing an owner-declared
+  // imported historical payout from a normal recipient-confirmed one --
+  // never inferred from roundNumber/K, always this persisted field.
+  confirmationBasis: true,
   clientOperationId: true,
   recordedAt: true,
   recordedById: true,

@@ -81,7 +81,7 @@ export default async function DepositHistoryPage({ params, searchParams }: { par
         <div aria-hidden="true" className="pointer-events-none absolute -right-24 top-8 hidden size-72 rounded-full border border-[var(--nia-border)] opacity-45 lg:block" />
         <div aria-hidden="true" className="pointer-events-none absolute -left-32 top-[31rem] hidden size-56 rounded-full border border-[var(--nia-border)] opacity-30 lg:block" />
 
-        <nav aria-label="Breadcrumb" className="relative flex min-w-0 items-center gap-2 text-sm text-[var(--nia-text-muted)]">
+        <nav aria-label={dictionary.common.breadcrumb} className="relative flex min-w-0 items-center gap-2 text-sm text-[var(--nia-text-muted)]">
           <Link href="/deposits" className="truncate transition hover:text-[var(--nia-primary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">{dictionary.common.mySavings}</Link>
           <span aria-hidden="true">›</span>
           <span className="truncate font-medium text-[var(--nia-text)]">{goal.name}</span>

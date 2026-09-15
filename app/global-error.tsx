@@ -3,6 +3,9 @@
 import "./globals.css";
 
 import { RecoveryPanel } from "@/app/recovery-panel";
+import { LOCALE_COOKIE } from "@/src/i18n/config";
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
 
 export default function GlobalError({
   unstable_retry,
@@ -10,15 +13,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   unstable_retry: () => void;
 }>) {
+  const locale = typeof document !== "undefined" && new RegExp(`(?:^|; )${LOCALE_COOKIE}=en(?:;|$)`).test(document.cookie) ? "en" : "fr";
+  const dictionary = locale === "en" ? en : fr;
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className="min-h-full bg-[#fbf7ef] antialiased">
         <RecoveryPanel
-          heading="Something went wrong."
-          description="Please try again. If the problem continues, return home and try again later."
+          heading={dictionary.common.globalErrorTitle}
+          description={dictionary.common.globalErrorDescription}
           retry={unstable_retry}
+          retryLabel={dictionary.common.retry}
           returnHref="/"
-          returnLabel="Return home"
+          returnLabel={dictionary.common.returnHome}
         />
       </body>
     </html>

@@ -15,6 +15,14 @@ above all of them.
 Audited by 7M against the code as it exists after 7L.4. No product code
 was changed by 7M — no P0/P1 defect was found requiring one.
 
+**Binding amendment — existing-circle import.** The native-circle contract
+below remains the default for every existing and newly-started circle. The
+separate, binding V1 extension for an already-running SUSU is
+`docs/product/susu-existing-import-contract-freeze.md` (9B.1). It freezes a
+strict owner-declared, provenance-tagged completed-round prefix; it does not
+reinterpret imported declarations as NIA-observed or member-confirmed
+financial events.
+
 ## 1. V1 product contract, one sentence per slice
 
 A SUSU circle is created `DRAFT` by its owner, who adds members and sets

@@ -40,6 +40,7 @@ function buildDeps(overrides: Partial<RemoveDraftCircleMemberDependencies> = {})
         circleId: input.circleId,
         displayName: "Amara",
         email: null,
+        phone: null,
         memberCode: "ABCDEF0123456789",
         payoutOrder: null,
         status: "REMOVED",

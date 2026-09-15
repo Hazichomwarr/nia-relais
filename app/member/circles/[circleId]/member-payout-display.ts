@@ -15,27 +15,47 @@ const UNRECORDED_BADGE_CLASS = "bg-[#efe7db] text-[#587066]";
 const RECORDED_BADGE_CLASS = "bg-[#fff0d9] text-[#8a5b27]";
 const CONFIRMED_BADGE_CLASS = "bg-[#e6f0e8] text-[#35634f]";
 const DISPUTED_BADGE_CLASS = "bg-[#f4e6e1] text-[#8d4f42]";
+// 9G: a deliberately distinct, quiet sage -- never the same green as a
+// real recipient confirmation, never a warning/red treatment (imported
+// history is legitimate data, not a problem state -- ticket §14).
+const IMPORTED_BADGE_CLASS = "bg-[#e3e8df] text-[#4f6354]";
 
 /**
- * Wording per the 7K.10 spec (sections 7-10): a null payout means the
- * owner has not recorded anything yet -- the member cannot decide on a
- * payout that doesn't exist as a persisted fact. RECORDED means the owner
- * recorded it and it now awaits the recipient's own decision. CONFIRMED
- * means the recipient already confirmed receiving it. DISPUTED means the
- * recipient already reported it was not validly received -- worded as a
- * plain historical fact, never as "pending adjudication," "awaiting
+ * Wording per the 7K.10 spec (sections 7-10), extended 9G for imported
+ * history: a null payout means the owner has not recorded anything yet --
+ * the member cannot decide on a payout that doesn't exist as a persisted
+ * fact. RECORDED means the owner recorded it and it now awaits the
+ * recipient's own decision. CONFIRMED means the recipient already
+ * confirmed receiving it THROUGH NIA. DISPUTED means the recipient
+ * already reported it was not validly received -- worded as a plain
+ * historical fact, never as "pending adjudication," "awaiting
  * correction," or something NIA will resolve/refund, because it is
- * terminal in V1 (7K.1 sign-off item 2). Branches only on payout.status
- * (or its absence) -- never on round.status or a due date.
+ * terminal in V1 (7K.1 sign-off item 2).
+ *
+ * `confirmationBasis` is the presentation authority for the one case a
+ * member must never see worded as their own action: a CONFIRMED payout
+ * whose confirmationBasis is IMPORTED_DECLARATION means the OWNER
+ * declared it when importing the circle -- this member never confirmed
+ * anything through NIA for it, even for their own historical round, and
+ * the copy must say so plainly ("Imported history," never "You confirmed
+ * receiving this payout"), per ticket 9G §6.
  */
 export function getMemberPayoutStatusPresentation(
   status: MemberPayoutsPayoutResult["status"] | null,
+  confirmationBasis?: MemberPayoutsPayoutResult["confirmationBasis"],
 ): BadgePresentation & { description: string } {
   if (status === null) {
     return {
       label: "Not yet recorded",
       description: "No payout has been recorded yet. The circle owner records it once it happens outside NIA.",
       className: UNRECORDED_BADGE_CLASS,
+    };
+  }
+  if (status === "CONFIRMED" && confirmationBasis === "IMPORTED_DECLARATION") {
+    return {
+      label: "Imported history",
+      description: "Reported when this circle was imported into NIA.",
+      className: IMPORTED_BADGE_CLASS,
     };
   }
   if (status === "RECORDED") {

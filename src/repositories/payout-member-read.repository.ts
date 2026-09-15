@@ -68,6 +68,9 @@ const memberPayoutsRoundSelect = {
   roundNumber: true,
   dueDate: true,
   status: true,
+  // 9G: presentation authority distinguishing an imported historical
+  // round from a normal NIA-managed one (see payout-member-read.service.ts).
+  closureBasis: true,
   recipientId: true,
 } satisfies Prisma.PayoutRoundSelect;
 
@@ -132,6 +135,9 @@ const memberPayoutsPayoutSelect = {
   amount: true,
   currency: true,
   status: true,
+  // 9G: presentation authority distinguishing an owner-declared imported
+  // historical payout from the recipient's own confirmation through NIA.
+  confirmationBasis: true,
   recordedAt: true,
   recordedById: true,
   confirmedAt: true,

@@ -8,10 +8,16 @@ import {
   assertRoundLifecycleStateIntegrity,
   assessContributionClosureReadiness,
   assessPayoutClosureReadiness,
+  firstLiveRoundNumber,
   RoundLifecycleFinancialIntegrityError,
   RoundLifecycleStateIntegrityError,
 } from "@/src/domain/round-lifecycle";
 import { lockSavingsCircleForUpdate } from "@/src/repositories/circle-lock.repository";
+import {
+  findCircleActivationObligations,
+  findCircleActivationPayouts,
+  findCircleActivationRounds,
+} from "@/src/repositories/circle.repository";
 import {
   activateLifecycleRound,
   closeLifecycleRound,
@@ -20,10 +26,12 @@ import {
   findObligationsForLifecycleRound,
   findPayoutForLifecycleRound,
   findRoundsForLifecycle,
+  type LifecycleCircleRecord,
   type LifecycleObligationRecord,
   type LifecyclePayoutRecord,
   type LifecycleRoundRecord,
 } from "@/src/repositories/round-lifecycle.repository";
+import { assertImportedReconstructionIntegrity, CircleActivationIntegrityError } from "@/src/services/circle.service";
 import { prisma } from "@/src/prisma";
 
 // Implements the frozen 7K.11 round-lifecycle contract
@@ -289,26 +297,91 @@ function assertPayoutReadyToClose(
 }
 
 /**
- * Resolves a request to activate round 1 when round 1 is already
- * ACTIVE or CLOSED (7K.13 section 20 / 7K.11 §21.21): a safe, zero-write
- * replay as long as round 1's own activation provenance is coherent --
- * the caller's original intent ("round 1 has started") was genuinely
- * satisfied, whether or not it has since progressed further. Never
- * reactivates or rewrites anything.
+ * Resolves a request to activate the first live round when it is already
+ * ACTIVE or CLOSED (7K.13 section 20 / 7K.11 §21.21, generalized 9F): a
+ * safe, zero-write replay as long as the target round's own activation
+ * provenance is coherent -- the caller's original intent ("the first
+ * NIA-managed round has started") was genuinely satisfied, whether or not
+ * it has since progressed further. Never reactivates or rewrites
+ * anything, and -- critically (9F ticket §9) -- never advances to any
+ * OTHER round: the target is always re-derived from the same immutable
+ * circle facts (origin/K), never from "whichever round happens to be
+ * UPCOMING now," so a replay can never drift forward to K+2.
  */
-function resolveActivateFirstRoundReplay(circleId: string, roundOne: LifecycleRoundRecord): ActivateFirstRoundResult {
-  return { circleId, round: serializeLifecycleRound(roundOne), replayed: true };
+function resolveActivateFirstRoundReplay(circleId: string, targetRound: LifecycleRoundRecord): ActivateFirstRoundResult {
+  return { circleId, round: serializeLifecycleRound(targetRound), replayed: true };
 }
 
 /**
- * Activates round 1 of an already-ACTIVE circle -- the frozen 7K.11
- * Option B first-round-activation contract (§21.7): activateCircle
- * itself is never touched by this function and remains exactly what it
- * already was (every round created UPCOMING); this is the separate,
- * explicit owner action that starts round 1's own collection period.
- * Never based on startDate, dueDate, current date, a read, a login, or
- * any financial activity -- only this explicit call, by the owner, does
- * it.
+ * Generalized fresh-start precondition (9F, extending 7K.13 section 5):
+ * every round BEFORE the target must already be CLOSED with imported-
+ * declaration basis (an owner-declared historical fact this module never
+ * witnessed), the target itself and every round after it must still be
+ * UPCOMING with normal NIA-managed basis. For a NEW circle (target = 1),
+ * no round has a smaller number, so this reduces to exactly the original
+ * "every round UPCOMING" rule -- byte-identical behavior, not a special
+ * case. assertLifecycleStateIntegrity already guarantees the overall
+ * phase-ordered shape is coherent; this is the additional, stricter
+ * "nothing after the historical prefix has started yet" check a fresh
+ * *first-live-round* activation specifically requires.
+ */
+export function assertFreshStartPrecondition(rounds: readonly LifecycleRoundRecord[], targetRoundNumber: number): void {
+  for (const round of rounds) {
+    if (round.roundNumber < targetRoundNumber) {
+      if (round.status !== "CLOSED" || round.closureBasis !== "IMPORTED_DECLARATION") {
+        throw new RoundLifecycleIntegrityError();
+      }
+    } else if (round.status !== "UPCOMING" || round.closureBasis !== "NIA_MANAGED") {
+      throw new RoundLifecycleIntegrityError();
+    }
+  }
+}
+
+/**
+ * Historical-prefix integrity for an IMPORTED circle (9F ticket §5): before
+ * ever activating K+1, re-verifies the ENTIRE imported prefix (rounds
+ * 1..K, their obligations, their payouts) still satisfies the exact frozen
+ * 9E reconstruction contract -- never merely trusting round statuses.
+ * Reuses circle.service.ts's own canonical
+ * assertImportedReconstructionIntegrity (the SAME function
+ * activateImportedCircle uses to verify its own freshly-written state,
+ * and the SAME function an ACTIVE-replay of imported activation
+ * re-verifies) and circle.repository.ts's own canonical whole-circle
+ * reads (findCircleActivationRounds/Obligations/Payouts) -- never a
+ * second, independently-drifting copy of either the query shape or the
+ * audit algorithm. Only ever called for an IMPORTED circle: a NEW circle
+ * has no historical prefix to verify (K is always 0), so this and its one
+ * extra round-trip of queries is skipped entirely for the common path.
+ */
+async function assertImportedPrefixCoherent(
+  client: PrismaClient | Prisma.TransactionClient,
+  circle: Pick<LifecycleCircleRecord, "id" | "historicalCompletedRoundCount">,
+): Promise<void> {
+  const [rounds, obligations, payouts] = await Promise.all([
+    findCircleActivationRounds(client, circle.id),
+    findCircleActivationObligations(client, circle.id),
+    findCircleActivationPayouts(client, circle.id),
+  ]);
+  try {
+    assertImportedReconstructionIntegrity(circle, rounds, obligations, payouts);
+  } catch (error) {
+    if (error instanceof CircleActivationIntegrityError) throw new RoundLifecycleIntegrityError();
+    throw error;
+  }
+}
+
+/**
+ * Activates the first NIA-managed round of an already-ACTIVE circle --
+ * round 1 for a NEW circle, round K+1 for an IMPORTED circle (9F,
+ * docs/product/susu-existing-import-contract-freeze.md §6, generalizing
+ * the frozen 7K.11 Option B first-round-activation contract, §21.7).
+ * activateCircle/activateImportedCircle are never touched by this
+ * function; this remains the separate, explicit owner action that starts
+ * the first live round's own collection period. The target round number
+ * is derived exclusively from the circle's own persisted, immutable
+ * originKind/historicalCompletedRoundCount (firstLiveRoundNumber,
+ * src/domain/round-lifecycle.ts) -- never accepted from the client, never
+ * inferred from round statuses, due dates, or elapsed time.
  */
 export async function activateFirstRound(params: {
   ownerId: string;
@@ -324,22 +397,27 @@ export async function activateFirstRound(params: {
   if (rounds.length === 0) {
     // No rounds exist at all -- this circle was never activated (still
     // DRAFT, or CANCELLED before ever activating). Never activated is
-    // not the same fact as corrupted: activateCircle is the only writer
-    // that ever creates PayoutRound rows, and it always creates the full
-    // set atomically, so a circle with zero rounds simply hasn't reached
-    // that point yet.
+    // not the same fact as corrupted: activateCircle/activateImportedCircle
+    // are the only writers that ever create PayoutRound rows, and each
+    // always creates the full set atomically, so a circle with zero
+    // rounds simply hasn't reached that point yet.
     throw new RoundLifecycleCircleNotActiveError();
   }
   assertLifecycleStateIntegrity(rounds);
-  const roundOne = rounds.find((round) => round.roundNumber === 1);
-  if (!roundOne) throw new RoundLifecycleIntegrityError();
+  const targetRoundNumber = firstLiveRoundNumber(circle.originKind, circle.historicalCompletedRoundCount);
+  const targetRound = rounds.find((round) => round.roundNumber === targetRoundNumber);
+  if (!targetRound) throw new RoundLifecycleIntegrityError();
 
-  if (roundOne.status === "ACTIVE" || roundOne.status === "CLOSED") {
-    return resolveActivateFirstRoundReplay(circleId, roundOne);
+  if (targetRound.status === "ACTIVE" || targetRound.status === "CLOSED") {
+    return resolveActivateFirstRoundReplay(circleId, targetRound);
   }
-  if (roundOne.status !== "UPCOMING") throw new RoundLifecycleIntegrityError();
+  if (targetRound.status !== "UPCOMING") throw new RoundLifecycleIntegrityError();
 
   if (circle.status !== "ACTIVE") throw new RoundLifecycleCircleNotActiveError();
+
+  if (circle.originKind === "IMPORTED") {
+    await assertImportedPrefixCoherent(prisma, circle);
+  }
 
   return prisma.$transaction(async (transaction) => {
     const locked = await lockSavingsCircleForUpdate(transaction, circleId);
@@ -356,28 +434,29 @@ export async function activateFirstRound(params: {
     if (freshRounds.length === 0) throw new RoundLifecycleCircleNotActiveError();
     assertLifecycleStateIntegrity(freshRounds);
 
-    const freshRoundOne = freshRounds.find((round) => round.roundNumber === 1);
-    if (!freshRoundOne) throw new RoundLifecycleIntegrityError();
+    // Re-derived from the SAME fresh, lock-held circle row -- origin/K are
+    // frozen post-activation (9D.1/9E), so this can never legitimately
+    // differ from the unlocked pre-check's own target, but this function
+    // never trusts a value computed before the lock was held.
+    const freshTargetRoundNumber = firstLiveRoundNumber(freshCircle.originKind, freshCircle.historicalCompletedRoundCount);
+    const freshTargetRound = freshRounds.find((round) => round.roundNumber === freshTargetRoundNumber);
+    if (!freshTargetRound) throw new RoundLifecycleIntegrityError();
 
-    if (freshRoundOne.status === "ACTIVE" || freshRoundOne.status === "CLOSED") {
-      return resolveActivateFirstRoundReplay(circleId, freshRoundOne);
+    if (freshTargetRound.status === "ACTIVE" || freshTargetRound.status === "CLOSED") {
+      return resolveActivateFirstRoundReplay(circleId, freshTargetRound);
     }
-    if (freshRoundOne.status !== "UPCOMING") throw new RoundLifecycleIntegrityError();
+    if (freshTargetRound.status !== "UPCOMING") throw new RoundLifecycleIntegrityError();
 
-    // Fresh-start precondition (7K.13 section 5): every round must still
-    // be UPCOMING -- assertLifecycleStateIntegrity already guarantees the
-    // overall shape is coherent, but a fresh *first* activation
-    // specifically requires the "nothing has started yet" shape, not
-    // merely "some coherent shape."
-    if (!freshRounds.every((round) => round.status === "UPCOMING")) {
-      throw new RoundLifecycleIntegrityError();
+    assertFreshStartPrecondition(freshRounds, freshTargetRoundNumber);
+    if (freshCircle.originKind === "IMPORTED") {
+      await assertImportedPrefixCoherent(transaction, freshCircle);
     }
 
     if (freshCircle.status !== "ACTIVE") throw new RoundLifecycleCircleNotActiveError();
 
     const activatedAt = new Date();
     const transition = await activateLifecycleRound(transaction, {
-      roundId: freshRoundOne.id,
+      roundId: freshTargetRound.id,
       circleId,
       activatedAt,
       activatedById: ownerId,
@@ -387,14 +466,14 @@ export async function activateFirstRound(params: {
       // the row lock this branch should be unreachable, but the CAS
       // contract is honored regardless.
       const raced = await findRoundsForLifecycle(transaction, circleId);
-      const racedRoundOne = raced.find((round) => round.roundNumber === 1);
-      if (!racedRoundOne || racedRoundOne.status === "UPCOMING") throw new RoundLifecycleIntegrityError();
-      return resolveActivateFirstRoundReplay(circleId, racedRoundOne);
+      const racedTargetRound = raced.find((round) => round.roundNumber === freshTargetRoundNumber);
+      if (!racedTargetRound || racedTargetRound.status === "UPCOMING") throw new RoundLifecycleIntegrityError();
+      return resolveActivateFirstRoundReplay(circleId, racedTargetRound);
     }
 
     return {
       circleId,
-      round: serializeLifecycleRound({ ...freshRoundOne, status: "ACTIVE", activatedAt, activatedById: ownerId }),
+      round: serializeLifecycleRound({ ...freshTargetRound, status: "ACTIVE", activatedAt, activatedById: ownerId }),
       replayed: false,
     };
   });

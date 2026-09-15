@@ -1,4 +1,6 @@
 import { requireUser } from "@/src/auth/require-user";
+import { getDictionary } from "@/src/i18n/get-dictionary";
+import { getLocale } from "@/src/i18n/locale";
 import {
   getCustodianInboxForUser,
   type CustodianInboxItem,
@@ -71,7 +73,9 @@ export default async function CustodianPage({
 }: {
   searchParams: CustodianSearchParams;
 }) {
-  const user = await requireUser();
+  const [user, locale] = await Promise.all([requireUser(), getLocale()]);
+  const dictionary = getDictionary(locale);
+  const copy = dictionary.custodian;
   const filters = await searchParams;
   const status = parseStatusFilter(filters.status);
   const range = parseRangeFilter(filters.range);
@@ -96,46 +100,46 @@ export default async function CustodianPage({
     <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-4 py-8 text-[#173c35] sm:px-8 sm:py-12">
       <div className="mx-auto w-full max-w-3xl">
         <header className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b95035]">Trusted person</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight">A little trust goes a long way.</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b95035]">{copy.eyebrow}</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight">{copy.title}</h1>
           <p className="mt-4 text-base leading-7 text-[#5a6b61]">
-            People you know may ask you to confirm that their recorded savings happened. NIA does not hold or move the money.
+            {copy.description}
           </p>
         </header>
 
         <dl className="mt-8 grid gap-3 sm:grid-cols-3">
-          <SummaryCount label="Invitations" value={pendingInvitations.length} />
-          <SummaryCount label="Awaiting confirmation" value={pendingDeposits.length} />
-          <SummaryCount label="Active relationships" value={activeRelationships.length} />
+          <SummaryCount label={copy.invitations} value={pendingInvitations.length} />
+          <SummaryCount label={copy.awaitingConfirmation} value={pendingDeposits.length} />
+          <SummaryCount label={copy.activeRelationships} value={activeRelationships.length} />
         </dl>
 
         <section className="mt-10" aria-labelledby="attention-heading">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b95035]">Needs your attention</p>
-          <h2 id="attention-heading" className="mt-2 text-2xl font-semibold tracking-tight">What needs you today</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b95035]">{copy.needsAttention}</p>
+          <h2 id="attention-heading" className="mt-2 text-2xl font-semibold tracking-tight">{copy.attentionTitle}</h2>
 
           <div className="mt-5 space-y-6">
             {pendingInvitations.length > 0 ? (
               <section aria-labelledby="invitations-heading">
-                <h3 id="invitations-heading" className="text-lg font-semibold">Invitations waiting for you</h3>
+                <h3 id="invitations-heading" className="text-lg font-semibold">{copy.invitationsWaiting}</h3>
                 <div className="mt-4 space-y-4">
-                  {pendingInvitations.map((assignment) => <CustodianAssignmentCard key={assignment.id} assignment={assignment} />)}
+                  {pendingInvitations.map((assignment) => <CustodianAssignmentCard key={assignment.id} assignment={assignment} dictionary={dictionary} locale={locale} />)}
                 </div>
               </section>
             ) : null}
 
             <section aria-labelledby="deposits-heading">
-              <h3 id="deposits-heading" className="text-lg font-semibold">Deposits awaiting confirmation</h3>
+              <h3 id="deposits-heading" className="text-lg font-semibold">{copy.savingsAwaiting}</h3>
               {pendingDeposits.length === 0 ? (
                 <p className="mt-4 rounded-2xl border border-[#d7e5d7] bg-[#edf5eb] p-5 text-sm leading-6 text-[#315b4b]">
-                  You&apos;re all caught up.
+                  {copy.caughtUp}
                 </p>
               ) : (
                 <>
                   <p className="mt-2 text-sm font-semibold text-[#315b4b]">
-                    {pendingDeposits.length} deposit{pendingDeposits.length === 1 ? " is" : "s are"} waiting for your confirmation.
+                    {copy.pendingCount.replace("{count}", String(pendingDeposits.length))}
                   </p>
                   <div className="mt-4 space-y-4">
-                    {pendingDeposits.map((deposit) => <CustodianPendingDepositCard key={deposit.id} deposit={deposit} />)}
+                    {pendingDeposits.map((deposit) => <CustodianPendingDepositCard key={deposit.id} deposit={deposit} dictionary={dictionary} locale={locale} />)}
                   </div>
                 </>
               )}
@@ -145,33 +149,33 @@ export default async function CustodianPage({
 
         {activeRelationships.length > 0 ? (
           <section className="mt-10" aria-labelledby="relationships-heading">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">Your trusted-person relationships</p>
-            <h2 id="relationships-heading" className="mt-2 text-2xl font-semibold tracking-tight">People you&apos;re helping</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{copy.relationshipsEyebrow}</p>
+            <h2 id="relationships-heading" className="mt-2 text-2xl font-semibold tracking-tight">{copy.relationshipsTitle}</h2>
             <div className="mt-5 space-y-3">
-              {activeRelationships.map((assignment) => <CustodianRelationshipRow key={assignment.id} assignment={assignment} />)}
+              {activeRelationships.map((assignment) => <CustodianRelationshipRow key={assignment.id} assignment={assignment} dictionary={dictionary} locale={locale} />)}
             </div>
           </section>
         ) : null}
 
         <section className="mt-10" aria-labelledby="history-heading">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#7b8179]">History and filters</p>
-          <h2 id="history-heading" className="mt-2 text-2xl font-semibold tracking-tight">Your trusted-person activity</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#7b8179]">{copy.historyEyebrow}</p>
+          <h2 id="history-heading" className="mt-2 text-2xl font-semibold tracking-tight">{copy.historyTitle}</h2>
 
           {noActivity ? (
             <div className="mt-5 rounded-[1.75rem] border border-[#e4d6c4] bg-[#fffaf0] p-7 shadow-[0_12px_30px_rgba(23,60,53,0.07)]">
-              <p className="text-xl font-semibold">You&apos;re not someone&apos;s trusted person yet.</p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-[#5a6b61]">When someone asks for your support, their invitation and any savings awaiting confirmation will appear here.</p>
+              <p className="text-xl font-semibold">{copy.emptyTitle}</p>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-[#5a6b61]">{copy.emptyDescription}</p>
             </div>
           ) : (
             <>
-              <CustodianInboxFilters status={status} range={range} />
+              <CustodianInboxFilters status={status} range={range} dictionary={dictionary} />
               {filteredRelationships.length === 0 ? (
                 <p className="mt-5 rounded-2xl border border-[#e4d6c4] bg-[#fffaf0] p-5 text-sm leading-6 text-[#5a6b61]">
-                  No trusted-person activity matches these filters.
+                  {copy.emptyDescription}
                 </p>
               ) : (
                 <div className="mt-5 space-y-3">
-                  {filteredRelationships.map((assignment) => <CustodianRelationshipRow key={assignment.id} assignment={assignment} />)}
+                  {filteredRelationships.map((assignment) => <CustodianRelationshipRow key={assignment.id} assignment={assignment} dictionary={dictionary} locale={locale} />)}
                 </div>
               )}
             </>

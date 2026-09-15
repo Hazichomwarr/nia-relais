@@ -19,6 +19,8 @@ const ownerCircleSelect = {
   frequency: true,
   startDate: true,
   status: true,
+  originKind: true,
+  historicalCompletedRoundCount: true,
 } satisfies Prisma.SavingsCircleSelect;
 
 export type OwnerCircleRecord = Prisma.SavingsCircleGetPayload<{
@@ -37,6 +39,7 @@ const ownerCircleMemberSelect = {
   displayName: true,
   memberCode: true,
   email: true,
+  phone: true,
   status: true,
   payoutOrder: true,
   addedAt: true,

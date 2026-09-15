@@ -19,7 +19,7 @@ export default function RegisterForm({ locale, dictionary }: { locale: Locale; d
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">{dictionary.register.title}</h1><LanguageSwitcher locale={locale} compact /></div>
+      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">{dictionary.register.title}</h1><LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} compact /></div>
       <form action={formAction} className="mt-6 space-y-4">
         <label className="block">
           <span className="text-sm font-medium">{dictionary.common.name}</span>

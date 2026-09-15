@@ -28,6 +28,11 @@ const completedOwnerCircleSelect = {
   startDate: true,
   status: true,
   completedAt: true,
+  // 9G: circle-level import context must remain visible/coherent after
+  // completion too (freeze §8, ticket §12) -- completion never flattens
+  // this provenance.
+  originKind: true,
+  historicalCompletedRoundCount: true,
 } satisfies Prisma.SavingsCircleSelect;
 
 export type CompletedOwnerCircleRecord = Prisma.SavingsCircleGetPayload<{

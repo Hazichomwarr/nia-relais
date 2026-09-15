@@ -19,25 +19,48 @@ const UNRECORDED_BADGE_CLASS = "bg-[#efe7db] text-[#587066]";
 const RECORDED_BADGE_CLASS = "bg-[#fff0d9] text-[#8a5b27]";
 const CONFIRMED_BADGE_CLASS = "bg-[#e6f0e8] text-[#35634f]";
 const DISPUTED_BADGE_CLASS = "bg-[#f4e6e1] text-[#8d4f42]";
+// 9G: a deliberately distinct, quiet sage -- never the same green as a
+// real recipient confirmation, never a warning/red treatment (imported
+// history is legitimate data, not a problem state -- ticket §14).
+const IMPORTED_BADGE_CLASS = "bg-[#e3e8df] text-[#4f6354]";
 
 /**
- * Wording per the 7K.9 spec (section 5): UNRECORDED means no external
- * payout has been entered into NIA yet; RECORDED means the owner entered
- * it and it awaits the recipient's own decision; CONFIRMED means the
- * recipient confirmed receiving it; DISPUTED means the recipient reported
- * it was not validly received -- and DISPUTED is never worded as
- * "awaiting correction," "retry available," or otherwise fixable, because
- * it is a terminal state in V1 (7K.1 sign-off item 2). Branches only on
- * payout.status (or its absence) -- never on round.status or a due date.
+ * Wording per the 7K.9 spec (section 5), extended 9G for imported history
+ * (docs/product/susu-existing-import-contract-freeze.md §4/§8): UNRECORDED
+ * means no external payout has been entered into NIA yet; RECORDED means
+ * the owner entered it and it awaits the recipient's own decision;
+ * CONFIRMED means the recipient confirmed receiving it THROUGH NIA;
+ * DISPUTED means the recipient reported it was not validly received --
+ * and DISPUTED is never worded as "awaiting correction," "retry
+ * available," or otherwise fixable, because it is a terminal state in V1
+ * (7K.1 sign-off item 2).
+ *
+ * `confirmationBasis` is the presentation authority for the one case
+ * `status` alone cannot distinguish: a CONFIRMED payout whose
+ * confirmationBasis is IMPORTED_DECLARATION is the OWNER's own historical
+ * declaration at import time, never the recipient's own action through
+ * NIA -- it is branded and worded entirely differently ("Imported
+ * history," never "Confirmed"/"the recipient confirmed"), exactly as
+ * ticket 9G §6 requires. Every other branch is unchanged, and still
+ * branches only on payout.status (or its absence) -- never on
+ * round.status or a due date.
  */
 export function getPayoutStatusPresentation(
   status: OwnerPayoutsPayoutResult["status"] | null,
+  confirmationBasis?: OwnerPayoutsPayoutResult["confirmationBasis"],
 ): BadgePresentation & { description: string } {
   if (status === null) {
     return {
       label: "Unrecorded",
       description: "No payout has been recorded yet.",
       className: UNRECORDED_BADGE_CLASS,
+    };
+  }
+  if (status === "CONFIRMED" && confirmationBasis === "IMPORTED_DECLARATION") {
+    return {
+      label: "Imported history",
+      description: "Reported when this circle was imported into NIA.",
+      className: IMPORTED_BADGE_CLASS,
     };
   }
   if (status === "RECORDED") {
