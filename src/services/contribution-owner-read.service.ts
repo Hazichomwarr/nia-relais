@@ -67,7 +67,7 @@ export class OwnerContributionsRoundNotFoundError extends Error {
   }
 }
 
-const ELIGIBLE_CIRCLE_STATUSES = ["ACTIVE", "COMPLETED"] as const;
+const ELIGIBLE_CIRCLE_STATUSES = ["ACTIVE", "COMPLETED", "CANCELLED", "ARCHIVED"] as const;
 type EligibleCircleStatus = (typeof ELIGIBLE_CIRCLE_STATUSES)[number];
 
 function isEligibleCircleStatus(status: string): status is EligibleCircleStatus {

@@ -12,6 +12,7 @@ import { formatDepositAmount, formatDepositDate } from "./deposit-display";
 import { DepositHistoryFilters, type DepositRangeFilter, type DepositStatusFilter } from "./deposit-history-filters";
 import DepositHistoryItemCard from "./deposit-history-item";
 import { GoalCustodianSection } from "./goal-custodian-section";
+import { GoalRetirementControls } from "./goal-retirement-controls";
 
 type DepositSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -140,6 +141,7 @@ export default async function DepositHistoryPage({ params, searchParams }: { par
               <p className="mt-6 rounded-2xl bg-[var(--nia-active-soft)] px-4 py-3 text-sm leading-6 text-[var(--nia-primary)]">{copy.progressMicrocopy}</p>
             </section>
             {custodianState ? <GoalCustodianSection goalId={goal.id} assignmentState={custodianState} dictionary={dictionary} /> : null}
+            {goal.status === "ACTIVE" || goal.status === "COMPLETED" ? <GoalRetirementControls goalId={goal.id} status={goal.status} dictionary={dictionary} /> : null}
             <section className="hidden rounded-2xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-5 text-[var(--nia-text-muted)] lg:block"><p className="font-serif text-xl leading-7 text-[var(--nia-text)]">{copy.disciplineQuote}</p><p className="mt-3 text-xs font-bold uppercase tracking-[0.15em] text-[var(--nia-primary)]">— NIA</p></section>
           </aside>
         </div>

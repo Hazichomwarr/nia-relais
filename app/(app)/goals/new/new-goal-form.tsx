@@ -12,6 +12,7 @@ import { initialCreatePersonalGoalState } from "@/src/actions/goal.state";
 import type { Locale } from "@/src/i18n/config";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { localizePersonalSavingsError } from "@/src/i18n/personal-savings-error-presentation";
+import { getCurrencyDisplayCode } from "@/src/i18n/format";
 
 const currencies = ["USD", "XOF", "EUR", "GBP"] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -115,7 +116,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
               <label className="block" htmlFor="currency">
                 <span className="text-sm font-semibold">{copy.currency}</span>
                 <select id="currency" name="currency" value={currency} onChange={(event) => setCurrency(event.target.value as (typeof currencies)[number])} aria-invalid={Boolean(state.fieldErrors?.currency)} aria-describedby="currency-error" className={inputClassName}>
-                  {currencies.map((option) => <option key={option}>{option}</option>)}
+                  {currencies.map((option) => <option key={option} value={option}>{getCurrencyDisplayCode(option)}</option>)}
                 </select>
                 <FieldError id="currency-error" errors={state.fieldErrors?.currency} />
               </label>
@@ -149,7 +150,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
             ) : (
               <p className="mt-6 rounded-2xl bg-[#fffaf0]/75 p-5 text-sm text-[#68483e]">{copy.timelineEmpty}</p>
             )}
-            {timeline && <p className="mt-4 text-sm leading-6 text-[#68483e]">{copy.timelineBasedOn.replace("{currency}", currency).replace("{amount}", weeklyAmount)}</p>}
+            {timeline && <p className="mt-4 text-sm leading-6 text-[#68483e]">{copy.timelineBasedOn.replace("{currency}", getCurrencyDisplayCode(currency)).replace("{amount}", weeklyAmount)}</p>}
           </section>
 
           {state.formError && <p className="rounded-2xl bg-[#f8d8d0] p-4 text-sm text-[#8d2f20]" role="alert">{localizePersonalSavingsError(state.formError, dictionary)}</p>}

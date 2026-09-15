@@ -81,7 +81,7 @@ export class OwnerPayoutsIntegrityError extends Error {
 // re-export pattern.
 export { PayoutAccountingIntegrityError } from "@/src/domain/payout-accounting";
 
-const ELIGIBLE_CIRCLE_STATUSES = ["ACTIVE", "COMPLETED", "ARCHIVED"] as const;
+const ELIGIBLE_CIRCLE_STATUSES = ["ACTIVE", "COMPLETED", "CANCELLED", "ARCHIVED"] as const;
 type EligibleCircleStatus = (typeof ELIGIBLE_CIRCLE_STATUSES)[number];
 
 export type OwnerPayoutsCircleResult = {

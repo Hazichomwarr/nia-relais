@@ -11,9 +11,10 @@ export const metadata: Metadata = {
   title: "My SUSU circles · NIA",
 };
 
-export default async function CirclesPage() {
+export default async function CirclesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const [user, locale] = await Promise.all([requireUser(), getLocale()]);
-  const circles = await getCirclesForOwnerIndex(user.id);
+  const historyView = (await searchParams).view === "history";
+  const circles = await getCirclesForOwnerIndex(user.id, { includeRetired: historyView });
 
-  return <CircleIndex circles={circles} dictionary={getDictionary(locale)} locale={locale} />;
+  return <CircleIndex circles={circles} dictionary={getDictionary(locale)} locale={locale} historyView={historyView} />;
 }

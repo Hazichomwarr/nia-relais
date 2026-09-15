@@ -83,7 +83,7 @@ async function getCompletionBalances(
 }
 
 function assertActiveOrCompleted(goal: LifecycleGoalRecord) {
-  if (goal.status === "ARCHIVED") {
+  if (goal.status !== "ACTIVE" && goal.status !== "COMPLETED") {
     throw new PersonalGoalCompletionConflictError();
   }
 }

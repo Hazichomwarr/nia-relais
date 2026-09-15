@@ -10,25 +10,33 @@ function formatAmount(amount: string, currency: string) {
   return formatMoney(amount, currency);
 }
 
-export default async function DepositsPage() {
+export default async function DepositsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const [user, locale] = await Promise.all([requireUser(), getLocale()]);
   const dictionary = getDictionary(locale);
   const copy = dictionary.personalSavings;
-  const goals = await getPersonalGoalsForDashboard(user);
+  const [goals, params] = await Promise.all([getPersonalGoalsForDashboard(user), searchParams]);
+  const historyView = params.view === "history";
+  const visibleGoals = goals.filter((goal) => historyView
+    ? goal.status === "ABANDONED" || goal.status === "ARCHIVED"
+    : goal.status !== "ABANDONED" && goal.status !== "ARCHIVED");
 
   return (
     <section className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b96549]">{dictionary.common.mySavings}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#173b32] sm:text-4xl">
-          {copy.indexTitle}
+          {historyView ? copy.retiredGoals : copy.indexTitle}
         </h1>
         <p className="mt-3 text-base leading-7 text-[#587066]">
           {copy.indexDescription}
         </p>
       </div>
 
-      {goals.length === 0 ? (
+      <Link href={historyView ? "/deposits" : "/deposits?view=history"} className="mt-5 inline-flex text-sm font-semibold text-[#285448] underline underline-offset-4">
+        {historyView ? copy.viewLiveGoals : copy.viewHistory}
+      </Link>
+
+      {visibleGoals.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-[#ded5c6] bg-white p-6 shadow-sm sm:p-8">
           <h2 className="text-xl font-semibold text-[#173b32]">{copy.noRecords}</h2>
           <p className="mt-2 max-w-lg leading-7 text-[#587066]">
@@ -43,7 +51,7 @@ export default async function DepositsPage() {
         </div>
       ) : (
         <div className="mt-8 space-y-3">
-          {goals.map((goal) => {
+          {visibleGoals.map((goal) => {
             const hasConfirmedSavings = goal.savedAmount !== "0.00";
 
             return (

@@ -12,7 +12,7 @@ const repositorySource = readFileSync(new URL("../../../src/repositories/circle-
 
 test("/circles derives owner scope only from requireUser", () => {
   assert.match(pageSource, /requireUser\(\)/);
-  assert.match(pageSource, /getCirclesForOwnerIndex\(user\.id\)/);
+  assert.match(pageSource, /getCirclesForOwnerIndex\(user\.id, \{ includeRetired: historyView \}\)/);
   assert.match(repositorySource, /where: \{ ownerId, status:/);
 });
 

@@ -5,6 +5,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { recordContributionAction } from "@/src/actions/circle.actions";
 import { initialRecordContributionState } from "@/src/actions/circle.state";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { formatMoney } from "@/src/i18n/format";
 
 // clientOperationId is generated ONCE per submission intent, client-side
 // only -- never in the Server Action (7J.7 section 6). It stays stable
@@ -67,11 +68,11 @@ export function RecordContributionForm({
       <p className="text-sm text-[#173b32]">
         {copy.recordContribution}: {" "}
         <span className="font-semibold">
-          {currency} {amount}
+          {formatMoney(amount, currency)}
         </span>
       </p>
       <p className="mt-1 text-xs text-[#7b8179]">
-        {copy.expected}: {currency} {amount}
+        {copy.expected}: {formatMoney(amount, currency)}
       </p>
 
       {state.status === "success" && state.payment ? (

@@ -100,7 +100,7 @@ export type PersonalGoalDashboardSummary = {
   weeklyAmount: string;
   startDate: string;
   unlockDate: string;
-  status: "ACTIVE" | "COMPLETED" | "ARCHIVED";
+  status: "ACTIVE" | "COMPLETED" | "ARCHIVED" | "ABANDONED";
   completedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
@@ -135,7 +135,7 @@ function serializeDate(date: Date | null) {
 }
 
 function statusRank(status: PersonalGoalDashboardSummary["status"]) {
-  return status === "ACTIVE" ? 0 : status === "COMPLETED" ? 1 : 2;
+  return status === "ACTIVE" ? 0 : status === "COMPLETED" ? 1 : status === "ARCHIVED" ? 2 : 3;
 }
 
 export async function getPersonalGoalsForDashboard(user: { id: string }) {

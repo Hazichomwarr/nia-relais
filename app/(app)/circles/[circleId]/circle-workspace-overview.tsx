@@ -10,6 +10,7 @@ import type { Locale } from "@/src/i18n/config";
 import { formatDate, getFrequencyLabel, getStatusLabel } from "@/src/i18n/format";
 
 import { formatContributionMoney } from "./contribution-desk-display";
+import { formatMoney } from "@/src/i18n/format";
 import { getRoundStatusBadge } from "./circle-workspace-display";
 
 function Initials({ name }: { name: string }) {
@@ -87,7 +88,7 @@ export function ActiveCircleWorkspaceOverview({
       </div>
 
       <section aria-label={copy.summaryLabel} className="grid border-b border-[#e2d7c9] py-6 sm:grid-cols-4">
-        <Stat label={copy.contribution} value={`${summary.circle.currency} ${summary.circle.contributionAmount}`} supporting={getFrequencyLabel(summary.circle.frequency, locale)} />
+        <Stat label={copy.contribution} value={formatMoney(summary.circle.contributionAmount, summary.circle.currency)} supporting={getFrequencyLabel(summary.circle.frequency, locale)} />
         <Stat label={copy.members} value={String(summary.members.length)} supporting={copy.activeMembers} />
         <Stat label={copy.started} value={formatDate(summary.circle.startDate, locale)} supporting={copy.circleStartDate} />
         <Stat label={copy.round} value={currentRound ? `${currentRound.roundNumber} ${copy.of} ${lifecycle.totalRounds}` : copy.notStarted} supporting={currentRound?.recipient.displayName ?? copy.rotationPending} />
@@ -118,5 +119,5 @@ export function ActiveCircleWorkspaceOverview({
 
 export function CompletedCircleWorkspaceOverview({ summary, dictionary, locale }: { summary: CompletedCircleOwnerSummaryResult; dictionary: Dictionary; locale: Locale }) {
   const copy = dictionary.susuWorkspace;
-  return <div className="max-w-4xl"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow} <span aria-hidden="true">›</span> {summary.circle.name}</p><section className="mt-4 rounded-[1.5rem] border border-[#e2d7c9] bg-[#fffdf8] p-7 sm:p-9"><span className="rounded-full bg-[#efe7db] px-3 py-1.5 text-xs font-bold tracking-wide text-[#587066]">{getStatusLabel("COMPLETED", dictionary)}</span><h1 className="mt-4 font-serif text-4xl tracking-tight text-[#173b32]">{summary.circle.name}</h1><p className="mt-3 max-w-xl leading-7 text-[#587066]">{copy.completedDescription}</p><dl className="mt-7 grid gap-5 sm:grid-cols-3"><Stat label={copy.contribution} value={`${summary.circle.currency} ${summary.circle.contributionAmount}`} supporting={getFrequencyLabel(summary.circle.frequency, locale)} /><Stat label={copy.members} value={String(summary.memberCount)} supporting={copy.rotationMembers} /><Stat label={copy.completed} value={formatDate(summary.circle.completedAt, locale)} supporting={copy.historicalRecord} /></dl></section></div>;
+  return <div className="max-w-4xl"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow} <span aria-hidden="true">›</span> {summary.circle.name}</p><section className="mt-4 rounded-[1.5rem] border border-[#e2d7c9] bg-[#fffdf8] p-7 sm:p-9"><span className="rounded-full bg-[#efe7db] px-3 py-1.5 text-xs font-bold tracking-wide text-[#587066]">{getStatusLabel("COMPLETED", dictionary)}</span><h1 className="mt-4 font-serif text-4xl tracking-tight text-[#173b32]">{summary.circle.name}</h1><p className="mt-3 max-w-xl leading-7 text-[#587066]">{copy.completedDescription}</p><dl className="mt-7 grid gap-5 sm:grid-cols-3"><Stat label={copy.contribution} value={formatMoney(summary.circle.contributionAmount, summary.circle.currency)} supporting={getFrequencyLabel(summary.circle.frequency, locale)} /><Stat label={copy.members} value={String(summary.memberCount)} supporting={copy.rotationMembers} /><Stat label={copy.completed} value={formatDate(summary.circle.completedAt, locale)} supporting={copy.historicalRecord} /></dl></section></div>;
 }

@@ -23,6 +23,8 @@ const STATUS_PRESENTATION: Record<CircleStatus, { badgeClassName: string; iconCl
     badgeClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]",
     iconClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]",
   },
+  CANCELLED: { badgeClassName: "bg-[#fff0d9] text-[#8a5b27]", iconClassName: "bg-[#fff0d9] text-[#8a5b27]" },
+  ARCHIVED: { badgeClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]", iconClassName: "bg-[var(--nia-surface-soft)] text-[var(--nia-text-muted)]" },
 };
 
 function GroupIcon({ className }: { className: string }) {
@@ -83,7 +85,7 @@ function CircleCard({ circle, dictionary, locale }: { circle: OwnerCircleIndexIt
   const copy = dictionary.susu;
   const presentation = STATUS_PRESENTATION[circle.status];
   const round = circle.currentOrNextRound;
-  const isCompleted = circle.status === "COMPLETED";
+  const isCompleted = circle.status === "COMPLETED" || circle.status === "CANCELLED" || circle.status === "ARCHIVED";
 
   return (
     <li>
@@ -140,9 +142,9 @@ function CircleEmptyState({ dictionary }: { dictionary: Dictionary }) {
   );
 }
 
-export function CircleIndex({ circles, dictionary, locale }: { circles: readonly OwnerCircleIndexItem[]; dictionary: Dictionary; locale: Locale }) {
+export function CircleIndex({ circles, dictionary, locale, historyView = false }: { circles: readonly OwnerCircleIndexItem[]; dictionary: Dictionary; locale: Locale; historyView?: boolean }) {
   const copy = dictionary.susu;
-  const sortedCircles = (["DRAFT", "ACTIVE", "COMPLETED"] as const).flatMap((status) => circles.filter((circle) => circle.status === status));
+  const sortedCircles = (historyView ? ["CANCELLED", "ARCHIVED"] : ["DRAFT", "ACTIVE", "COMPLETED"]).flatMap((status) => circles.filter((circle) => circle.status === status));
   const countLabel = `${circles.length} ${circles.length === 1 ? copy.circleCountOne : copy.circleCountMany}`;
 
   return (
@@ -156,6 +158,8 @@ export function CircleIndex({ circles, dictionary, locale }: { circles: readonly
             + {copy.createCircle}
           </Link>
         </div>
+
+        <Link href={historyView ? "/circles" : "/circles?view=history"} className="mt-5 inline-flex text-sm font-semibold text-[var(--nia-primary)] underline underline-offset-4">{historyView ? dictionary.personalSavings.viewLiveGoals : dictionary.personalSavings.viewHistory}</Link>
 
         {circles.length === 0 ? (
           <CircleEmptyState dictionary={dictionary} />

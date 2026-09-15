@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/src/auth/require-user";
 import { getDictionary } from "@/src/i18n/get-dictionary";
 import { getLocale } from "@/src/i18n/locale";
-import { getFrequencyLabel } from "@/src/i18n/format";
+import { formatMoney, getFrequencyLabel } from "@/src/i18n/format";
 import {
   ActiveCircleOwnerReadAuthorizationError,
   ActiveCircleOwnerReadNotActiveError,
@@ -63,6 +63,7 @@ import { PayoutDesk } from "./payout-desk";
 import { PayoutOrderForm } from "./payout-order-form";
 import { RoundLifecycleCard } from "./round-lifecycle-card";
 import { DraftCircleConfigurationForm } from "./draft-circle-configuration-form";
+import { CircleRetirementControls } from "./circle-retirement-controls";
 
 export async function generateMetadata(): Promise<Metadata> {
   const dictionary = getDictionary(await getLocale());
@@ -92,6 +93,12 @@ type CompletedSummaryData = {
   readonly payouts: OwnerCirclePayoutsResult;
 };
 
+type HistoricalSummaryData = {
+  readonly kind: "historical";
+  readonly contributions: OwnerCircleContributionsResult;
+  readonly payouts: OwnerCirclePayoutsResult;
+};
+
 // All data fetching (and the try/catch it needs) happens below, before any
 // JSX is constructed -- react-hooks/error-boundaries flags JSX built
 // inside a try/catch (React errors surface during render/commit, not at
@@ -102,7 +109,7 @@ type CompletedSummaryData = {
 async function loadWorkspaceOrSummary(
   ownerId: string,
   circleId: string,
-): Promise<DraftWorkspaceData | ActiveSummaryData | CompletedSummaryData> {
+): Promise<DraftWorkspaceData | ActiveSummaryData | CompletedSummaryData | HistoricalSummaryData> {
   try {
     const [{ circle, members }, review] = await Promise.all([
       getDraftCircleForOwner({ ownerId, circleId }),
@@ -124,6 +131,11 @@ async function loadWorkspaceOrSummary(
     }
 
     if (!(error instanceof DraftCircleOwnerReadNotDraftError)) {
+      console.error("[owner-circle-workspace] draft read failed", {
+        route: "/circles/[circleId]",
+        operation: "getDraftCircleForOwner",
+        errorClass: error instanceof Error ? error.name : "UnknownError",
+      });
       throw error;
     }
 
@@ -170,6 +182,11 @@ async function loadWorkspaceOrSummary(
         return { kind: "completed", summary, contributions, payouts };
       }
 
+      if (payouts.circle.status === "CANCELLED" || payouts.circle.status === "ARCHIVED") {
+        const contributions = await getOwnerCircleContributions({ ownerId, circleId });
+        return { kind: "historical", contributions, payouts };
+      }
+
       notFound();
     } catch (activeOrCompletedReadError) {
       if (
@@ -197,6 +214,11 @@ async function loadWorkspaceOrSummary(
       // boundary here (7K.16 section 23) -- corrupted persisted history
       // must never be silently disguised as an ordinary 404 or as "round
       // not ready yet."
+      console.error("[owner-circle-workspace] non-draft read failed", {
+        route: "/circles/[circleId]",
+        operation: "loadActiveOrCompletedWorkspace",
+        errorClass: activeOrCompletedReadError instanceof Error ? activeOrCompletedReadError.name : "UnknownError",
+      });
       throw activeOrCompletedReadError;
     }
   }
@@ -245,13 +267,14 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={activeSections} dictionary={dictionary} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${formatMoney(data.summary.circle.contributionAmount, data.summary.circle.currency)} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={activeSections} dictionary={dictionary} />
           <div className="min-w-0">
             {section === "overview" ? <ActiveCircleWorkspaceOverview circleId={circleId} summary={data.summary} contributions={data.contributions} payouts={data.payouts} lifecycle={data.lifecycle} dictionary={dictionary} locale={locale} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
             {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly={false} dictionary={dictionary} locale={locale} /> : null}
             {section === "members" ? <CircleMemberReadList members={data.summary.members} dictionary={dictionary} /> : null}
             {section === "schedule" ? <div className="flex max-w-3xl flex-col gap-6"><CircleSchedule rounds={data.summary.rounds} dictionary={dictionary} locale={locale} /><RoundLifecycleCard circleId={circleId} lifecycle={data.lifecycle} dictionary={dictionary} /></div> : null}
+            {section === "overview" ? <CircleRetirementControls circleId={circleId} status="ACTIVE" dictionary={dictionary} /> : null}
           </div>
         </div>
       </main>
@@ -263,17 +286,24 @@ export default async function OwnerCirclePage({
     return (
       <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
         <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${data.summary.circle.currency} ${data.summary.circle.contributionAmount} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={completedSections} dictionary={dictionary} />
+          <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={data.summary.circle.name} status={data.summary.circle.status} terms={`${formatMoney(data.summary.circle.contributionAmount, data.summary.circle.currency)} ${getFrequencyLabel(data.summary.circle.frequency, locale)}`} availableSections={completedSections} dictionary={dictionary} />
           <div className="min-w-0">
             {section === "overview" ? <CompletedCircleWorkspaceOverview summary={data.summary} dictionary={dictionary} locale={locale} /> : null}
             {section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly dictionary={dictionary} locale={locale} /> : null}
             {section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly dictionary={dictionary} locale={locale} /> : null}
             {section === "members" ? <CircleMemberReadList members={data.summary.members} dictionary={dictionary} /> : null}
             {section === "schedule" ? <CircleSchedule rounds={data.payouts.rounds} dictionary={dictionary} locale={locale} /> : null}
+            {section === "overview" ? <CircleRetirementControls circleId={circleId} status="COMPLETED" dictionary={dictionary} /> : null}
           </div>
         </div>
       </main>
     );
+  }
+
+  if (data.kind === "historical") {
+    const historicalSections: readonly CircleWorkspaceSection[] = ["contributions", "payouts", "schedule"];
+    const circle = data.payouts.circle;
+    return <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10"><div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start"><CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={circle.currency} availableSections={historicalSections} dictionary={dictionary} /><div className="min-w-0">{section === "contributions" ? <ContributionDesk circleId={circleId} contributions={data.contributions} readOnly dictionary={dictionary} locale={locale} /> : null}{section === "payouts" ? <PayoutDesk circleId={circleId} payouts={data.payouts} readOnly dictionary={dictionary} locale={locale} /> : null}{section === "schedule" || section === "overview" ? <CircleSchedule rounds={data.payouts.rounds} dictionary={dictionary} locale={locale} /> : null}</div></div></main>;
   }
 
   const { circle, members, review } = data;
@@ -282,7 +312,7 @@ export default async function OwnerCirclePage({
   return (
     <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-5 py-8 text-[#173b32] sm:px-8 sm:py-10">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-        <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${circle.currency} ${circle.contributionAmount} ${getFrequencyLabel(circle.frequency, locale)}`} availableSections={draftSections} dictionary={dictionary} />
+        <CircleWorkspaceNavigation circleId={circleId} section={section} circleName={circle.name} status={circle.status} terms={`${formatMoney(circle.contributionAmount, circle.currency)} ${getFrequencyLabel(circle.frequency, locale)}`} availableSections={draftSections} dictionary={dictionary} />
         <div className="min-w-0">
           {section === "overview" ? (
             <div className="max-w-3xl">
@@ -290,9 +320,10 @@ export default async function OwnerCirclePage({
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{dictionary.susu.eyebrow}</p>
                 <span className="mt-3 inline-flex w-fit rounded-full bg-[#fff0d9] px-3 py-1 text-sm font-semibold text-[#8a5b27]">{dictionary.susu.draftStatus}</span>
                 <h1 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">{circle.name}</h1>
-                <p className="mt-4 max-w-xl leading-7 text-[#587066]">{dictionary.susu.setupContribution.replace("{amount}", `${circle.currency} ${circle.contributionAmount}`).replace("{frequency}", getFrequencyLabel(circle.frequency, locale))}</p>
+                <p className="mt-4 max-w-xl leading-7 text-[#587066]">{dictionary.susu.setupContribution.replace("{amount}", formatMoney(circle.contributionAmount, circle.currency)).replace("{frequency}", getFrequencyLabel(circle.frequency, locale))}</p>
                 <p className="mt-5 text-sm leading-6 text-[#587066]">{dictionary.susu.setupInstructions}</p>
                 <DraftCircleConfigurationForm circle={circle} dictionary={dictionary} locale={locale} />
+                <CircleRetirementControls circleId={circleId} status="DRAFT" dictionary={dictionary} />
               </section>
             </div>
           ) : null}

@@ -28,9 +28,9 @@ export type OwnerCircleIndexRecord = Prisma.SavingsCircleGetPayload<{
   select: typeof ownerCircleIndexSelect;
 }>;
 
-export function findCirclesForOwnerIndex(ownerId: string) {
+export function findCirclesForOwnerIndex(ownerId: string, includeRetired = false) {
   return prisma.savingsCircle.findMany({
-    where: { ownerId, status: { in: ["DRAFT", "ACTIVE", "COMPLETED"] } },
+    where: { ownerId, status: { in: includeRetired ? ["CANCELLED", "ARCHIVED"] : ["DRAFT", "ACTIVE", "COMPLETED"] } },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     select: ownerCircleIndexSelect,
   });

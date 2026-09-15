@@ -56,5 +56,6 @@ export const createPersonalGoalSchema = z
 
 export const completePersonalGoalSchema = z.object({ goalId });
 export const archivePersonalGoalSchema = z.object({ goalId });
+export const abandonPersonalGoalSchema = z.object({ goalId });
 
 export type CreatePersonalGoalInput = z.infer<typeof createPersonalGoalSchema>;

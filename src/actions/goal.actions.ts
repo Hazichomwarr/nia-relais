@@ -32,6 +32,8 @@ import {
   createPersonalGoalSchema,
 } from "@/src/validations/goal.schema";
 import { createCustodianAssignmentSchema } from "@/src/validations/custodian.schema";
+import { abandonPersonalGoal, PersonalGoalAbandonmentConflictError } from "@/src/services/goal-abandonment.service";
+import { abandonPersonalGoalSchema } from "@/src/validations/goal.schema";
 
 export type CreatePersonalGoalActionState = {
   fieldErrors?: Partial<
@@ -58,6 +60,26 @@ export type ArchivePersonalGoalActionState = {
   archive?: PersonalGoalArchiveResult;
   formError?: string;
 };
+
+export type AbandonPersonalGoalActionState = { status?: "success" | "error"; formError?: string };
+
+export async function abandonPersonalGoalAction(
+  _previousState: AbandonPersonalGoalActionState,
+  formData: FormData,
+): Promise<AbandonPersonalGoalActionState> {
+  const parsed = abandonPersonalGoalSchema.safeParse({ goalId: formData.get("goalId") });
+  if (!parsed.success) return { status: "error", formError: "We could not abandon this goal." };
+  const user = await requireUser();
+  try {
+    await abandonPersonalGoal({ ownerId: user.id, goalId: parsed.data.goalId });
+    revalidatePath("/dashboard"); revalidatePath("/deposits"); revalidatePath(`/goals/${encodeURIComponent(parsed.data.goalId)}/deposits`);
+    return { status: "success" };
+  } catch (error) {
+    if (error instanceof GoalNotFoundOrUnauthorizedError || error instanceof PersonalGoalAbandonmentConflictError) return { status: "error", formError: "We could not abandon this goal." };
+    console.error("[abandonPersonalGoalAction] unexpected failure", error instanceof Error ? error.name : "UnknownError");
+    return { status: "error", formError: "We could not abandon this goal." };
+  }
+}
 
 export async function createPersonalGoalAction(
   _previousState: CreatePersonalGoalActionState,

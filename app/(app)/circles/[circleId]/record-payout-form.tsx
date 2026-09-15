@@ -5,6 +5,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { recordPayoutAction } from "@/src/actions/payout.actions";
 import { initialRecordPayoutState } from "@/src/actions/payout.state";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
+import { formatMoney } from "@/src/i18n/format";
 
 // Mirrors record-contribution-form.tsx's own proven pattern exactly
 // (7J.7 section 6/9, carried forward unchanged for payouts, 7K.9 section
@@ -67,7 +68,7 @@ export function RecordPayoutForm({
       <p className="text-sm text-[#173b32]">
         {copy.recordPayout}: {" "}
         <span className="font-semibold">
-          {currency} {amount}
+          {formatMoney(amount, currency)}
         </span>
       </p>
       <p className="mt-1 text-xs leading-5 text-[#7b8179]">

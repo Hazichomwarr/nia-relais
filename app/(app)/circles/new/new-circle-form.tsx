@@ -7,7 +7,7 @@ import { initialCreateDraftCircleState } from "@/src/actions/circle.state";
 import { CIRCLE_ORIGIN_KINDS, DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES } from "@/src/validations/circle.schema";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
-import { getFrequencyLabel as getLocalizedFrequencyLabel } from "@/src/i18n/format";
+import { getCurrencyDisplayCode, getFrequencyLabel as getLocalizedFrequencyLabel } from "@/src/i18n/format";
 
 import { buildContributionRestatement } from "./new-circle-form-display";
 
@@ -132,7 +132,7 @@ export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; 
             >
               {DRAFT_CIRCLE_CURRENCIES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {getCurrencyDisplayCode(option)}
                 </option>
               ))}
             </select>

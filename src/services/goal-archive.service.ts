@@ -55,7 +55,9 @@ function serializeArchive(
 }
 
 function assertCompletedOrArchived(goal: LifecycleGoalRecord) {
-  if (goal.status === "ACTIVE") throw new PersonalGoalArchiveConflictError();
+  if (goal.status !== "COMPLETED" && goal.status !== "ARCHIVED") {
+    throw new PersonalGoalArchiveConflictError();
+  }
 }
 
 export async function archivePersonalGoal(input: {

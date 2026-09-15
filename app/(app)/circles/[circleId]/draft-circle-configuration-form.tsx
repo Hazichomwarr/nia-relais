@@ -6,7 +6,7 @@ import { updateDraftCircleConfigurationAction } from "@/src/actions/circle.actio
 import { initialUpdateDraftCircleConfigurationState } from "@/src/actions/circle.state";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
-import { getFrequencyLabel } from "@/src/i18n/format";
+import { getCurrencyDisplayCode, getFrequencyLabel } from "@/src/i18n/format";
 import { DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES } from "@/src/validations/circle.schema";
 import type { DraftCircleOwnerCircleResult } from "@/src/services/circle-draft-owner.service";
 
@@ -64,7 +64,7 @@ export function DraftCircleConfigurationForm({
           <div>
             <label htmlFor="edit-circle-currency" className="text-sm font-semibold text-[#173b32]">{susu.currency}</label>
             <select id="edit-circle-currency" name="currency" defaultValue={circle.currency} className={inputClassName}>
-              {DRAFT_CIRCLE_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+              {DRAFT_CIRCLE_CURRENCIES.map((currency) => <option key={currency} value={currency}>{getCurrencyDisplayCode(currency)}</option>)}
             </select>
             <FieldError errors={state.fieldErrors?.currency} />
           </div>

@@ -2,7 +2,7 @@ import "server-only";
 
 import { findCirclesForOwnerIndex } from "@/src/repositories/circle-owner-index.repository";
 
-export type OwnerCircleIndexStatus = "DRAFT" | "ACTIVE" | "COMPLETED";
+export type OwnerCircleIndexStatus = "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "ARCHIVED";
 
 export type OwnerCircleIndexRound = {
   readonly roundNumber: number;
@@ -24,8 +24,8 @@ export type OwnerCircleIndexItem = {
   readonly currentOrNextRound: OwnerCircleIndexRound | null;
 };
 
-export async function getCirclesForOwnerIndex(ownerId: string): Promise<readonly OwnerCircleIndexItem[]> {
-  const circles = await findCirclesForOwnerIndex(ownerId);
+export async function getCirclesForOwnerIndex(ownerId: string, options: { includeRetired?: boolean } = {}): Promise<readonly OwnerCircleIndexItem[]> {
+  const circles = await findCirclesForOwnerIndex(ownerId, options.includeRetired);
 
   return circles.map((circle) => {
     const round = circle.rounds.find((item) => item.status === "ACTIVE")
