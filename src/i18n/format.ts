@@ -14,7 +14,13 @@ export function formatMoney(value: string, currency: string) {
 }
 
 export function formatDate(value: string | Date, locale: Locale) {
-  const date = typeof value === "string" ? new Date(`${value}T00:00:00.000Z`) : value;
+  // Date-only values are persisted calendar dates and must be parsed in UTC.
+  // Owner SUSU reads also intentionally serialize lifecycle/schedule instants
+  // as full ISO strings; appending a second time portion to those made an
+  // invalid Date (for example, `...Z T00:00:00.000Z`) at the Intl boundary.
+  const date = typeof value === "string"
+    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00.000Z` : value)
+    : value;
   return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { day: "numeric", month: "long", timeZone: "UTC", year: "numeric" }).format(date);
 }
 
