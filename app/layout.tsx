@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { getLocale } from "@/src/i18n/locale";
 import "./globals.css";
@@ -16,6 +17,22 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NIA — Small steps. Brighter tomorrows.",
   description: "A peaceful place to keep promises to yourself.",
+  applicationName: "NIA",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/nia-512.png",
+    apple: "/icons/nia-apple-touch-180.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "NIA",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#255b48",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
