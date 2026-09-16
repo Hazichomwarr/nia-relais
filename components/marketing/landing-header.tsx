@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { InstallNiaCta } from "@/components/pwa/install-nia-cta";
 import type { Locale } from "@/src/i18n/config";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 
@@ -21,6 +22,7 @@ export function LandingHeader({ locale, dictionary }: { locale: Locale; dictiona
 
       <nav aria-label={dictionary.landing.mainNavigation} className="flex items-center gap-2 sm:gap-5">
         <span className="hidden sm:inline-flex"><LanguageSwitcher locale={locale} languageLabel={dictionary.common.language} /></span>
+        <InstallNiaCta copy={dictionary.landing} />
         <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-[#587066] transition-colors hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549] sm:px-4">
           {dictionary.common.signIn}
         </Link>

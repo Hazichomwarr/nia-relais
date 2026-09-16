@@ -49,6 +49,12 @@ export type Dictionary = {
     niaLogo: string;
     mainNavigation: string;
     heroImageAlt: string;
+    installNia: string;
+    installInstructionsTitle: string;
+    installStepOne: string;
+    installStepTwo: string;
+    installStepThree: string;
+    close: string;
   };
   login: {
     title: string;
