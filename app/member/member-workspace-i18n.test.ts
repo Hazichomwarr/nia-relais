@@ -24,6 +24,17 @@ test("member workspace dictionary provides canonical EN/FR financial terminology
   assert.equal(fr.memberWorkspace.round, "Tour");
 });
 
+test("the premium member hierarchy is fully dictionary-backed in EN and FR", () => {
+  assert.equal(en.memberWorkspace.youReceiveThisRound, "You receive this round");
+  assert.equal(fr.memberWorkspace.youReceiveThisRound, "Vous recevez ce tour");
+  assert.equal(en.memberWorkspace.contributionProgress, "{confirmed} of {total} contributions confirmed");
+  assert.equal(fr.memberWorkspace.contributionProgress, "{confirmed} cotisations confirmées sur {total}");
+  assert.equal(en.memberWorkspace.circleDetails, "Circle details");
+  assert.equal(fr.memberWorkspace.circleDetails, "Informations du cercle");
+  assert.equal(en.memberWorkspace.poweredByRelais, "powered by RELAIS");
+  assert.equal(fr.memberWorkspace.poweredByRelais, "propulsé par RELAIS");
+});
+
 test("member presentation uses typed dictionary copy without changing user or financial values", () => {
   assert.match(source, /dictionary\.memberWorkspace|const copy = dictionary\.memberWorkspace/);
   for (const value of ["dashboard.circle.name", "dashboard.member.displayName", "circle.currency", "contributionAmount", "memberCode"]) {
@@ -36,4 +47,10 @@ test("member loading and safe payout errors are localized at the presentation bo
   assert.match(source, /dictionary\.memberWorkspace\.loadingCircle/);
   assert.match(source, /copy\.genericActionError/);
   assert.match(source, /localizeMemberFormError/);
+});
+
+test("the member workspace has no raw translation-key fallback for the new premium surfaces", () => {
+  for (const key of ["youReceiveThisRound", "recipientReceivesThisRound", "contributionProgress", "circleDetails", "scheduleDescription"]) {
+    assert.match(source, new RegExp(`memberWorkspace\\.${key}|copy\\.${key}`));
+  }
 });

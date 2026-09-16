@@ -93,8 +93,8 @@ export default async function MemberCirclePage({
   }
 
   return (
-    <MemberDashboard dashboard={dashboard} dictionary={dictionary} locale={locale}>
+    <MemberDashboard dashboard={dashboard} dictionary={dictionary} locale={locale} payoutPanel={
       <MemberPayoutCard circleId={circleId} payouts={payouts} dictionary={dictionary} locale={locale} />
-    </MemberDashboard>
+    } />
   );
 }

@@ -51,8 +51,8 @@ test("every MemberPayouts* not-found/authorization/not-eligible failure collapse
   assert.doesNotMatch(source, /MemberPayoutsIntegrityError/);
 });
 
-test("the existing member dashboard is still rendered, unmodified, wrapping the new payout card as a child -- not replaced", () => {
-  assert.match(source, /<MemberDashboard dashboard=\{dashboard\} dictionary=\{dictionary\} locale=\{locale\}>/);
+test("the existing member dashboard still receives the authorized payout card as an additive presentation slot", () => {
+  assert.match(source, /<MemberDashboard dashboard=\{dashboard\} dictionary=\{dictionary\} locale=\{locale\} payoutPanel=\{/);
   assert.match(source, /<MemberPayoutCard circleId=\{circleId\} payouts=\{payouts\} dictionary=\{dictionary\} locale=\{locale\} \/>/);
 });
 

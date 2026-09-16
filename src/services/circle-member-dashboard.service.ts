@@ -6,6 +6,8 @@ import { clampToZero, isObligationFulfilled, toMoney } from "@/src/domain/contri
 import { selectCurrentAndNextRound } from "@/src/domain/circle-round-selection";
 import {
   findCircleSummary,
+  countActiveCircleMembers,
+  findActiveCircleMemberNames,
   findConfirmedPaymentSums,
   findMemberObligations,
   findMemberSummary,
@@ -107,6 +109,10 @@ export type MemberContributionSummary = {
 export type RoundProgressResult = {
   readonly confirmedMemberCount: number;
   readonly totalMemberCount: number;
+  // Computed from the selected round's persisted obligations with Decimal
+  // arithmetic. This is an expected collection/payout figure only; it never
+  // represents a recorded or transferred payout.
+  readonly expectedPayoutAmount: string;
 } | null;
 
 export type MemberPayoutResult = {
@@ -125,6 +131,8 @@ export type MemberPayoutResult = {
 export type MemberDashboardResult = {
   readonly circle: CircleSummaryResult;
   readonly member: MemberSummaryResult;
+  readonly activeMemberCount: number;
+  readonly activeMemberDisplayNames: readonly string[];
   readonly roundSchedule: readonly RoundScheduleEntry[];
   readonly currentRound: RoundScheduleEntry | null;
   readonly nextRound: RoundScheduleEntry | null;
@@ -161,9 +169,11 @@ export async function getCircleMemberDashboard(input: {
   circleId: string;
   memberId: string;
 }): Promise<MemberDashboardResult> {
-  const [circle, member, rounds, obligations] = await Promise.all([
+  const [circle, member, activeMemberCount, activeMembers, rounds, obligations] = await Promise.all([
     findCircleSummary(input.circleId),
     findMemberSummary(input.circleId, input.memberId),
+    countActiveCircleMembers(input.circleId),
+    findActiveCircleMemberNames(input.circleId),
     findRoundsForCircle(input.circleId),
     findMemberObligations(input.circleId, input.memberId),
   ]);
@@ -244,7 +254,15 @@ export async function getCircleMemberDashboard(input: {
       return isObligationFulfilled(confirmedAmount, obligation.expectedAmount);
     }).length;
 
-    roundProgress = { confirmedMemberCount, totalMemberCount: roundObligationsForProgress.length };
+    const expectedPayoutAmount = roundObligationsForProgress.reduce(
+      (total, obligation) => total.plus(obligation.expectedAmount),
+      new Prisma.Decimal(0),
+    );
+    roundProgress = {
+      confirmedMemberCount,
+      totalMemberCount: roundObligationsForProgress.length,
+      expectedPayoutAmount: toMoney(expectedPayoutAmount),
+    };
   }
 
   // --- this member's own payout, if they are ever a recipient. ---
@@ -278,6 +296,8 @@ export async function getCircleMemberDashboard(input: {
       historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
     },
     member: { displayName: member.displayName, payoutOrder: member.payoutOrder },
+    activeMemberCount,
+    activeMemberDisplayNames: activeMembers.map((activeMember) => activeMember.displayName),
     roundSchedule: rounds.map(serializeRound),
     currentRound: currentRound ? serializeRound(currentRound) : null,
     nextRound: nextRound ? serializeRound(nextRound) : null,

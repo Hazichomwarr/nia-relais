@@ -64,6 +64,23 @@ export function findMemberSummary(circleId: string, memberId: string) {
   });
 }
 
+// Aggregate only: the member workspace needs the live cohort size for its
+// compact circle facts, not a list of other members or any credential data.
+export function countActiveCircleMembers(circleId: string) {
+  return prisma.circleMember.count({ where: { circleId, status: "ACTIVE" } });
+}
+
+// The member-facing people surface exposes only the active cohort's display
+// names. It intentionally excludes IDs, member codes, contact details, and
+// all credential/session fields.
+export function findActiveCircleMemberNames(circleId: string) {
+  return prisma.circleMember.findMany({
+    where: { circleId, status: "ACTIVE" },
+    orderBy: { displayName: "asc" },
+    select: { displayName: true },
+  });
+}
+
 const roundScheduleSelect = {
   id: true,
   roundNumber: true,

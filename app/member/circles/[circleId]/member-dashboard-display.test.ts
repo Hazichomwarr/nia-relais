@@ -22,9 +22,9 @@ test("formatCircleMoney groups thousands and pads to two decimals without recalc
   assert.equal(formatCircleMoney("0.00", "USD"), "USD 0.00");
 });
 
-test("formatCircleMoney drops the decimal for a whole XOF amount, per the existing app convention", () => {
-  assert.equal(formatCircleMoney("5000.00", "XOF"), "XOF 5,000");
-  assert.equal(formatCircleMoney("5000.50", "XOF"), "XOF 5,000.50");
+test("formatCircleMoney presents persisted XOF as CFA and drops the decimal for whole amounts", () => {
+  assert.equal(formatCircleMoney("5000.00", "XOF"), "CFA 5,000");
+  assert.equal(formatCircleMoney("5000.50", "XOF"), "CFA 5,000.50");
 });
 
 test("formatCircleDate and formatCircleDateTime render calendar dates/timestamps", () => {

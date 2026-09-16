@@ -67,9 +67,9 @@ test("the payout card renders no confirmation action (no <button>, no form) and 
 
 // --- no other-member financial details ---
 
-test("the rotation schedule never renders any per-member financial figure, only round-level fields", () => {
-  const scheduleSectionMatch = componentSource.match(/function RotationScheduleCard[\s\S]*?\n}\n/);
-  assert.ok(scheduleSectionMatch, "expected to find RotationScheduleCard's body");
+test("the collapsed rotation schedule never renders any per-member financial figure, only round-level fields", () => {
+  const scheduleSectionMatch = componentSource.match(/function RotationSchedule[\s\S]*?\n}\n/);
+  assert.ok(scheduleSectionMatch, "expected to find RotationSchedule's body");
   const scheduleSection = scheduleSectionMatch![0];
 
   for (const forbidden of ["confirmedAmount", "expectedAmount", "outstandingAmount", "memberCode", "email", "pinHash"]) {
@@ -111,10 +111,11 @@ test("no source file in this route references Prisma writes or any writer servic
 
 test("the dashboard uses mobile-first responsive classes and avoids chart/animation libraries", () => {
   assert.match(componentSource, /sm:/, "expected at least one sm: responsive utility class");
-  assert.match(componentSource, /max-w-2xl/);
-  for (const forbidden of ["recharts", "chart.js", "d3", "framer-motion"]) {
+  assert.match(componentSource, /max-w-5xl/);
+  for (const forbidden of ["recharts", "chart.js", "framer-motion"]) {
     assert.doesNotMatch(componentSource, new RegExp(forbidden, "i"));
   }
+  assert.doesNotMatch(componentSource, /from\s+["']d3/i);
 });
 
 // --- errors are handled without leaking database/circle-existence details ---
@@ -127,15 +128,18 @@ test("internal read-model integrity errors redirect to /member/login rather than
   assert.match(pageSource, /redirect\(\s*["']\/member\/login["']\s*\)/);
 });
 
-// --- 7K.10: MemberDashboard gained an additive children slot only ---
+// --- 10D: the payout panel remains an additive, authorized child ---
 
-test("MemberDashboard accepts an optional children slot, rendered after every existing card -- getCircleMemberDashboard itself is not touched", () => {
-  assert.match(componentSource, /children\?: React\.ReactNode/);
-  // {children} must appear strictly after the last existing card
-  // (RotationScheduleCard) so the new payout card (7K.10) is additive,
-  // never inserted between or in place of an existing one.
-  const rotationIndex = componentSource.indexOf("<RotationScheduleCard");
-  const childrenIndex = componentSource.indexOf("{children}");
-  assert.ok(rotationIndex >= 0 && childrenIndex > rotationIndex);
+test("MemberDashboard accepts an optional payoutPanel without fetching its own payout read model", () => {
+  assert.match(componentSource, /payoutPanel\?: React\.ReactNode/);
+  assert.match(componentSource, /currentRoundBelongsToMember \? payoutPanel : null/);
+  assert.match(componentSource, /payoutPanel=\{currentRoundBelongsToMember \? null : payoutPanel\}/);
   assert.doesNotMatch(componentSource, /getCircleMemberPayouts/, "the dashboard component itself must not fetch the 7K.8 read model");
+});
+
+test("the primary member screen keeps full schedule and contribution history behind compact native disclosures", () => {
+  assert.match(componentSource, /<Disclosure id="rotation-schedule"/);
+  assert.match(componentSource, /<Disclosure id="contribution-history"/);
+  assert.match(componentSource, /<details id=\{id\}/);
+  assert.match(componentSource, /<BottomNavigation/);
 });
