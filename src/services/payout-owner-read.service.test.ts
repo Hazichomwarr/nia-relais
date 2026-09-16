@@ -249,14 +249,23 @@ test("a DRAFT circle is rejected with OwnerPayoutsCircleNotEligibleError", async
   );
 });
 
-test("a CANCELLED circle is rejected with OwnerPayoutsCircleNotEligibleError", async () => {
-  const ownerId = await createOwner();
-  const circleId = await createFixtureCircle(ownerId, "CANCELLED", "10.00");
+// 10F: circle-retirement.service.ts's cancelCircle only ever transitions
+// ACTIVE -> CANCELLED (never DRAFT -> CANCELLED -- a DRAFT circle is
+// deleted, not cancelled), so a CANCELLED circle always did activate and
+// always has real, already-persisted PayoutRound/ContributionObligation
+// history. ELIGIBLE_CIRCLE_STATUSES above has explicitly included
+// CANCELLED since the retirement-lifecycle-controls feature shipped,
+// exactly mirroring the already-correct ARCHIVED case just below -- this
+// suite previously still asserted the pre-that-feature rejection, which
+// was stale, not a production defect.
+test("a CANCELLED circle's payout history remains readable", async () => {
+  const fixture = await createActiveCircleWithRound();
+  await recordFixturePayout(fixture);
+  await prisma.savingsCircle.update({ where: { id: fixture.circleId }, data: { status: "CANCELLED" } });
 
-  await assert.rejects(
-    () => getOwnerCirclePayouts({ ownerId, circleId }),
-    OwnerPayoutsCircleNotEligibleError,
-  );
+  const result = await getOwnerCirclePayouts({ ownerId: fixture.ownerId, circleId: fixture.circleId });
+  assert.equal(result.circle.status, "CANCELLED");
+  assert.equal(result.rounds[0]?.payout?.status, "RECORDED");
 });
 
 test("a COMPLETED circle's payout history remains readable", async () => {
@@ -690,17 +699,28 @@ test("the result exposes only the whitelisted fields at every level", async () =
 
   assert.deepEqual(Object.keys(result).sort(), ["circle", "rounds", "summary"]);
   assert.deepEqual(Object.keys(result.circle).sort(), ["currency", "id", "name", "status"]);
+  // 9G: closureBasis (imported-history round-closure provenance) is a
+  // deliberate, safe presentation field -- see this module's own
+  // OwnerPayoutsRoundResult type -- distinguishing an owner-declared
+  // imported round closure from a normal NIA-managed one.
   assert.deepEqual(
     Object.keys(result.rounds[0]!).sort(),
-    ["dueDate", "expectedPayout", "id", "payout", "recipient", "roundNumber", "status"],
+    ["closureBasis", "dueDate", "expectedPayout", "id", "payout", "recipient", "roundNumber", "status"],
   );
   assert.deepEqual(Object.keys(result.rounds[0]!.recipient).sort(), ["displayName", "memberCode", "memberId", "payoutOrder"]);
   assert.deepEqual(Object.keys(result.rounds[0]!.expectedPayout).sort(), ["amount", "currency"]);
+  // 9G: confirmationBasis is the payout-level counterpart to closureBasis
+  // above -- IMPORTED_DECLARATION means this payout's CONFIRMED status is
+  // the owner's own historical declaration at import time, never a real
+  // recipient confirmation through NIA. Not a credential or internal
+  // actor id beyond the already-whitelisted recordedById/confirmedByMemberId/
+  // disputedByMemberId this test already covers.
   assert.deepEqual(
     Object.keys(result.rounds[0]!.payout ?? {}).sort(),
     [
       "amount",
       "clientOperationId",
+      "confirmationBasis",
       "confirmedAt",
       "confirmedByMemberId",
       "currency",

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
+import { getDraftCircleActivationReview } from "@/src/services/circle-activation-review.service";
 import {
   activateCircle,
   CircleActivationStaleReviewError,
@@ -68,15 +69,36 @@ async function createFixtureMember(circleId: string, ownerId: string, displayNam
   return { id: member.id, payoutOrder };
 }
 
-/** Mirrors circle-activation-review.service.ts's own ordering: sort by
- * payoutOrder ascending (unambiguous for a complete order) before
- * fingerprinting -- reuses computeActivationReviewFingerprint itself,
- * never a second implementation of the fingerprint algorithm. */
-function fingerprintFor(members: Array<{ id: string; payoutOrder: number }>): string {
-  const orderedActiveMembers = [...members]
-    .sort((left, right) => left.payoutOrder - right.payoutOrder)
-    .map((member) => ({ id: member.id, displayName: "", memberCode: "", payoutOrder: member.payoutOrder }));
-  return computeActivationReviewFingerprint({ orderedActiveMembers });
+/**
+ * 10F: the REAL fingerprint a live review of this circle would currently
+ * produce -- obtained by calling the actual production review-generation
+ * function (getDraftCircleActivationReview) and fingerprinting its result
+ * exactly as every real caller does, never a second, hand-rolled
+ * implementation of the algorithm.
+ *
+ * This replaces an earlier version of this helper that called
+ * computeActivationReviewFingerprint with ONLY `orderedActiveMembers` and
+ * no `circle` field at all. That omission was silently tolerated by the
+ * fingerprint function (its `circle` parameter is optional specifically
+ * so pure-domain unit tests of member-ordering logic don't need one -- see
+ * circle-activation-review.ts's own doc comment), but every real caller
+ * (the review UI's activation-review-section.tsx, activate-circle.ts's
+ * preflight check, and circle.service.ts's assertFreshReviewMatches
+ * itself) always fingerprints a FULL review including circle terms. The
+ * old helper's fingerprint could therefore never equal the one
+ * assertFreshReviewMatches computes fresh at activation time -- these
+ * integration tests were exercising a shape no real caller produces. Only
+ * the test helper was wrong; computeActivationReviewFingerprint and
+ * assertFreshReviewMatches match the frozen contract and are unchanged.
+ *
+ * Only valid while the circle is still DRAFT (getDraftCircleForOwner, and
+ * therefore this function, rejects otherwise) -- matches every real
+ * caller's own constraint, and every call site below invokes this before
+ * any activation in that same test has occurred.
+ */
+async function fingerprintFor(ownerId: string, circleId: string): Promise<string> {
+  const review = await getDraftCircleActivationReview({ ownerId, circleId });
+  return computeActivationReviewFingerprint(review);
 }
 
 async function createTwoMemberCircle(contributionAmount = "10.00") {
@@ -129,7 +151,7 @@ test("A/E. a matching fingerprint (unchanged configuration) activates successful
   const result = await activateCircle({
     ownerId: fixture.ownerId,
     circleId: fixture.circleId,
-    expectedFingerprint: fingerprintFor(fixture.members),
+    expectedFingerprint: await fingerprintFor(fixture.ownerId, fixture.circleId),
   });
 
   assert.equal(result.circle.status, "ACTIVE");
@@ -162,7 +184,7 @@ test("B. a mismatched fingerprint rejects activation and creates zero rounds/obl
 // C. membership change between review and lock is rejected
 test("C. a membership change since the review (same order, different member) is rejected, zero rounds/obligations created", async () => {
   const fixture = await createThreeMemberCircle();
-  const staleFingerprint = fingerprintFor(fixture.members);
+  const staleFingerprint = await fingerprintFor(fixture.ownerId, fixture.circleId);
 
   // Simulate a race: between the owner's review and this activation
   // attempt, the owner removes member C and adds member D in the same
@@ -173,7 +195,7 @@ test("C. a membership change since the review (same order, different member) is 
     where: { id: fixture.members[2].id },
     data: { status: "REMOVED", payoutOrder: null },
   });
-  const replacementMember = await createFixtureMember(fixture.circleId, fixture.ownerId, "D", 3);
+  await createFixtureMember(fixture.circleId, fixture.ownerId, "D", 3);
 
   await assert.rejects(
     () => activateCircle({ ownerId: fixture.ownerId, circleId: fixture.circleId, expectedFingerprint: staleFingerprint }),
@@ -187,11 +209,10 @@ test("C. a membership change since the review (same order, different member) is 
 
   // Activating with the CURRENT (fresh) fingerprint still succeeds --
   // this is a rejection of the STALE review, not a broken circle.
-  const freshMembers = [fixture.members[0], fixture.members[1], replacementMember];
   const result = await activateCircle({
     ownerId: fixture.ownerId,
     circleId: fixture.circleId,
-    expectedFingerprint: fingerprintFor(freshMembers),
+    expectedFingerprint: await fingerprintFor(fixture.ownerId, fixture.circleId),
   });
   assert.equal(result.circle.status, "ACTIVE");
 });
@@ -199,7 +220,7 @@ test("C. a membership change since the review (same order, different member) is 
 // D. payout-order change between review and lock is rejected
 test("D. a payout-order change since the review (same members, different order) is rejected, zero rounds/obligations created", async () => {
   const fixture = await createThreeMemberCircle();
-  const staleFingerprint = fingerprintFor(fixture.members);
+  const staleFingerprint = await fingerprintFor(fixture.ownerId, fixture.circleId);
 
   // Swap B and C's payout order via the real domain service, exactly as
   // 7I.4's UI would.
@@ -221,7 +242,7 @@ test("D. a payout-order change since the review (same members, different order) 
 // F. concurrent activation/reorder is serialized correctly
 test("F. a concurrent activation and reorder are serialized by the row lock -- exactly one consistent outcome results", async () => {
   const fixture = await createThreeMemberCircle();
-  const originalFingerprint = fingerprintFor(fixture.members);
+  const originalFingerprint = await fingerprintFor(fixture.ownerId, fixture.circleId);
 
   const [activationOutcome, reorderOutcome] = await Promise.allSettled([
     activateCircle({ ownerId: fixture.ownerId, circleId: fixture.circleId, expectedFingerprint: originalFingerprint }),
@@ -261,7 +282,7 @@ test("F. a concurrent activation and reorder are serialized by the row lock -- e
 // G. ACTIVE replay remains idempotent
 test("G. replaying activation with the same fingerprint is idempotent -- no duplicate rounds/obligations", async () => {
   const fixture = await createTwoMemberCircle();
-  const fingerprint = fingerprintFor(fixture.members);
+  const fingerprint = await fingerprintFor(fixture.ownerId, fixture.circleId);
 
   const first = await activateCircle({ ownerId: fixture.ownerId, circleId: fixture.circleId, expectedFingerprint: fingerprint });
   const roundsAfterFirst = await prisma.payoutRound.count({ where: { circleId: fixture.circleId } });
@@ -278,7 +299,7 @@ test("G. replaying activation with the same fingerprint is idempotent -- no dupl
 
 test("G2. replaying activation with a fingerprint that no longer matches the (now-frozen) persisted state is rejected", async () => {
   const fixture = await createTwoMemberCircle();
-  const fingerprint = fingerprintFor(fixture.members);
+  const fingerprint = await fingerprintFor(fixture.ownerId, fixture.circleId);
   await activateCircle({ ownerId: fixture.ownerId, circleId: fixture.circleId, expectedFingerprint: fingerprint });
 
   await assert.rejects(

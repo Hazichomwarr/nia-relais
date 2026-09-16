@@ -22,8 +22,24 @@ function read(relativePath: string): string {
 
 const IMPORT_VOCAB = /IMPORTED_DECLARATION|historicalCompletedRoundCount|originKind|closureBasis|firstLiveRoundNumber/;
 
+// 10F: contribution-recording.service.ts is deliberately excluded from
+// this loop. 9F's own original boundary (this file's header) predates
+// the SUSU import work (9A-9H) -- at 9F's own scope, "no import
+// vocabulary" in these six files was true. A later, legitimate ticket
+// added exactly one guard to contribution-recording.service.ts:
+// `if (obligation.fulfillmentBasis === "IMPORTED_DECLARATION") throw new
+// ContributionObligationImportedError()`. This is not scope creep -- it
+// is the enforcement point for 10F's own explicit preserved contract
+// ("imported historical obligations must not masquerade as NIA-confirmed
+// payments"): recordContribution is the ONLY mutation entry point that
+// could ever attempt to create a NEW ContributionPayment against an
+// obligation whose fulfillment already came from an import declaration,
+// so it is the only one of the six that needs the guard. The other five
+// act on rows (ContributionPayment/Payout) that structurally never exist
+// for an imported obligation in the first place (see the §15 tests below
+// for the payout-side equivalent of this same reasoning) -- confirmed by
+// their own assertions here still passing unmodified.
 for (const file of [
-  "../services/contribution-recording.service.ts",
   "../services/contribution-confirmation.service.ts",
   "../services/contribution-rejection.service.ts",
   "../services/payout-recording.service.ts",
@@ -34,6 +50,29 @@ for (const file of [
     assert.doesNotMatch(read(file), IMPORT_VOCAB);
   });
 }
+
+test("contribution-recording.service.ts's only import vocabulary is the single ContributionObligationImportedError guard -- nothing else about financial mutation semantics changed", () => {
+  const source = read("../services/contribution-recording.service.ts");
+
+  // The narrow, bounded addition: reject recording against an obligation
+  // whose fulfillment basis is already an import declaration.
+  assert.match(source, /obligation\.fulfillmentBasis === "IMPORTED_DECLARATION"/);
+  assert.match(source, /throw new ContributionObligationImportedError\(\);/);
+
+  // No other import vocabulary leaked in alongside it -- historicalCompletedRoundCount,
+  // originKind, closureBasis, and firstLiveRoundNumber remain exclusively
+  // circle-/round-level presentation and lifecycle concerns, never read
+  // here.
+  assert.doesNotMatch(source, /historicalCompletedRoundCount|originKind|closureBasis|firstLiveRoundNumber/);
+
+  // The rest of the amount/eligibility/idempotency contract this suite
+  // otherwise verifies for the other five files is untouched: still a
+  // circle-ACTIVE gate, still exact-amount matching, still
+  // clientOperationId-keyed replay.
+  assert.match(source, /circle\.status !== "ACTIVE"/);
+  assert.match(source, /amountMatchesObligation\(amount, obligation\.expectedAmount\)/);
+  assert.match(source, /findContributionPaymentByOperationId/);
+});
 
 // -------------------------------------------------------------------
 // §15 -- the existing mutation boundary already prevents a recipient

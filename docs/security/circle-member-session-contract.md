@@ -7,6 +7,17 @@ describes the session primitive itself; the orchestration doc describes how
 it is called. No member dashboard, PIN rotation, or notification flow exists
 yet.
 
+**10E update:** members now authenticate with a human-facing `circleCode`
+(or, for pre-10E credentials, a legacy raw `SavingsCircle.id`) instead of
+typing the raw internal id directly — see
+`docs/security/member-login-orchestration.md`, "Human vs. internal
+identity." This document's own identity contract below is unchanged by
+that: a session has always represented, and continues to represent,
+internal `(circleId, memberId, credentialVersion)` only. Human-facing
+codes are never session identity, never persisted on `CircleMemberSession`,
+and are resolved to internal ids once, by the verifier, before a session is
+ever issued.
+
 ## Identity contract
 
 A member session represents exactly `(circleId, memberId, credentialVersion)`.

@@ -3,6 +3,20 @@
 Status: cleanup mechanism implemented (7G.2.6); scheduling is a documented,
 deliberately-deferred proposal, not yet wired up (see "Scheduling" below).
 
+**10E update:** the limiter's public input field was renamed from `circleId`
+to `circleCode` (a human-facing `NIA-XXXX` code, or a legacy raw
+`SavingsCircle.id` accepted only for pre-10E credentials -- see
+`docs/security/member-login-orchestration.md`, "Human vs. internal
+identity"). TARGET derivation now classifies that input the same way
+credential verification does (`classifyCircleLoginIdentifier`) before
+hashing it, rather than checking it against a bare CUID pattern. This is a
+rename and a classification step, not a change to the retention contract,
+cardinality analysis, or cleanup mechanism described below -- every
+statement in this document about SOURCE/TARGET/GLOBAL cardinality and
+cleanup behavior remains accurate under 10E; read "circleId" in the
+`checkMemberAuthenticationRateLimit(...)`-shaped snippets below as the
+pre-10E name for what is now the classified `circleCode` value.
+
 ## Retention contract
 
 - A bucket row is **eligible for deletion** once `expiresAt < now()`
@@ -45,16 +59,22 @@ always increments all three scopes before evaluating admission, regardless
 of whether SOURCE or GLOBAL already denied the request. This means an
 attacker already blocked by SOURCE (past 20 attempts in 15 minutes) can
 still cause a **brand-new TARGET row** on every subsequent — still denied —
-request, simply by submitting a different `circleId`/`memberCode` pair each
-time. Being denied by SOURCE does not stop the TARGET increment from
+request, simply by submitting a different `circleCode`/`memberCode` pair
+each time. Being denied by SOURCE does not stop the TARGET increment from
 happening, and therefore does not stop a new TARGET bucket from being
 created for a pair never seen before.
 
-Malformed targets remain the one bounded exception: any pair that fails the
-CUID/16-hex-code shape check collapses to a single shared sentinel row
+Malformed targets remain the one bounded exception: any pair that fails
+classification (10E: neither a valid `circleCode` nor a legacy raw circle
+id, via `classifyCircleLoginIdentifier`) or the memberCode union-pattern
+shape check collapses to a single shared sentinel row
 (`TARGET:malformed-target`), regardless of how many distinct garbage inputs
 are tried. But a *syntactically valid* pair that simply doesn't correspond
-to a real member is **not** deduplicated beyond the pair itself.
+to a real member is **not** deduplicated beyond the pair itself — and a
+valid `circleCode` and a valid legacy circle id are tracked as distinct
+TARGET identities (the classified `kind` participates in the hashed
+material) even if, hypothetically, their raw string values collided, which
+they structurally cannot (see the login orchestration doc).
 
 **Actual cardinality, per scope:**
 
@@ -62,7 +82,7 @@ to a real member is **not** deduplicated beyond the pair itself.
 |---|---|---|
 | GLOBAL | exactly 1 | none (fixed key) — effectively bounded already |
 | SOURCE | ≤ 1 per distinct source IP that has attempted authentication | number of distinct attacking/legitimate IPs, not request volume from any one IP |
-| TARGET | ≤ 1 per distinct syntactically-valid `(circleId, memberCode)` pair attempted, **plus** exactly 1 shared malformed-input row | number of distinct pairs tried — **not bounded by SOURCE's own threshold**, since a SOURCE-denied request still creates/increments its TARGET row |
+| TARGET | ≤ 1 per distinct syntactically-valid classified `(circleCode-or-legacy-id, memberCode)` pair attempted, **plus** exactly 1 shared malformed-input row | number of distinct pairs tried — **not bounded by SOURCE's own threshold**, since a SOURCE-denied request still creates/increments its TARGET row |
 
 **TARGET is the dimension most exposed to genuine unbounded row growth** from
 a determined attacker spraying distinct fake-but-valid-shaped target pairs

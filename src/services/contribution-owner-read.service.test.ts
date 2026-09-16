@@ -181,17 +181,40 @@ test("a DRAFT circle is rejected with OwnerContributionsCircleNotEligibleError",
   );
 });
 
+// 10F: CANCELLED and ARCHIVED are retirement-lifecycle terminal states
+// (circle-retirement.service.ts) reached only from ACTIVE and COMPLETED
+// respectively -- both always have real, already-persisted contribution
+// history. Per OwnerContributionsCircleNotEligibleError's own contract
+// ("Contribution details are only available once a circle has been
+// activated"), any circle that was ever activated remains readable for
+// its own owner; retiring it is a read-only terminal state, not a data
+// blackout. ELIGIBLE_CIRCLE_STATUSES (contribution-owner-read.service.ts)
+// has explicitly included both since the retirement-lifecycle-controls
+// feature shipped -- this suite previously still asserted the pre-that-
+// feature rejection, which was stale, not a production defect.
 for (const status of ["CANCELLED", "ARCHIVED"] as const) {
-  test(`a ${status} circle is rejected with OwnerContributionsCircleNotEligibleError`, async () => {
+  test(`a ${status} circle is eligible -- historical contribution data reads successfully`, async () => {
     const ownerId = await createOwner();
     const circleId = await createFixtureCircle(ownerId, status, "10.00");
+    const memberA = await createFixtureMember(circleId, ownerId, "A", 1);
+    const roundId = await createFixtureRound(circleId, 1, memberA.id);
+    await createFixtureObligation(circleId, roundId, memberA.id, "10.00");
 
-    await assert.rejects(
-      () => getOwnerCircleContributions({ ownerId, circleId }),
-      OwnerContributionsCircleNotEligibleError,
-    );
+    const result = await getOwnerCircleContributions({ ownerId, circleId });
+    assert.equal(result.circle.status, status);
+    assert.equal(result.obligations.length, 1);
   });
 }
+
+// A circle that was NEVER activated has no real contribution history to
+// read -- DRAFT remains the one genuinely ineligible status (asserted
+// above), and this must not silently widen alongside CANCELLED/ARCHIVED.
+test("a DRAFT circle remains rejected even though CANCELLED/ARCHIVED are eligible", () => {
+  assert.doesNotMatch(
+    readFileSync(new URL("./contribution-owner-read.service.ts", import.meta.url), "utf8"),
+    /ELIGIBLE_CIRCLE_STATUSES\s*=\s*\[[^\]]*"DRAFT"/,
+  );
+});
 
 test("a COMPLETED circle is now eligible (7L.3 P1 fix) -- historical contribution data reads successfully", async () => {
   const ownerId = await createOwner();
@@ -430,10 +453,23 @@ test("the result exposes only the whitelisted fields at every level", async () =
 
   assert.deepEqual(Object.keys(result).sort(), ["circle", "obligations", "payments", "rounds"]);
   assert.deepEqual(Object.keys(result.circle).sort(), ["currency", "id", "name", "status"]);
-  assert.deepEqual(Object.keys(result.rounds[0]!).sort(), ["dueDate", "id", "recipientDisplayName", "roundNumber", "status"]);
+  // 9G: closureBasis (imported-history round-closure provenance) is a
+  // deliberate, safe presentation field -- see the module's own
+  // OwnerContributionsRoundResult type -- distinguishing an owner-declared
+  // imported round closure from a normal NIA-managed one. Not a
+  // credential or internal actor id.
+  assert.deepEqual(Object.keys(result.rounds[0]!).sort(), ["closureBasis", "dueDate", "id", "recipientDisplayName", "roundNumber", "status"]);
+  // 9G: fulfillmentBasis (imported-history obligation-fulfillment
+  // provenance) is the obligation-level counterpart to closureBasis above
+  // -- IMPORTED_DECLARATION means this obligation's fulfilled state is the
+  // owner's own historical declaration at import time, never a real
+  // ContributionPayment through NIA. This is exactly the guarantee 10F's
+  // own contract requires ("imported historical obligations must not
+  // masquerade as NIA-confirmed payments") -- the field is what lets the
+  // UI make that distinction, not a leak.
   assert.deepEqual(
     Object.keys(result.obligations[0]!).sort(),
-    ["confirmedAmount", "currency", "dueDate", "expectedAmount", "fulfilledAt", "id", "memberCode", "memberDisplayName", "memberId", "outstandingAmount", "roundId", "status"].sort(),
+    ["confirmedAmount", "currency", "dueDate", "expectedAmount", "fulfilledAt", "fulfillmentBasis", "id", "memberCode", "memberDisplayName", "memberId", "outstandingAmount", "roundId", "status"].sort(),
   );
   assert.deepEqual(
     Object.keys(result.payments[0]!).sort(),

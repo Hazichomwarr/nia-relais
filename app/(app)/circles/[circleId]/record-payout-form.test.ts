@@ -46,8 +46,14 @@ test("the amount field is a hidden, read-only input fixed to the round's own exp
   assert.doesNotMatch(source, /<input[^>]*name="amount"[^>]*type="(?:text|number)"/);
 });
 
+// 10F: this used to assert a literal `{currency} {amount}` interpolation.
+// Production now formats the amount via the shared formatMoney() helper
+// (src/i18n/format.ts) instead -- correct grouped-thousands and CFA/XOF
+// no-decimal display, not a regression -- so the exact literal pattern no
+// longer appears. The amount is still displayed, just through the
+// codebase's one shared money formatter rather than ad hoc interpolation.
 test("the exact amount is displayed to the owner, not just submitted silently, and no client-side arithmetic computes it", () => {
-  assert.match(source, /\{currency\}\s*\{amount\}/);
+  assert.match(source, /\{formatMoney\(amount, currency\)\}/);
   assert.match(source, /copy\.payoutDescription/);
   assert.doesNotMatch(source, /\breduce\(/);
   assert.doesNotMatch(source, /contributionAmount\s*\*/);

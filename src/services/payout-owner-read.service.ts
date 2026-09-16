@@ -36,16 +36,20 @@ import {
 // Lifecycle boundary: unlike getActiveCircleSummaryForOwner (7I.6) and
 // getOwnerCircleContributions (7J.5), which are both explicitly
 // ACTIVE-only ("a future ticket" language in 7I.6's own comment), this
-// read is intentionally available for ACTIVE, COMPLETED, and ARCHIVED
-// circles. Payout history is permanent accounting fact once recorded --
-// it does not stop being true when a circle later completes or is
-// archived, exactly mirroring confirmPayout/disputePayout's own frozen
-// rule that a legitimate recipient decision (and its replay) must remain
-// readable/actionable past ACTIVE (7K.4/7K.5). A DRAFT circle has no
-// PayoutRound/ContributionObligation rows at all (both are created only
-// at activation), so it is rejected here exactly as it is rejected by
-// every other owner read -- there is nothing yet to show. A CANCELLED
-// circle never activates either, so the same rejection applies to it.
+// read is intentionally available for ACTIVE, COMPLETED, CANCELLED, and
+// ARCHIVED circles. Payout history is permanent accounting fact once
+// recorded -- it does not stop being true when a circle later completes,
+// is cancelled, or is archived, exactly mirroring confirmPayout/
+// disputePayout's own frozen rule that a legitimate recipient decision
+// (and its replay) must remain readable/actionable past ACTIVE
+// (7K.4/7K.5). A DRAFT circle has no PayoutRound/ContributionObligation
+// rows at all (both are created only at activation), so it is rejected
+// here exactly as it is rejected by every other owner read -- there is
+// nothing yet to show. A CANCELLED circle (retirement-lifecycle-controls)
+// is reached only from ACTIVE (circle-retirement.service.ts's
+// cancelCircle never transitions a DRAFT circle -- deleteDraftCircle
+// handles that case, by hard deletion, separately), so it always DID
+// activate and always has real history to read; it is never rejected.
 
 export class OwnerPayoutsCircleNotFoundError extends Error {
   constructor() {

@@ -123,13 +123,19 @@ test("no actor id (completedById/activatedById) is ever exposed", async () => {
   const circleId = await createFixtureCircle(ownerId, "COMPLETED");
 
   const result = await getCompletedCircleSummaryForOwner({ ownerId, circleId });
+  // 9D.1: originKind/historicalCompletedRoundCount are import-history
+  // presentation metadata (docs/product/susu-existing-import-contract-freeze.md),
+  // deliberately added to CompletedCircleOwnerSummaryResult -- not an
+  // actor id, which this test's own name is specifically about.
   assert.deepEqual(Object.keys(result.circle).sort(), [
     "completedAt",
     "contributionAmount",
     "currency",
     "frequency",
+    "historicalCompletedRoundCount",
     "id",
     "name",
+    "originKind",
     "startDate",
     "status",
   ]);

@@ -709,14 +709,25 @@ test("the result exposes only the whitelisted fields at every level", async () =
 
   assert.deepEqual(Object.keys(result).sort(), ["circle", "recipientRounds"]);
   assert.deepEqual(Object.keys(result.circle).sort(), ["currency", "id", "name", "status"]);
+  // 9G: closureBasis (imported-history round-closure provenance) is a
+  // deliberate, safe presentation field -- see this module's own
+  // MemberPayoutsRecipientRoundResult type -- distinguishing an
+  // owner-declared imported round closure from a normal NIA-managed one.
+  // Not a credential, memberCode, or internal actor id (both remain
+  // excluded, per the test just above).
   assert.deepEqual(
     Object.keys(result.recipientRounds[0]!).sort(),
-    ["dueDate", "expectedPayout", "id", "payout", "roundNumber", "status"],
+    ["closureBasis", "dueDate", "expectedPayout", "id", "payout", "roundNumber", "status"],
   );
   assert.deepEqual(Object.keys(result.recipientRounds[0]!.expectedPayout).sort(), ["amount", "currency"]);
+  // 9G: confirmationBasis (MemberPayoutsPayoutResult) tells the UI apart a
+  // genuine MEMBER_CONFIRMED receipt from an IMPORTED_DECLARATION
+  // historical record -- exactly what prevents an imported payout from
+  // rendering Confirm/Dispute controls or being misread as "you confirmed
+  // this." Not a credential or internal actor id.
   assert.deepEqual(
     Object.keys(result.recipientRounds[0]!.payout ?? {}).sort(),
-    ["amount", "confirmedAt", "currency", "disputeReason", "disputedAt", "id", "recordedAt", "status"],
+    ["amount", "confirmationBasis", "confirmedAt", "currency", "disputeReason", "disputedAt", "id", "recordedAt", "status"],
   );
 });
 

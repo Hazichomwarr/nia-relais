@@ -1,4 +1,4 @@
-# SUSU Member Login Orchestration (7G.4)
+# SUSU Member Login Orchestration (7G.4, updated 10E)
 
 Status: implemented. This is the ticket that connects the previously
 independent, independently-tested primitives — trusted source (7G.2.4), rate
@@ -6,6 +6,34 @@ limiter (7G.2.5/7G.2.6), credential verifier (7G.1/7G.2), and member session
 issuance (7G.3) — into one public login endpoint. No member login UI, member
 dashboard, contribution/payout mutation, PIN rotation, or notification flow
 exists as of this ticket.
+
+**10E update:** the human-facing login field is now `circleCode`
+(`SavingsCircle.circleCode`, e.g. `NIA-7K42`), not the raw internal
+`SavingsCircle.id`. See "Human vs. internal identity" below before reading
+the rest of this document — every `circleId` field name that follows in this
+file's original (7G.4) prose refers to the *request field name*, which 10E
+renamed to `circleCode`; internal identity itself did not change.
+
+## Human vs. internal identity (10E)
+
+- **Human authentication input:** `circleCode` + `memberCode` + PIN. This is
+  the only credential a member is ever asked to type.
+- **Legacy compatibility:** a legacy raw `SavingsCircle.id` remains accepted
+  in the same `circleCode` request field, ONLY for already-issued
+  credentials predating 10E (10E §8's bounded, explicit
+  backward-compatibility path — see `classifyCircleLoginIdentifier` in
+  `src/validations/circle-member-auth.schema.ts`). It is never shown in the
+  UI and never generated for anything new.
+- **Internal authority:** `SavingsCircle.id` and `CircleMember.id` remain the
+  sole internal database identity everywhere — foreign keys, ownership
+  checks, provenance. `circleCode`/`memberCode` are never used as internal
+  identity and never replace `SavingsCircle.id`/`CircleMember.id` anywhere.
+- **Session identity:** a member session represents internal
+  `(circleId, memberId, credentialVersion)` only — see
+  `circle-member-session-contract.md`. Human-facing codes are never session
+  identity; a session is issued and validated entirely in terms of internal
+  ids, regardless of which shape (`circleCode` or legacy id) the member
+  originally typed to authenticate.
 
 ## Route namespace
 
@@ -30,25 +58,34 @@ the honest answer given this topology, not a default left unexamined — see
 
 ## Input contract
 
-The route accepts exactly three fields in the JSON body: `circleId`,
+The route accepts exactly three fields in the JSON body: `circleCode`,
 `memberCode`, `pin`. Nothing else is read from the request — no `userId`,
 `memberId`, `credentialVersion`, membership status, circle status, or session
 identity field exists in the request schema, so there is nothing for the
 server to (correctly) ignore; a client cannot even attempt to smuggle those
 in a way the code notices.
 
+`circleCode` (10E) accepts either shape described in "Human vs. internal
+identity" above — a new `NIA-XXXX` circleCode or, for backward compatibility,
+a legacy raw `SavingsCircle.id`. Classification happens once, inside
+`verifyCircleMemberCredentials` (via `classifyCircleLoginIdentifier`), and
+that same classification is reused by the rate limiter's own TARGET
+derivation (see "Rate limiter secret" below) so a request is never
+classified two different ways at two different stages.
+
 Two layers of validation exist, deliberately different in strictness:
 
 1. `circle-member-login.service.ts`'s own bounded schema (max length + type
    only, with `.catch("")` on every field so parsing never throws) — just
-   enough to safely reach the rate limiter, which needs `circleId` and
+   enough to safely reach the rate limiter, which needs `circleCode` and
    `memberCode` even when they are malformed (a malformed pair still
    consumes bounded `TARGET`-scope capacity via the limiter's own
    `malformed-target` sentinel, rather than bypassing the limiter).
-2. `verifyCircleMemberCredentialsSchema`'s strict shape check (CUID pattern,
-   16-hex member code, 6-digit PIN), enforced inside
-   `verifyCircleMemberCredentials` itself, which this route never
-   re-implements or duplicates.
+2. `verifyCircleMemberCredentialsSchema`'s strict shape check (circleCode or
+   legacy-id pattern, the memberCode union pattern covering both the new
+   6-character restricted-alphabet shape and legacy 16-hex codes, and a
+   6-digit PIN), enforced inside `verifyCircleMemberCredentials` itself,
+   which this route never re-implements or duplicates.
 
 ## Execution order
 
@@ -59,20 +96,24 @@ called from the route handler:
 getTrustedMemberAuthSource(request)
         |  ok:false -> stop, generic failure. Rate limiter and verifier never run.
         v
-checkMemberAuthenticationRateLimit({ source, circleId, memberCode })
+checkMemberAuthenticationRateLimit({ source, circleCode, memberCode })
         |  allowed:false -> stop, generic failure. Verifier never runs.
         v
-verifyCircleMemberCredentials({ circleId, memberCode, pin })
+verifyCircleMemberCredentials({ circleCode, memberCode, pin })
+        (classifies circleCode into CIRCLE_CODE or LEGACY_CIRCLE_ID, resolves
+         to the internal circleId, then verifies memberCode + PIN against it)
         |  throws CircleMemberAuthenticationError -> stop, generic failure. No session issued.
         v
 createCircleMemberSession({ circleId, memberId, credentialVersion })
-        (using ONLY the verifier's own returned circleId/memberId/credentialVersion --
-         never the raw client-supplied circleId/memberCode/pin again)
+        (using ONLY the verifier's own resolved, trusted internal circleId/memberId/
+         credentialVersion -- never the raw client-supplied circleCode/memberCode/pin again)
         |  throws -> stop, generic failure, no cookie set, no retry.
         v
 cookies().set(nia_member_session, rawToken, CIRCLE_MEMBER_SESSION_COOKIE_OPTIONS)
         v
-{ ok: true } JSON response (never contains the token)
+{ ok: true, circleId } JSON response (the verifier's own resolved internal
+        circleId, for the browser to navigate to /member/circles/[circleId] --
+        routing plumbing, never a credential; never contains the raw token)
 ```
 
 Each arrow's failure path returns the identical `{ ok: false }` from

@@ -51,9 +51,14 @@ test("priority route segments have lightweight accessible loading states", () =>
   }
 });
 
+// 10F: this used to assert a hardcoded English string. Production now
+// localizes this page via dictionary.common.pageNotFound (EN/FR, like
+// every other user-facing page) instead of a hardcoded literal -- the
+// displayed English text is unchanged ("We couldn't find that page.",
+// src/i18n/dictionaries/en.ts), only the mechanism is different.
 test("the root not-found page remains generic and offers a safe recovery path", () => {
   const notFound = source("./not-found.tsx");
-  assert.match(notFound, /We couldn’t find that page/);
+  assert.match(notFound, /dictionary\.common\.pageNotFound/);
   assert.match(notFound, /href="\/"/);
   assert.doesNotMatch(notFound, /owner|authorization|database/i);
 });

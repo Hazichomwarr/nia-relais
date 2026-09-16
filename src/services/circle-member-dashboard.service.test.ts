@@ -491,7 +491,7 @@ test("N. confirmedContributionTotal and fulfilled/total obligation counts are co
   assert.equal(result.summary.totalObligationCount, 3);
 });
 
-test("O. circle-wide round progress is an aggregate count only, computed from the ledger", async () => {
+test("O. circle-wide round progress is an aggregate, non-member-specific summary computed from the ledger", async () => {
   const fixture = await buildCircleFixture({
     circleStatus: "ACTIVE",
     contributionAmount: "100.00",
@@ -504,8 +504,19 @@ test("O. circle-wide round progress is an aggregate count only, computed from th
 
   const result = await dashboardFor(fixture, 0);
 
-  assert.deepEqual(result.roundProgress, { confirmedMemberCount: 2, totalMemberCount: 3 });
-  assert.deepEqual(Object.keys(result.roundProgress!).sort(), ["confirmedMemberCount", "totalMemberCount"]);
+  assert.deepEqual(result.roundProgress, {
+    confirmedMemberCount: 2,
+    totalMemberCount: 3,
+    // "feat: redesign member susu workspace": expectedPayoutAmount is a
+    // circle-wide, non-member-specific figure (contributionAmount x active
+    // member count, computed from the round's own persisted obligations --
+    // see RoundProgressResult's own doc comment) -- knowable to every
+    // member from already-public circle terms, never a recorded/
+    // transferred payout and never another member's individual figure
+    // (that guarantee is enforced separately by test P below).
+    expectedPayoutAmount: "300.00",
+  });
+  assert.deepEqual(Object.keys(result.roundProgress!).sort(), ["confirmedMemberCount", "expectedPayoutAmount", "totalMemberCount"]);
 });
 
 test("P. another member's specific financial figures never appear anywhere in this member's dashboard", async () => {
@@ -544,7 +555,11 @@ test("R. a RECORDED payout is never treated as recipient-confirmed receipt", asy
   assert.equal(result.payout?.confirmedAt, null);
   // The result carries no derived "received"/"confirmed" boolean that could
   // be misread as receipt -- only the raw status string and timestamps.
-  assert.deepEqual(Object.keys(result.payout!).sort(), ["amount", "confirmedAt", "disputedAt", "recordedAt", "roundNumber", "status"]);
+  // 9G: confirmationBasis is itself in service of this same guarantee --
+  // it is what lets the UI tell a genuine MEMBER_CONFIRMED receipt apart
+  // from an IMPORTED_DECLARATION historical record, so a RECORDED payout
+  // (this test's own case) is never misrepresented as either.
+  assert.deepEqual(Object.keys(result.payout!).sort(), ["amount", "confirmationBasis", "confirmedAt", "disputedAt", "recordedAt", "roundNumber", "status"]);
 });
 
 test("S. a CONFIRMED payout is represented truthfully with its confirmedAt timestamp", async () => {
