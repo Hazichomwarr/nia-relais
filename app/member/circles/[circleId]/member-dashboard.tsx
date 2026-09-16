@@ -34,8 +34,8 @@ export function MemberDashboard({
     roundHeading.kind === "current" && isMemberRecipientRound(roundHeading.round, dashboard.member.payoutOrder);
 
   return (
-    <main id="member-workspace" className="min-h-screen bg-[#fbf7ef] px-4 py-5 text-[#173b32] sm:px-8 sm:py-8">
-      <div className="mx-auto w-full max-w-5xl pb-24 sm:pb-10">
+    <main id="member-workspace" className="min-h-[100dvh] bg-[#fbf7ef] px-4 py-5 text-[#173b32] sm:px-8 sm:py-8">
+      <div className="mx-auto w-full max-w-5xl pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-10">
         <WorkspaceHeader dashboard={dashboard} dictionary={dictionary} locale={locale} />
         <MemberIdentity dashboard={dashboard} dictionary={dictionary} locale={locale} />
         {dashboard.circle.originKind === "IMPORTED" ? <ImportedHistoryNotice dashboard={dashboard} dictionary={dictionary} /> : null}
@@ -165,7 +165,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 function BottomNavigation({ dictionary }: { dictionary: Dictionary }) {
   const copy = dictionary.memberWorkspace;
-  return <nav aria-label={copy.susuCircle} className="fixed inset-x-3 bottom-3 z-10 mx-auto flex max-w-md items-center justify-around rounded-2xl border border-[#e5ddd2] bg-[#fffdf9]/95 px-2 py-2 shadow-[0_8px_28px_rgba(77,57,40,0.14)] backdrop-blur sm:hidden"><BottomLink href="#member-workspace" icon="home" label={copy.home} active /><BottomLink href="#rotation-schedule" icon="calendar" label={copy.schedule} /><BottomLink href="#contribution-history" icon="list" label={copy.history} /><BottomLink href="#circle-details" icon="person" label={copy.profile} /></nav>;
+  return <nav aria-label={copy.susuCircle} className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 mx-auto flex max-w-md items-center justify-around rounded-2xl border border-[#e5ddd2] bg-[#fffdf9]/95 px-2 py-2 shadow-[0_8px_28px_rgba(77,57,40,0.14)] backdrop-blur sm:hidden"><BottomLink href="#member-workspace" icon="home" label={copy.home} active /><BottomLink href="#rotation-schedule" icon="calendar" label={copy.schedule} /><BottomLink href="#contribution-history" icon="list" label={copy.history} /><BottomLink href="#circle-details" icon="person" label={copy.profile} /></nav>;
 }
 
 function BottomLink({ href, icon, label, active = false }: { href: string; icon: IconName; label: string; active?: boolean }) {

@@ -25,5 +25,5 @@ export function ConnectivityIndicator({
   }, [status]);
 
   if (status === "online") return null;
-  return <div role="status" aria-live="polite" className="fixed inset-x-3 bottom-3 z-50 rounded-xl bg-[#255b48] px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">{status === "offline" ? offlineLabel : restoredLabel}</div>;
+  return <div role="status" aria-live="polite" className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-50 rounded-xl bg-[#255b48] px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">{status === "offline" ? offlineLabel : restoredLabel}</div>;
 }

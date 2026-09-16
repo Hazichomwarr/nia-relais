@@ -35,7 +35,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
   ];
 
   return (
-    <header className="border-b border-[var(--nia-border)] bg-[var(--nia-surface)] px-4 py-3 sm:px-8">
+    <header className="border-b border-[var(--nia-border)] bg-[var(--nia-surface)] px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-8">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
         <Link
           href="/dashboard"
