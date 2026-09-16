@@ -44,6 +44,12 @@ export type MemberLoginResult =
   | { readonly ok: true; readonly rawToken: string; readonly expiresAt: string }
   | { readonly ok: false };
 
+function logMemberLoginFailure(stage: string) {
+  // Deliberately fieldless: member auth failures must remain diagnosable in
+  // production without recording credentials, member identity, or source IP.
+  console.warn("[member-login] rejected", { stage });
+}
+
 async function extractBoundedLoginFields(request: Request) {
   let body: unknown = null;
   try {
@@ -92,7 +98,10 @@ export async function loginCircleMember(
   // 1. Trusted request source. If this fails, nothing else runs -- not the
   // limiter, not the verifier. There is no fallback source.
   const sourceResult = deps.getTrustedSource(request);
-  if (!sourceResult.ok) return { ok: false };
+  if (!sourceResult.ok) {
+    logMemberLoginFailure("TRUSTED_SOURCE_UNAVAILABLE");
+    return { ok: false };
+  }
 
   const fields = await extractBoundedLoginFields(request);
 
@@ -104,7 +113,10 @@ export async function loginCircleMember(
     circleId: fields.circleId,
     memberCode: fields.memberCode,
   });
-  if (!rateLimitDecision.allowed) return { ok: false };
+  if (!rateLimitDecision.allowed) {
+    logMemberLoginFailure("RATE_LIMIT_DENIED");
+    return { ok: false };
+  }
 
   // 3. Credential verification. The verifier does its own strict shape
   // validation and its own timing-safe dummy-compare path internally; any
@@ -114,7 +126,10 @@ export async function loginCircleMember(
   try {
     verified = await deps.verifyCredentials(fields);
   } catch (error) {
-    if (error instanceof CircleMemberAuthenticationError) return { ok: false };
+    if (error instanceof CircleMemberAuthenticationError) {
+      logMemberLoginFailure("CREDENTIAL_REJECTED");
+      return { ok: false };
+    }
     throw error;
   }
 
@@ -132,6 +147,7 @@ export async function loginCircleMember(
   } catch {
     // No retry. No cookie. A fresh login attempt (a new HTTP request) is the
     // only way to try again -- this function does not loop.
+    logMemberLoginFailure("SESSION_CREATION_FAILED");
     return { ok: false };
   }
 }

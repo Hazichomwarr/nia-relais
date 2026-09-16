@@ -122,7 +122,12 @@ export async function checkMemberAuthenticationRateLimit(input: {
   memberCode: string;
 }): Promise<MemberAuthRateLimitDecision> {
   const secret = getRateLimitSecret();
-  if (!secret) return { allowed: false };
+  if (!secret) {
+    console.error("[member-auth-rate-limit] configuration unavailable", {
+      stage: "RATE_LIMIT_SECRET_UNAVAILABLE",
+    });
+    return { allowed: false };
+  }
 
   const targetMaterial = normalizeTargetMaterial(input.circleId, input.memberCode);
 
