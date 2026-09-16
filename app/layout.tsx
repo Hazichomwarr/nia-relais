@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { ConnectivityIndicator } from "@/components/pwa/connectivity-indicator";
 import { getLocale } from "@/src/i18n/locale";
 import "./globals.css";
 
@@ -50,6 +51,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegistration />
+        <ConnectivityIndicator offlineLabel={locale === "en" ? "You're offline" : "Vous êtes hors ligne"} restoredLabel={locale === "en" ? "Connection restored" : "Connexion rétablie"} />
         {children}
       </body>
     </html>

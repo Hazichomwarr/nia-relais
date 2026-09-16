@@ -51,7 +51,7 @@ test("cache policy keeps navigations, data, auth, and mutations network-authorit
 });
 
 test("cache names are versioned and cleanup is limited to NIA-owned caches", () => {
-  assert.equal(policy.CACHE_NAME, "nia-static-v1");
+  assert.equal(policy.CACHE_NAME, "nia-static-v2");
   assert.equal(policy.CACHE_PREFIX, "nia-static-");
   assert.equal(policy.isNiaCacheName("nia-static-v0"), true);
   assert.equal(policy.isNiaCacheName("another-app-v1"), false);
@@ -80,13 +80,24 @@ test("only successful, same-origin-safe responses are cacheable", () => {
 });
 
 test("the worker and its registration contain no offline mutation or takeover behavior", async () => {
-  const [workerSource, registrationSource] = await Promise.all([
+  const [workerSource, registrationSource, offlineSource, indicatorSource] = await Promise.all([
     readFile("public/sw.js", "utf8"),
     readFile("components/pwa/service-worker-registration.tsx", "utf8"),
+    readFile("public/offline.html", "utf8"),
+    readFile("components/pwa/connectivity-indicator.tsx", "utf8"),
   ]);
 
   assert.match(workerSource, /importScripts\("\/sw-policy\.js"\)/);
   assert.doesNotMatch(workerSource, /self\.skipWaiting|clients\.claim|addEventListener\("sync"/);
   assert.match(registrationSource, /process\.env\.NODE_ENV !== "production"/);
   assert.match(registrationSource, /register\("\/sw\.js", \{ scope: "\/" \}\)/);
+  assert.match(workerSource, /event\.request\.mode === "navigate"/);
+  assert.match(workerSource, /caches\.match\(OFFLINE_FALLBACK_PATH\)/);
+  assert.match(offlineSource, /location\.reload\(\)/);
+  assert.match(offlineSource, /Vous êtes hors ligne/);
+  assert.match(offlineSource, /You’re offline/);
+  assert.doesNotMatch(offlineSource, /dashboard|contribution|payout|balance|member list/i);
+  assert.match(indicatorSource, /addEventListener\("offline"/);
+  assert.match(indicatorSource, /addEventListener\("online"/);
+  assert.doesNotMatch(indicatorSource, /fetch\(|submit|replay/i);
 });

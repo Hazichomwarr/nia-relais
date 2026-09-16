@@ -1,7 +1,7 @@
 /* global NiaCachePolicy */
 importScripts("/sw-policy.js");
 
-const { CACHE_NAME, classifyRequest, isNiaCacheName, isSafeResponse } = NiaCachePolicy;
+const { CACHE_NAME, OFFLINE_FALLBACK_PATH, classifyRequest, isNiaCacheName, isSafeResponse } = NiaCachePolicy;
 
 async function cacheResponse(request, response) {
   if (isSafeResponse(response)) {
@@ -34,9 +34,13 @@ async function networkFirst(request) {
   }
 }
 
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
   // No hardcoded build chunk list and no skipWaiting: old tabs finish with the
   // worker they started with, avoiding an old-HTML/new-chunk mismatch.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll([
+    OFFLINE_FALLBACK_PATH,
+    "/images/nia-logo.png",
+  ])));
 });
 
 self.addEventListener("activate", (event) => {
@@ -55,6 +59,12 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE_FALLBACK_PATH)));
+    return;
+  }
+
   const classification = classifyRequest(event.request, url);
 
   // All navigations, RSC/Flight traffic, APIs, authentication, and every

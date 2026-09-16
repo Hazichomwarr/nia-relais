@@ -6,7 +6,8 @@
  */
 (function attachNiaCachePolicy(scope) {
   const CACHE_PREFIX = "nia-static-";
-  const CACHE_NAME = "nia-static-v1";
+  const CACHE_NAME = "nia-static-v2";
+  const OFFLINE_FALLBACK_PATH = "/offline.html";
 
   const NIA_STATIC_ASSETS = new Set([
     "/icons/nia-192.png",
@@ -56,6 +57,7 @@
   const policy = {
     CACHE_PREFIX,
     CACHE_NAME,
+    OFFLINE_FALLBACK_PATH,
     classifyRequest,
     isNiaCacheName,
     isSafeResponse,
