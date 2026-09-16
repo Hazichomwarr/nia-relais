@@ -51,7 +51,7 @@ export default async function RootLayout({
     >
       <body className="flex min-h-[100dvh] flex-col">
         <ServiceWorkerRegistration />
-        <ConnectivityIndicator offlineLabel={locale === "en" ? "You're offline" : "Vous êtes hors ligne"} restoredLabel={locale === "en" ? "Connection restored" : "Connexion rétablie"} />
+        <ConnectivityIndicator offlineLabel={locale === "en" ? "You're offline" : "Vous êtes hors ligne"} />
         {children}
       </body>
     </html>
