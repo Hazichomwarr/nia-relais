@@ -232,6 +232,13 @@ model SavingsCircle {
   ownerId String
   owner   User   @relation("CircleOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
+  // Human-facing login identifier (10E), distinct from `id`. Immutable once
+  // set, generated server-side from a restricted alphabet (never derived
+  // from `id`), globally unique, canonically uppercase (e.g. "NIA-7K42").
+  // `id` remains the sole internal/foreign-key identity -- nothing here
+  // replaces it.
+  circleCode String @unique
+
   name                          String
   currency                      String                @db.Char(3)
   contributionAmount            Decimal               @db.Decimal(18, 2)
@@ -277,8 +284,18 @@ model CircleMember {
   displayName String
   email       String?
   phone       String?
-  memberCode  String
-  pinHash     String
+  // Human-facing login credential, scoped unique per circle (see the
+  // @@unique below) -- never globally unique, by design (10E): the same
+  // short code may legitimately exist in different circles, and login is
+  // always scoped by circleCode + memberCode together. Two coexisting
+  // generations of value may be stored here: legacy 16-character uppercase
+  // hex codes issued before 10E (still valid, never invalidated) and, for
+  // every member added since, a shorter 6-character code drawn from the
+  // same restricted alphabet as SavingsCircle.circleCode. The two shapes
+  // never collide (different lengths), so no migration/backfill of
+  // existing rows is needed or performed.
+  memberCode String
+  pinHash    String
 
   // Durable, shared authentication security state. These values are not financial history.
   failedPinAttempts Int       @default(0)

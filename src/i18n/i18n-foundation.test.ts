@@ -38,7 +38,7 @@ test("the switcher persists a selected locale and refreshes without changing the
 test("the foundation localizes landing, authentication, member access, and shared navigation", () => {
   assert.match(landingSource, /dictionary\.landing\.titleFirst/);
   assert.match(loginSource, /dictionary\.login\.memberTitle/);
-  assert.match(memberLoginSource, /dictionary\.memberLogin\.circleId/);
+  assert.match(memberLoginSource, /dictionary\.memberLogin\.circleCode/);
   assert.match(navigationSource, /dictionary\.common\.susuCircles/);
   assert.match(navigationSource, /dictionary\.common\.greeting/);
 });

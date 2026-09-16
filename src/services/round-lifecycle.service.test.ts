@@ -25,6 +25,7 @@ import {
   RoundLifecycleRoundNotFoundError,
 } from "@/src/services/round-lifecycle.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests for the round-lifecycle services (7K.13),
 // implementing the frozen 7K.11 contract. Same methodology as every
@@ -67,6 +68,7 @@ async function createFixtureCircle(ownerId: string, contributionAmount = "10.00"
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("RoundLifecycleTestCircle"),
       currency: "USD",
       contributionAmount,
@@ -254,6 +256,7 @@ test("dueDate and startDate do not gate activation -- a due date far in the past
     .create({
       data: {
         ownerId,
+        circleCode: randomTestCircleCode(),
         name: unique("FutureStartCircle"),
         currency: "USD",
         contributionAmount: "10.00",

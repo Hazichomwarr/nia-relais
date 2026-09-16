@@ -22,12 +22,12 @@ import type { Dictionary } from "@/src/i18n/dictionaries/types";
 // outside of anything this script can see. See
 // docs/security/member-login-orchestration.md.
 
-type FieldName = "circleId" | "memberCode" | "pin";
+type FieldName = "circleCode" | "memberCode" | "pin";
 
 export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const router = useRouter();
 
-  const [circleId, setCircleId] = useState("");
+  const [circleCode, setCircleCode] = useState("");
   const [memberCode, setMemberCode] = useState("");
   const [pin, setPin] = useState("");
   const [fieldErrors, setFieldErrors] = useState<MemberLoginFieldErrors>({});
@@ -43,7 +43,7 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
     event.preventDefault();
     if (isSubmittingRef.current) return;
 
-    const values = { circleId, memberCode, pin };
+    const values = { circleCode, memberCode, pin };
     const errors = validateMemberLoginForm(values);
     setFieldErrors(errors);
     setFormError(null);
@@ -62,19 +62,21 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
         body: JSON.stringify(payload),
       });
 
-      let authenticated = false;
+      let resolvedCircleId: string | null = null;
       try {
         const data: unknown = await response.json();
-        authenticated =
+        const authenticated =
           response.ok &&
           typeof data === "object" &&
           data !== null &&
           (data as { ok?: unknown }).ok === true;
+        const circleId = authenticated ? (data as { circleId?: unknown }).circleId : null;
+        resolvedCircleId = typeof circleId === "string" && circleId.length > 0 ? circleId : null;
       } catch {
-        authenticated = false;
+        resolvedCircleId = null;
       }
 
-      if (!authenticated) {
+      if (!resolvedCircleId) {
         setFormError(GENERIC_MEMBER_AUTH_ERROR);
         setIsSubmitting(false);
         isSubmittingRef.current = false;
@@ -84,7 +86,7 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
       // Navigating away -- deliberately leave isSubmitting/isSubmittingRef
       // as-is. This screen is about to unmount; there is no button left to
       // double-submit with, so there is nothing to reset.
-      router.push(buildMemberCircleHref(payload.circleId));
+      router.push(buildMemberCircleHref(resolvedCircleId));
     } catch {
       setFormError(MEMBER_AUTH_NETWORK_ERROR);
       setIsSubmitting(false);
@@ -114,30 +116,30 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
         className="mt-8 space-y-5 rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"
       >
         <div>
-          <label htmlFor="circleId" className="block text-sm font-semibold text-[#173b32]">
-            {dictionary.memberLogin.circleId}
+          <label htmlFor="circleCode" className="block text-sm font-semibold text-[#173b32]">
+            {dictionary.memberLogin.circleCode}
           </label>
-          <p id="circleId-hint" className="mt-1 text-xs text-[#7b8179]">
-            {dictionary.memberLogin.circleIdHint}
+          <p id="circleCode-hint" className="mt-1 text-xs text-[#7b8179]">
+            {dictionary.memberLogin.circleCodeHint}
           </p>
           <input
-            id="circleId"
-            name="circleId"
+            id="circleCode"
+            name="circleCode"
             type="text"
             autoComplete="off"
-            autoCapitalize="off"
+            autoCapitalize="characters"
             spellCheck={false}
             required
-            value={circleId}
-            onChange={(event) => setCircleId(event.target.value)}
-            aria-invalid={Boolean(fieldErrors.circleId)}
-            aria-describedby={describedBy("circleId")}
+            value={circleCode}
+            onChange={(event) => setCircleCode(event.target.value)}
+            aria-invalid={Boolean(fieldErrors.circleCode)}
+            aria-describedby={describedBy("circleCode")}
             disabled={isSubmitting}
-            className="mt-2 block w-full rounded-xl border border-[#cdbda9] bg-white px-3.5 py-2.5 text-base text-[#173b32] outline-none transition focus-visible:border-[#b96549] focus-visible:ring-2 focus-visible:ring-[#b96549]/30 disabled:opacity-60"
+            className="mt-2 block w-full rounded-xl border border-[#cdbda9] bg-white px-3.5 py-2.5 text-base uppercase tracking-wider text-[#173b32] outline-none transition focus-visible:border-[#b96549] focus-visible:ring-2 focus-visible:ring-[#b96549]/30 disabled:opacity-60"
           />
-          {fieldErrors.circleId ? (
-            <p id="circleId-error" role="alert" className="mt-1.5 text-sm text-[#b3261e]">
-              {localizeMemberFieldError(fieldErrors.circleId, dictionary)}
+          {fieldErrors.circleCode ? (
+            <p id="circleCode-error" role="alert" className="mt-1.5 text-sm text-[#b3261e]">
+              {localizeMemberFieldError(fieldErrors.circleCode, dictionary)}
             </p>
           ) : null}
         </div>
@@ -220,8 +222,8 @@ export function MemberLoginForm({ locale, dictionary }: { locale: Locale; dictio
 }
 
 function localizeMemberFieldError(error: string, dictionary: Dictionary) {
-  if (error === "Enter your Circle ID.") return dictionary.memberLogin.fieldCircleId;
-  if (error === "Enter the 16-character member code exactly as given to you.") return dictionary.memberLogin.fieldMemberCode;
+  if (error === "Enter your Circle Code.") return dictionary.memberLogin.fieldCircleCode;
+  if (error === "Enter the member code exactly as given to you.") return dictionary.memberLogin.fieldMemberCode;
   if (error === "Enter your 6-digit PIN.") return dictionary.memberLogin.fieldPin;
   return error;
 }

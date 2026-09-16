@@ -34,6 +34,9 @@ export async function POST(request: Request): Promise<Response> {
   );
 
   // The raw token lives only in the Set-Cookie header written above -- the
-  // JSON body below never carries it.
-  return Response.json({ ok: true });
+  // JSON body below never carries it. `circleId` is the verifier's own
+  // trusted, resolved internal SavingsCircle.id (never the client-supplied
+  // circleCode/legacy-id) -- not a credential, just routing plumbing so the
+  // browser can navigate to /member/circles/[circleId] (10E §13).
+  return Response.json({ ok: true, circleId: result.circleId });
 }

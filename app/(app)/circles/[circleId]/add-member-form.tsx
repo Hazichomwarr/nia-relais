@@ -35,13 +35,69 @@ const inputClassName =
 
 type HandoffMember = { displayName: string; memberCode: string; pin: string };
 
-export function AddMemberForm({ circleId, dictionary }: { circleId: string; dictionary: Dictionary }) {
+// Builds the exact WhatsApp-friendly plain-text this screen ever puts on
+// the clipboard -- circleName/circleCode/memberCode/pin/loginUrl, nothing
+// else. Called only from the copy button's own click handler, never
+// persisted, never sent anywhere -- the browser's clipboard is the only
+// place this text goes.
+function buildLoginDetailsCopyText(input: {
+  circleName: string;
+  circleCode: string;
+  memberCode: string;
+  pin: string;
+  loginUrl: string;
+  labels: { circleCode: string; memberCode: string; pin: string; login: string };
+}): string {
+  return [
+    `NIA — ${input.circleName}`,
+    `${input.labels.circleCode}: ${input.circleCode}`,
+    `${input.labels.memberCode}: ${input.memberCode}`,
+    `${input.labels.pin}: ${input.pin}`,
+    `${input.labels.login}: ${input.loginUrl}`,
+  ].join("\n");
+}
+
+export function AddMemberForm({
+  circleId,
+  circleCode,
+  circleName,
+  dictionary,
+}: {
+  circleId: string;
+  circleCode: string;
+  circleName: string;
+  dictionary: Dictionary;
+}) {
   const copy = dictionary.susu;
   const [state, formAction, pending] = useActionState(addDraftCircleMemberAction, initialAddDraftCircleMemberState);
   const [pin, setPin] = useState("");
   const [handoff, setHandoff] = useState<HandoffMember | null>(null);
+  const [copied, setCopied] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const lastSubmittedPinRef = useRef("");
+  const copiedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleCopyLoginDetails() {
+    if (!handoff) return;
+    const text = buildLoginDetailsCopyText({
+      circleName,
+      circleCode,
+      memberCode: handoff.memberCode,
+      pin: handoff.pin,
+      loginUrl: `${window.location.origin}/member/login`,
+      labels: {
+        circleCode: copy.circleCode,
+        memberCode: copy.credentialMemberCode,
+        pin: copy.credentialPin,
+        login: copy.credentialLoginLabel,
+      },
+    });
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
+      copiedResetTimeoutRef.current = setTimeout(() => setCopied(false), 3000);
+    });
+  }
 
   useEffect(() => {
     if (state.status === "success" && state.member) {
@@ -50,6 +106,7 @@ export function AddMemberForm({ circleId, dictionary }: { circleId: string; dict
         memberCode: state.member.memberCode,
         pin: lastSubmittedPinRef.current,
       });
+      setCopied(false);
       lastSubmittedPinRef.current = "";
       setPin("");
       formRef.current?.reset();
@@ -69,8 +126,8 @@ export function AddMemberForm({ circleId, dictionary }: { circleId: string; dict
             <dd className="mt-1 text-base font-semibold text-[#173b32]">{handoff.displayName}</dd>
           </div>
           <div className="rounded-xl bg-white/70 p-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.circleId}</dt>
-            <dd className="mt-1 break-all font-mono text-sm font-semibold text-[#173b32]">{circleId}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.circleCode}</dt>
+            <dd className="mt-1 break-all font-mono text-sm font-semibold text-[#173b32]">{circleCode}</dd>
           </div>
           <div className="rounded-xl bg-white/70 p-3">
             <dt className="text-xs font-semibold uppercase tracking-wide text-[#68483e]">{copy.credentialMemberCode}</dt>
@@ -81,13 +138,25 @@ export function AddMemberForm({ circleId, dictionary }: { circleId: string; dict
             <dd className="mt-1 font-mono text-base font-semibold tracking-[0.3em] text-[#173b32]">{handoff.pin}</dd>
           </div>
         </dl>
-        <button
-          type="button"
-          onClick={() => setHandoff(null)}
-          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
-        >
-          {copy.credentialDismiss}
-        </button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleCopyLoginDetails}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#b96549] px-5 text-sm font-semibold text-[#a53f2b] transition hover:bg-[#fbe1d1] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
+          >
+            {copied ? copy.copyLoginDetailsCopied : copy.copyLoginDetails}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCopied(false);
+              setHandoff(null);
+            }}
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#b96549] px-5 text-sm font-semibold text-white transition hover:bg-[#9f543d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"
+          >
+            {copy.credentialDismiss}
+          </button>
+        </div>
       </div>
     );
   }

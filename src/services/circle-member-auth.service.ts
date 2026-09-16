@@ -6,6 +6,7 @@ import {
   lockCircleMemberForCredentialVerification,
   recordCircleMemberPinFailure,
   resetCircleMemberPinFailures,
+  resolveCircleIdForLogin,
 } from "@/src/repositories/circle-member-auth.repository";
 import { prisma } from "@/src/prisma";
 import {
@@ -58,7 +59,10 @@ export async function verifyCircleMemberCredentials(
   }
 
   const verified = await prisma.$transaction(async (transaction) => {
-    const member = await lockCircleMemberForCredentialVerification(transaction, parsed.data);
+    const circleId = await resolveCircleIdForLogin(transaction, parsed.data.circleCode);
+    const member = circleId
+      ? await lockCircleMemberForCredentialVerification(transaction, { circleId, memberCode: parsed.data.memberCode })
+      : null;
     const pinMatches = await compare(parsed.data.pin, member?.pinHash ?? DUMMY_MEMBER_PIN_HASH);
     const now = new Date();
 

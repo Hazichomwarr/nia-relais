@@ -15,6 +15,7 @@ import {
   CircleMemberSessionCredentialVersionMismatchError,
 } from "@/src/services/circle-member-session.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Temporary fixtures, precisely scoped by unique generated ids, deleted in
 // `test.after` regardless of individual test outcome. Nothing here performs
@@ -40,6 +41,7 @@ async function createFixtureCircle(ownerId: string, status: "DRAFT" | "ACTIVE" |
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("SessionTestCircle"),
       currency: "USD",
       contributionAmount: "10.00",

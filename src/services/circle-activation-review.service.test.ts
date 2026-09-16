@@ -11,6 +11,7 @@ import {
   getDraftCircleActivationReview,
 } from "@/src/services/circle-activation-review.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as every prior SUSU
 // ticket. No TEST_DATABASE_URL required (nothing here is destructive).
@@ -45,6 +46,7 @@ async function createFixtureCircle(
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("ActivationReviewTestCircle"),
       currency: overrides.currency ?? "USD",
       contributionAmount: overrides.contributionAmount ?? "50.00",

@@ -11,6 +11,7 @@ import {
   getDraftCircleForOwner,
 } from "@/src/services/circle-draft-owner.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as every prior SUSU
 // ticket: unique-id-scoped fixtures, FK-safe cleanup in test.after
@@ -42,6 +43,7 @@ async function createFixtureCircle(
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("DraftOwnerReadTestCircle"),
       currency: overrides.currency ?? "USD",
       contributionAmount: overrides.contributionAmount ?? "42.50",

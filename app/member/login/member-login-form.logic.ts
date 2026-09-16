@@ -4,11 +4,11 @@
 // functions to state, fetch, and navigation.
 
 export type MemberLoginFieldErrors = Partial<
-  Record<"circleId" | "memberCode" | "pin", string>
+  Record<"circleCode" | "memberCode" | "pin", string>
 >;
 
 export type MemberLoginFormValues = {
-  readonly circleId: string;
+  readonly circleCode: string;
   readonly memberCode: string;
   readonly pin: string;
 };
@@ -17,12 +17,19 @@ export type MemberLoginFormValues = {
 // shape check (verifyCircleMemberCredentialsSchema) -- these exist only to
 // give a human a helpful "that doesn't look right yet" message before an
 // API call, never to decide whether credentials are actually valid. The
-// server remains the sole source of truth for that.
-const MEMBER_CODE_PATTERN = /^[A-F0-9]{16}$/;
+// server remains the sole source of truth for that. circleCode is checked
+// only for non-emptiness here (not the "NIA-XXXX" shape): a member with a
+// credential issued before 10E may still legitimately type their old raw
+// circle id into this same field, and the server's own classification
+// (classifyCircleLoginIdentifier) is what actually decides which shape it
+// is -- this field must not reject that up front. memberCode accepts
+// either the new 6-character code or a legacy 16-character hex code, for
+// the same reason.
+const MEMBER_CODE_PATTERN = /^(?:[A-F0-9]{16}|[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6})$/;
 const PIN_PATTERN = /^\d{6}$/;
 
 export const GENERIC_MEMBER_AUTH_ERROR =
-  "We couldn't sign you in with that Circle ID, member code, and PIN. Please check them and try again.";
+  "We couldn't sign you in with that Circle Code, member code, and PIN. Please check them and try again.";
 
 export const MEMBER_AUTH_NETWORK_ERROR =
   "We couldn't reach NIA right now. Please check your connection and try again.";
@@ -38,12 +45,12 @@ export function validateMemberLoginForm(
 ): MemberLoginFieldErrors {
   const errors: MemberLoginFieldErrors = {};
 
-  if (values.circleId.trim().length === 0) {
-    errors.circleId = "Enter your Circle ID.";
+  if (values.circleCode.trim().length === 0) {
+    errors.circleCode = "Enter your Circle Code.";
   }
 
   if (!MEMBER_CODE_PATTERN.test(values.memberCode.trim().toUpperCase())) {
-    errors.memberCode = "Enter the 16-character member code exactly as given to you.";
+    errors.memberCode = "Enter the member code exactly as given to you.";
   }
 
   if (!PIN_PATTERN.test(values.pin.trim())) {
@@ -55,24 +62,31 @@ export function validateMemberLoginForm(
 
 /**
  * The exact, and only, request body this screen ever sends to
- * POST /api/member/auth/login -- circleId, memberCode, pin, nothing else.
+ * POST /api/member/auth/login -- circleCode, memberCode, pin, nothing else.
+ * circleCode is sent trimmed but NOT case-normalized here: unlike
+ * memberCode, its canonical casing depends on which shape it turns out to
+ * be (a new circleCode is canonically uppercase, a legacy raw circle id is
+ * canonically lowercase), and only the server's classification
+ * (classifyCircleLoginIdentifier) can tell those apart -- so this function
+ * deliberately leaves that decision to the server rather than guessing.
  */
 export function buildMemberLoginRequestPayload(values: MemberLoginFormValues): {
-  circleId: string;
+  circleCode: string;
   memberCode: string;
   pin: string;
 } {
   return {
-    circleId: values.circleId.trim(),
+    circleCode: values.circleCode.trim(),
     memberCode: values.memberCode.trim().toUpperCase(),
     pin: values.pin.trim(),
   };
 }
 
 /**
- * Where a successful login navigates to. Takes only the circleId the member
- * themselves typed -- never a member code, PIN, or anything from the login
- * response body (which carries no identity data to begin with).
+ * Where a successful login navigates to. Takes only the internal circleId
+ * the server's own login response returned -- never a member code, PIN, or
+ * the raw circleCode/legacy-id the member typed (the server-resolved id is
+ * the only value this function is ever given).
  */
 export function buildMemberCircleHref(circleId: string): string {
   return `/member/circles/${encodeURIComponent(circleId)}`;

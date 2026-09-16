@@ -49,8 +49,20 @@ test("the PIN is never written to localStorage, sessionStorage, or any URL", () 
   assert.doesNotMatch(source, /localStorage/);
   assert.doesNotMatch(source, /sessionStorage/);
   assert.doesNotMatch(source, /router\.push/);
-  assert.doesNotMatch(source, /window\.location/);
   assert.doesNotMatch(source, /searchParams/);
+});
+
+// 10E: window.location.origin is now read once, only to build the plain
+// text the "Copy login details" button puts on the clipboard (a login
+// URL, not a PIN destination) -- it must never be concatenated with the
+// PIN itself or handed to router.push/window.location.assign/href.
+test("the one legitimate window.location usage builds a login URL, never carries the PIN, and never navigates", () => {
+  const usages = [...source.matchAll(/.*window\.location.*/g)].map((match) => match[0]);
+  assert.equal(usages.length, 1, "expected exactly one window.location usage");
+  assert.match(usages[0], /window\.location\.origin/);
+  assert.doesNotMatch(usages[0], /\bpin\b/i);
+  assert.doesNotMatch(source, /window\.location\s*=/);
+  assert.doesNotMatch(source, /window\.location\.(assign|replace|href)/);
 });
 
 test("the PIN is never logged or sent anywhere but the form action", () => {
@@ -60,7 +72,7 @@ test("the PIN is never logged or sent anywhere but the form action", () => {
 
 // handoff cleared on dismissal/navigation/reload
 test("dismissing the handoff clears it via plain component state, with no persistence to survive a reload", () => {
-  assert.match(source, /onClick=\{\(\) => setHandoff\(null\)\}/);
+  assert.match(source, /setCopied\(false\);\s*setHandoff\(null\);/);
   // useState (not a ref keyed to storage, not a URL param) is the only
   // thing holding the handoff -- unmounting (navigation) or reloading the
   // page discards it automatically because nothing here persists it.
@@ -69,8 +81,11 @@ test("dismissing the handoff clears it via plain component state, with no persis
 
 // no "reveal PIN again" feature
 test("there is no second control that could re-show a PIN after the handoff is dismissed", () => {
+  // Submit, copy (10E -- copies the already-displayed PIN to the
+  // clipboard, it never re-fetches or re-derives one), and dismiss. None of
+  // these re-show a PIN that isn't already on screen.
   const revealButtons = [...source.matchAll(/<button[^>]*>/g)];
-  assert.equal(revealButtons.length, 2, "expected exactly the submit button and the one dismiss button");
+  assert.equal(revealButtons.length, 3, "expected exactly the submit button, the copy button, and the one dismiss button");
 });
 
 test("prevents duplicate submissions while the action is pending", () => {
@@ -86,11 +101,22 @@ test("no direct Prisma reference or member-session identity import", () => {
 
 test("the one-time handoff explains the three member credentials and the separate sign-in route", () => {
   assert.match(source, /copy\.credentialDescription/);
-  assert.match(en.susu.credentialDescription, /Circle ID, member code, and PIN/);
-  assert.match(fr.susu.credentialDescription, /identifiant du cercle, le code membre et le code PIN/);
+  assert.match(en.susu.credentialDescription, /Circle Code, member code, and PIN/);
+  assert.match(fr.susu.credentialDescription, /le code du cercle, le code membre et le code PIN/);
   assert.match(source, /href="\/member\/login"/);
   assert.match(source, /copy\.memberSignIn/);
-  assert.match(source, /copy\.circleId/);
-  assert.match(source, /\{circleId\}/);
+  assert.match(source, /copy\.circleCode/);
+  assert.match(source, /\{circleCode\}/);
   assert.match(source, /break-all/);
+});
+
+// 10E: the raw internal SavingsCircle.id must never appear in the
+// human-facing handoff panel -- only circleCode does. circleId is still
+// used once, as the hidden form field that tells the server action which
+// draft circle to add the member to (an authorization/routing input, not a
+// human-facing credential).
+test("the handoff never displays the raw circleId, only the human-facing circleCode", () => {
+  const circleIdUsages = [...source.matchAll(/\{circleId\}/g)];
+  assert.equal(circleIdUsages.length, 1, "circleId should only be used once, as the hidden form field value");
+  assert.match(source, /name="circleId" value=\{circleId\}/);
 });

@@ -66,8 +66,9 @@ test("only one generic auth error message constant exists and it names no creden
 
 // --- successful navigation ---
 
-test("a successful login navigates via router.push to the circle href built from circleId alone", () => {
-  assert.match(formSource, /router\.push\(buildMemberCircleHref\(payload\.circleId\)\)/);
+test("a successful login navigates via router.push to the circle href built from the server's own resolved circleId, never the client-typed circleCode", () => {
+  assert.match(formSource, /router\.push\(buildMemberCircleHref\(resolvedCircleId\)\)/);
+  assert.doesNotMatch(formSource, /buildMemberCircleHref\(payload\.circleCode\)/);
 });
 
 // --- no credentials in URLs/storage ---

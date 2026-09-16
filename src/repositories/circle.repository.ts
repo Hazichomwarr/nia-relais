@@ -4,6 +4,7 @@ import { prisma } from "@/src/prisma";
 
 export function createDraftCircleRecord(input: {
   ownerId: string;
+  circleCode: string;
   name: string;
   currency: string;
   contributionAmount: Prisma.Decimal;
@@ -15,6 +16,7 @@ export function createDraftCircleRecord(input: {
   return prisma.savingsCircle.create({
     data: {
       ownerId: input.ownerId,
+      circleCode: input.circleCode,
       name: input.name,
       currency: input.currency,
       contributionAmount: input.contributionAmount,
@@ -38,6 +40,7 @@ export function createDraftCircleRecord(input: {
     },
     select: {
       id: true,
+      circleCode: true,
       name: true,
       currency: true,
       contributionAmount: true,

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { checkIsolatedTestDatabaseConfiguration } from "@/src/testing/isolated-test-database";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 import type { RateLimitScope } from "@/src/repositories/circle-member-auth-rate-limit.repository";
 
 // This suite needs PostgreSQL's real concurrency and database-time behavior,
@@ -86,8 +87,13 @@ function randomTestIp(): string {
   return `203.0.113.${Math.floor(Math.random() * 254) + 1}`;
 }
 
-function randomCircleId(): string {
-  return "c" + randomBytes(13).toString("hex").slice(0, 24);
+// 10E: the limiter's TARGET derivation now classifies its circleCode input
+// the same way credential verification does (classifyCircleLoginIdentifier)
+// -- a syntactically valid "NIA-XXXX" circleCode is the ordinary case this
+// suite exercises. Test F below separately covers the still-supported
+// legacy raw-circle-id shape and outright malformed input.
+function randomCircleCode(): string {
+  return randomTestCircleCode();
 }
 
 function randomMemberCode(): string {
@@ -104,8 +110,13 @@ function sourceFromIp(ip: string) {
   return result.source;
 }
 
-function trackTarget(circleId: string, memberCode: string) {
-  track("TARGET", hmacHex(`TARGET:${circleId}:${memberCode}`));
+// Mirrors normalizeTargetMaterial's own classified-identifier material
+// exactly (`${identifier.kind}:${identifier.value}:${normalizedMemberCode}`)
+// -- every circleCode this file generates via randomCircleCode() is already
+// a syntactically valid "NIA-XXXX" code, so it always classifies as
+// CIRCLE_CODE here, never the legacy-id shape.
+function trackTarget(circleCode: string, memberCode: string) {
+  track("TARGET", hmacHex(`TARGET:CIRCLE_CODE:${circleCode}:${memberCode}`));
 }
 
 async function readBucket(scope: RateLimitScope, keyHash: string, windowSeconds: number) {
@@ -230,11 +241,11 @@ rateLimitTest("J. the window boundary is computed from PostgreSQL's own clock, c
 
 rateLimitTest("A. an allowed request with a fresh source and target returns allowed:true", async () => {
   const source = sourceFromIp(randomTestIp());
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
 
-  const decision = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  const decision = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
   assert.equal(decision.allowed, true);
 });
 
@@ -243,10 +254,10 @@ rateLimitTest("B / E. SOURCE denies the 21st attempt from one source, even when 
   const decisions: boolean[] = [];
 
   for (let i = 0; i < 21; i++) {
-    const circleId = randomCircleId();
+    const circleCode = randomCircleCode();
     const memberCode = randomMemberCode();
-    trackTarget(circleId, memberCode);
-    const decision = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+    trackTarget(circleCode, memberCode);
+    const decision = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
     decisions.push(decision.allowed);
   }
 
@@ -255,14 +266,14 @@ rateLimitTest("B / E. SOURCE denies the 21st attempt from one source, even when 
 });
 
 rateLimitTest("C. TARGET denies the 11th attempt against the same target, even from 11 different sources", async () => {
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
   const decisions: boolean[] = [];
 
   for (let i = 0; i < 11; i++) {
     const source = sourceFromIp(randomTestIp());
-    const decision = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+    const decision = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
     decisions.push(decision.allowed);
   }
 
@@ -280,20 +291,20 @@ rateLimitTest("D. GLOBAL is wired to the documented fixed key and increments on 
   // test additionally proves the service genuinely wires GLOBAL through
   // that mechanism with the documented key derivation.
   const source = sourceFromIp(randomTestIp());
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
 
   const globalKeyHash = hmacHex("GLOBAL:circle-member-auth");
   const before = await readBucket("GLOBAL", globalKeyHash, 60);
 
-  await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
 
   const after = await readBucket("GLOBAL", globalKeyHash, 60);
   assert.equal(after, before + 1, "GLOBAL should increment by exactly one per call, regardless of source or target");
 });
 
-rateLimitTest("F. malformed circleId/memberCode still consumes SOURCE and a single shared TARGET bucket", async () => {
+rateLimitTest("F. malformed circleCode/memberCode still consumes SOURCE and a single shared TARGET bucket", async () => {
   const source = sourceFromIp(randomTestIp());
   const malformedTargetKeyHash = hmacHex("TARGET:malformed-target");
   const sourceKeyHash = hmacHex(`SOURCE:${source.value}`);
@@ -303,7 +314,7 @@ rateLimitTest("F. malformed circleId/memberCode still consumes SOURCE and a sing
 
   const decision = await checkMemberAuthenticationRateLimit({
     source,
-    circleId: "not-a-cuid",
+    circleCode: "not-a-cuid",
     memberCode: "not-hex-either",
   });
   assert.equal(decision.allowed, true, "a single malformed attempt should still be allowed if under all thresholds");
@@ -320,11 +331,34 @@ rateLimitTest("F2. two differently-malformed targets from the same source share 
   const malformedTargetKeyHash = hmacHex("TARGET:malformed-target");
   const before = await readBucket("TARGET", malformedTargetKeyHash, 900);
 
-  await checkMemberAuthenticationRateLimit({ source, circleId: "garbage-one", memberCode: "zzzz" });
-  await checkMemberAuthenticationRateLimit({ source, circleId: "12345", memberCode: "!!!not-hex!!!" });
+  await checkMemberAuthenticationRateLimit({ source, circleCode: "garbage-one", memberCode: "zzzz" });
+  await checkMemberAuthenticationRateLimit({ source, circleCode: "12345", memberCode: "!!!not-hex!!!" });
 
   const after = await readBucket("TARGET", malformedTargetKeyHash, 900);
   assert.equal(after, before + 2, "both malformed attempts, despite different garbage input, must land in the same bounded bucket");
+});
+
+// F3 (10E §8/§9): a legacy raw circle id classifies as its own distinct
+// TARGET, never colliding with an equally-shaped CIRCLE_CODE value, and
+// never falling into the shared malformed-target bucket -- the legacy
+// backward-compatibility path is bounded/isolated the same way the new
+// circleCode path is.
+rateLimitTest("F3. a legacy raw circle id gets its own isolated, non-malformed TARGET bucket", async () => {
+  const source = sourceFromIp(randomTestIp());
+  const legacyCircleId = "c" + randomBytes(13).toString("hex").slice(0, 24);
+  const memberCode = randomMemberCode();
+  const legacyTargetKeyHash = hmacHex(`TARGET:LEGACY_CIRCLE_ID:${legacyCircleId}:${memberCode}`);
+  track("TARGET", legacyTargetKeyHash);
+  const malformedTargetKeyHash = hmacHex("TARGET:malformed-target");
+
+  const beforeLegacy = await readBucket("TARGET", legacyTargetKeyHash, 900);
+  const beforeMalformed = await readBucket("TARGET", malformedTargetKeyHash, 900);
+
+  const decision = await checkMemberAuthenticationRateLimit({ source, circleCode: legacyCircleId, memberCode });
+  assert.equal(decision.allowed, true);
+
+  assert.equal(await readBucket("TARGET", legacyTargetKeyHash, 900), beforeLegacy + 1);
+  assert.equal(await readBucket("TARGET", malformedTargetKeyHash, 900), beforeMalformed, "a valid legacy circle id must not fall into the malformed sentinel bucket");
 });
 
 rateLimitTest("G. concurrent requests against a fresh SOURCE cannot exceed the SOURCE threshold", async () => {
@@ -332,14 +366,14 @@ rateLimitTest("G. concurrent requests against a fresh SOURCE cannot exceed the S
   const concurrency = 25; // > SOURCE limit of 20
 
   const targets = Array.from({ length: concurrency }, () => {
-    const circleId = randomCircleId();
+    const circleCode = randomCircleCode();
     const memberCode = randomMemberCode();
-    trackTarget(circleId, memberCode);
-    return { circleId, memberCode };
+    trackTarget(circleCode, memberCode);
+    return { circleCode, memberCode };
   });
 
   const decisions = await Promise.all(
-    targets.map(({ circleId, memberCode }) => checkMemberAuthenticationRateLimit({ source, circleId, memberCode })),
+    targets.map(({ circleCode, memberCode }) => checkMemberAuthenticationRateLimit({ source, circleCode, memberCode })),
   );
 
   const allowedCount = decisions.filter((d) => d.allowed).length;
@@ -348,29 +382,29 @@ rateLimitTest("G. concurrent requests against a fresh SOURCE cannot exceed the S
 
 rateLimitTest("H. state is shared across independent calls (all state lives in PostgreSQL, not in-memory)", async () => {
   const source = sourceFromIp(randomTestIp());
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
 
-  const first = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
-  const second = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  const first = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
+  const second = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
 
   assert.equal(first.allowed, true);
   assert.equal(second.allowed, true);
 
-  const targetKeyHash = hmacHex(`TARGET:${circleId}:${memberCode}`);
+  const targetKeyHash = hmacHex(`TARGET:CIRCLE_CODE:${circleCode}:${memberCode}`);
   const count = await readBucket("TARGET", targetKeyHash, 900);
   assert.equal(count, 2, "the second call must observe the first call's persisted increment");
 });
 
 rateLimitTest("K. one admission decision atomically touches all three scopes together", async () => {
   const source = sourceFromIp(randomTestIp());
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
 
   const sourceKeyHash = hmacHex(`SOURCE:${source.value}`);
-  const targetKeyHash = hmacHex(`TARGET:${circleId}:${memberCode}`);
+  const targetKeyHash = hmacHex(`TARGET:CIRCLE_CODE:${circleCode}:${memberCode}`);
   const globalKeyHash = hmacHex("GLOBAL:circle-member-auth");
 
   const before = {
@@ -379,7 +413,7 @@ rateLimitTest("K. one admission decision atomically touches all three scopes tog
     global: await readBucket("GLOBAL", globalKeyHash, 60),
   };
 
-  await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
 
   const after = {
     source: await readBucket("SOURCE", sourceKeyHash, 900),
@@ -396,19 +430,19 @@ rateLimitTest("L. a denied attempt still increments its exhausted scope's counte
   const source = sourceFromIp(randomTestIp());
 
   for (let i = 0; i < 20; i++) {
-    const circleId = randomCircleId();
+    const circleCode = randomCircleCode();
     const memberCode = randomMemberCode();
-    trackTarget(circleId, memberCode);
-    await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+    trackTarget(circleCode, memberCode);
+    await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
   }
 
   const sourceKeyHash = hmacHex(`SOURCE:${source.value}`);
   assert.equal(await readBucket("SOURCE", sourceKeyHash, 900), 20);
 
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
-  const decision = await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  trackTarget(circleCode, memberCode);
+  const decision = await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
   assert.equal(decision.allowed, false);
 
   assert.equal(
@@ -425,7 +459,7 @@ rateLimitTest("M. fails closed when the rate-limit secret is missing or too shor
     const source = sourceFromIp(randomTestIp());
     const decisionMissing = await checkMemberAuthenticationRateLimit({
       source,
-      circleId: randomCircleId(),
+      circleCode: randomCircleCode(),
       memberCode: randomMemberCode(),
     });
     assert.equal(decisionMissing.allowed, false);
@@ -433,7 +467,7 @@ rateLimitTest("M. fails closed when the rate-limit secret is missing or too shor
     process.env.MEMBER_AUTH_RATE_LIMIT_SECRET = "too-short";
     const decisionWeak = await checkMemberAuthenticationRateLimit({
       source,
-      circleId: randomCircleId(),
+      circleCode: randomCircleCode(),
       memberCode: randomMemberCode(),
     });
     assert.equal(decisionWeak.allowed, false);
@@ -444,11 +478,11 @@ rateLimitTest("M. fails closed when the rate-limit secret is missing or too shor
 
 rateLimitTest("N. only a lowercase 64-character hex digest is ever persisted as keyHash", async () => {
   const source = sourceFromIp(randomTestIp());
-  const circleId = randomCircleId();
+  const circleCode = randomCircleCode();
   const memberCode = randomMemberCode();
-  trackTarget(circleId, memberCode);
+  trackTarget(circleCode, memberCode);
 
-  await checkMemberAuthenticationRateLimit({ source, circleId, memberCode });
+  await checkMemberAuthenticationRateLimit({ source, circleCode, memberCode });
 
   const sourceKeyHash = hmacHex(`SOURCE:${source.value}`);
   const raw = await prisma.$queryRaw<Array<{ keyHash: string }>>`
@@ -462,7 +496,7 @@ rateLimitTest("N. only a lowercase 64-character hex digest is ever persisted as 
   assert.ok(!raw[0].keyHash.includes(source.value), "the persisted hash must not contain the raw source value");
 });
 
-test("O. the service never logs the raw source value, circleId, memberCode, or secret", () => {
+test("O. the service never logs the raw source value, circleCode, memberCode, or secret", () => {
   const servicePath = fileURLToPath(new URL("./circle-member-auth-rate-limit.service.ts", import.meta.url));
   const source = readFileSync(servicePath, "utf8");
   const consoleCalls = source.match(/console\.(error|log|warn)\([\s\S]*?\);/g) ?? [];
@@ -470,7 +504,7 @@ test("O. the service never logs the raw source value, circleId, memberCode, or s
   assert.ok(consoleCalls.length > 0, "expected at least one console call to inspect");
 
   for (const call of consoleCalls) {
-    for (const forbidden of ["input.source", "input.circleId", "input.memberCode", "sourceKeyHash", "targetKeyHash", "secret"]) {
+    for (const forbidden of ["input.source", "input.circleCode", "input.memberCode", "sourceKeyHash", "targetKeyHash", "secret"]) {
       assert.ok(!call.includes(forbidden), `console call unexpectedly references "${forbidden}": ${call}`);
     }
   }

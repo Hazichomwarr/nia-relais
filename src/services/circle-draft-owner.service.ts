@@ -38,6 +38,7 @@ export class DraftCircleOwnerReadNotDraftError extends Error {
 
 export type DraftCircleOwnerCircleResult = {
   readonly id: string;
+  readonly circleCode: string;
   readonly name: string;
   readonly currency: string;
   readonly contributionAmount: string;
@@ -140,6 +141,7 @@ export async function getDraftCircleForOwner(input: {
   return {
     circle: {
       id: circle.id,
+      circleCode: circle.circleCode,
       name: circle.name,
       currency: circle.currency,
       contributionAmount: circle.contributionAmount.toFixed(2),

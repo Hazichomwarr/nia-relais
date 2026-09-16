@@ -73,15 +73,15 @@ export type Dictionary = {
     eyebrow: string;
     title: string;
     description: string;
-    circleId: string;
-    circleIdHint: string;
+    circleCode: string;
+    circleCodeHint: string;
     memberCode: string;
     memberCodeHint: string;
     pin: string;
     pinHint: string;
     genericError: string;
     networkError: string;
-    fieldCircleId: string;
+    fieldCircleCode: string;
     fieldMemberCode: string;
     fieldPin: string;
   };
@@ -166,7 +166,7 @@ export type Dictionary = {
     setupModeQuestion: string; setupModeNew: string; setupModeImported: string; importedStartDateHelp: string; historicalCompletedRoundCount: string; historicalCompletedRoundCountHelp: string; historicalTermsConfirmed: string; errorHistoricalRoundCountInvalid: string; errorHistoricalRoundCountZero: string; errorHistoricalTermsConfirmationRequired: string; errorSetupModeRequired: string; errorImportedActivationNotReady: string;
     workspace: string; overview: string; schedule: string; backToCircles: string; setupContribution: string; setupInstructions: string; draftStatus: string;
     membersDescription: string; addMemberDescription: string; addMember: string; addingMember: string; memberName: string; memberNamePlaceholder: string; phoneNumber: string; optional: string; memberPin: string; memberPinHint: string; noMembers: string; activeMembers: string; noActiveMembers: string; removedMembers: string; removedOn: string; memberCode: string; removeMember: string; removeMemberConfirmation: string;
-    credentialTitle: string; credentialDescription: string; credentialName: string; circleId: string; credentialMemberCode: string; credentialPin: string; credentialDismiss: string; memberSignIn: string;
+    credentialTitle: string; credentialDescription: string; credentialName: string; circleCode: string; credentialMemberCode: string; credentialPin: string; credentialDismiss: string; memberSignIn: string; credentialLoginLabel: string; copyLoginDetails: string; copyLoginDetailsCopied: string;
     payoutOrder: string; payoutOrderDescription: string; payoutOrderEmpty: string; payoutOrderMinimum: string; moveUp: string; moveDown: string; moveUpAria: string; moveDownAria: string; saved: string; notSaved: string; saving: string; savePayoutOrder: string;
     reviewActivate: string; activationDescription: string; activationMembers: string; proposedRotation: string; round: string; due: string; expectedCollection: string; expectedContribution: string; expectedRoundCollection: string; expectedRotationTotal: string; expectedDisclaimer: string; activationFrozenNotice: string; activationConfirmation: string; activating: string; activateCircle: string; blockerInsufficientMembers: string; blockerIncompletePayoutOrder: string;
     errorNotFound: string; errorAddMember: string; errorMemberDraftOnly: string; errorOrderDraftOnly: string; errorOrderChanged: string; errorSaveOrder: string; errorActivationConfirmation: string; errorActivationStale: string; errorNotEligible: string; errorNoLongerDraft: string; errorActivationIntegrity: string; errorActivate: string; };

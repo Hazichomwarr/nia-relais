@@ -12,6 +12,7 @@ import { prisma } from "@/src/prisma";
 
 const ownerCircleSelect = {
   id: true,
+  circleCode: true,
   ownerId: true,
   name: true,
   currency: true,

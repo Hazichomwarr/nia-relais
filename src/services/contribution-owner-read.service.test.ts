@@ -15,6 +15,7 @@ import {
 import { recordContribution } from "@/src/services/contribution-recording.service";
 import { rejectContribution } from "@/src/services/contribution-rejection.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as every prior SUSU
 // ticket: unique-id-scoped fixtures, FK-ordered cleanup in test.after
@@ -42,6 +43,7 @@ async function createFixtureCircle(ownerId: string, status: CircleStatus, contri
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("OwnerReadTestCircle"),
       currency: "USD",
       contributionAmount,

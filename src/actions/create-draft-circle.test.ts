@@ -46,6 +46,7 @@ function buildDeps(overrides: Partial<CreateDraftCircleDependencies> = {}) {
       capturedInput = input;
       return {
         id: "circle-1",
+        circleCode: "NIA-7K42",
         name: input.input.name,
         currency: input.input.currency,
         contributionAmount: input.input.contributionAmount,
@@ -59,6 +60,7 @@ function buildDeps(overrides: Partial<CreateDraftCircleDependencies> = {}) {
       capturedInput = input;
       return {
         id: "circle-1",
+        circleCode: "NIA-7K42",
         name: input.input.name,
         currency: input.input.currency,
         contributionAmount: input.input.contributionAmount,

@@ -25,7 +25,7 @@ function jsonRequest(body: unknown): Request {
   });
 }
 
-const VALID_BODY = { circleId: "c".padEnd(25, "0"), memberCode: "ABCDEF0123456789", pin: "123456" };
+const VALID_BODY = { circleCode: "NIA-7K42", memberCode: "ABCDEF0123456789", pin: "123456" };
 
 function trackedCallLog() {
   const calls: string[] = [];
@@ -177,7 +177,7 @@ test("session issuance is called with the verifier's trusted identity, not the c
   });
 
   await loginCircleMember(
-    jsonRequest({ circleId: "client-supplied-circle", memberCode: "CLIENTCODE000000", pin: "999999" }),
+    jsonRequest({ circleCode: "client-supplied-circle", memberCode: "CLIENTCODE000000", pin: "999999" }),
     deps,
   );
 
@@ -192,9 +192,9 @@ test("session issuance is called with the verifier's trusted identity, not the c
 // orchestrator -- they still reach the rate limiter (bounded) with an empty
 // string in place of anything that failed to parse.
 test("a malformed request body is bounded to empty strings rather than throwing", async () => {
-  let capturedRateLimitInput: { circleId: string; memberCode: string } | undefined;
+  let capturedRateLimitInput: { circleCode: string; memberCode: string } | undefined;
   const { deps } = buildDeps({
-    checkRateLimit: async (input: { circleId: string; memberCode: string; source: unknown }) => {
+    checkRateLimit: async (input: { circleCode: string; memberCode: string; source: unknown }) => {
       capturedRateLimitInput = input;
       return { allowed: true };
     },
@@ -203,12 +203,12 @@ test("a malformed request body is bounded to empty strings rather than throwing"
   const request = new Request("https://example.test/api/member/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ circleId: 12345, unrelated: "x".repeat(10_000) }),
+    body: JSON.stringify({ circleCode: 12345, unrelated: "x".repeat(10_000) }),
   });
 
   await loginCircleMember(request, deps);
 
-  assert.equal(capturedRateLimitInput?.circleId, "");
+  assert.equal(capturedRateLimitInput?.circleCode, "");
   assert.equal(capturedRateLimitInput?.memberCode, "");
 });
 
@@ -260,8 +260,15 @@ test("the route handler's JSON responses never reference the raw session token",
   assert.ok(jsonCalls.length >= 2, "expected both a failure and a success Response.json call");
   for (const call of jsonCalls) {
     assert.doesNotMatch(call, /rawToken/);
-    assert.doesNotMatch(call, /result\./);
   }
+
+  // 10E: the success body legitimately carries the server-resolved
+  // internal circleId now (routing plumbing, not a credential and not the
+  // raw session token) -- exactly one JSON call may reference `result.`,
+  // and only via `result.circleId`.
+  const resultReferencingCalls = jsonCalls.filter((call) => call.includes("result."));
+  assert.equal(resultReferencingCalls.length, 1);
+  assert.match(resultReferencingCalls[0], /result\.circleId/);
 });
 
 test("neither the route handler nor the login service imports platform Auth.js", () => {
@@ -280,7 +287,7 @@ test("the login request schema has no field for identity, status, or session dat
   assert.ok(schemaBlockMatch, "expected to find memberLoginBoundsSchema's field list");
 
   const fields = schemaBlockMatch![1];
-  assert.match(fields, /circleId/);
+  assert.match(fields, /circleCode/);
   assert.match(fields, /memberCode/);
   assert.match(fields, /pin/);
   for (const forbidden of ["userId", "memberId", "credentialVersion", "status"]) {

@@ -16,6 +16,7 @@ import {
 } from "@/src/services/payout-owner-read.service";
 import { recordPayout } from "@/src/services/payout-recording.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as
 // contribution-owner-read.service.test.ts / payout-confirmation.service
@@ -52,6 +53,7 @@ async function createFixtureCircle(
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("PayoutOwnerReadTestCircle"),
       currency,
       contributionAmount,

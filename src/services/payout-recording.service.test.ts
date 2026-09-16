@@ -18,6 +18,7 @@ import {
   recordPayout,
 } from "@/src/services/payout-recording.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as every prior SUSU ticket
 // (contribution-recording.service.test.ts most directly): unique-id-scoped
@@ -52,6 +53,7 @@ async function createFixtureCircle(
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("PayoutTestCircle"),
       currency,
       contributionAmount,

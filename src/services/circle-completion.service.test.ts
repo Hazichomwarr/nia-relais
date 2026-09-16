@@ -20,6 +20,7 @@ import { confirmPayout } from "@/src/services/payout-confirmation.service";
 import { recordPayout } from "@/src/services/payout-recording.service";
 import { activateFirstRound, advanceRound } from "@/src/services/round-lifecycle.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests for the SUSU circle-completion service
 // (7L.1), implementing the frozen 7L contract
@@ -67,6 +68,7 @@ async function createFixtureCircle(ownerId: string, contributionAmount = "10.00"
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("CircleCompletionTestCircle"),
       currency: "USD",
       contributionAmount,

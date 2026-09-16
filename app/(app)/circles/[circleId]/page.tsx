@@ -332,7 +332,7 @@ export default async function OwnerCirclePage({
               <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8">
                 <h1 className="font-serif text-3xl tracking-tight">{dictionary.susu.members}</h1>
                 <p className="mt-2 text-sm leading-6 text-[#587066]">{dictionary.susu.membersDescription}</p>
-                <div className="mt-5"><AddMemberForm circleId={circleId} dictionary={dictionary} /></div>
+                <div className="mt-5"><AddMemberForm circleId={circleId} circleCode={circle.circleCode} circleName={circle.name} dictionary={dictionary} /></div>
               </section>
               <section className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-6 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-8"><MemberList circleId={circleId} members={members} dictionary={dictionary} locale={locale} /></section>
             </div>

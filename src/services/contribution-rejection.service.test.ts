@@ -21,6 +21,7 @@ import {
   rejectContribution,
 } from "@/src/services/contribution-rejection.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as every prior SUSU
 // ticket (contribution-confirmation.service.test.ts,
@@ -49,6 +50,7 @@ async function createFixtureCircle(ownerId: string, status: CircleStatus, contri
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("RejectionTestCircle"),
       currency: "USD",
       contributionAmount,

@@ -12,6 +12,7 @@ import {
   setDraftCirclePayoutOrder,
 } from "@/src/services/circle.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests for the atomic activation review guard
 // (7I.5.1) -- same methodology as every prior SUSU ticket: unique-id-
@@ -37,6 +38,7 @@ async function createFixtureCircle(ownerId: string, contributionAmount = "10.00"
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("ActivationGuardTestCircle"),
       currency: "USD",
       contributionAmount,

@@ -5,7 +5,7 @@ import {
   incrementRateLimitBucket,
   type RateLimitScope,
 } from "@/src/repositories/circle-member-auth-rate-limit.repository";
-import { CUID_PATTERN, MEMBER_CODE_PATTERN } from "@/src/validations/circle-member-auth.schema";
+import { classifyCircleLoginIdentifier, MEMBER_CODE_LOGIN_PATTERN } from "@/src/validations/circle-member-auth.schema";
 import type { TrustedMemberAuthSource } from "@/src/auth/trusted-member-auth-source";
 
 // Configuration contract for MEMBER_AUTH_RATE_LIMIT_SECRET:
@@ -49,23 +49,27 @@ function hmacHex(secret: string, material: string): string {
 }
 
 /**
- * Reuses the same circleId/memberCode shape contract the credential
+ * Reuses the same circleCode/memberCode shape contract the credential
  * verifier uses (`src/validations/circle-member-auth.schema.ts`) rather
- * than redefining it. A pair that doesn't match either pattern normalizes
- * to a single, fixed, bounded sentinel material -- every malformed target
- * shares ONE TARGET bucket, so an attacker cannot create unbounded distinct
- * buckets (or unbounded CPU/memory cost) by varying garbage input, and a
- * malformed target still consumes TARGET-scope capacity instead of
- * bypassing it. The sentinel string cannot collide with a real target: it
- * is not shaped like `<circleId>:<memberCode>` and is hashed the same way,
- * so it is cryptographically distinct from every real target's key, not a
- * stand-in for any specific valid identity.
+ * than redefining it -- including classifyCircleLoginIdentifier's own
+ * per-shape case normalization (circleCode canonically uppercase, a legacy
+ * circle id canonically lowercase), so a request is classified identically
+ * here and at verification. A pair that doesn't classify as either shape
+ * normalizes to a single, fixed, bounded sentinel material -- every
+ * malformed target shares ONE TARGET bucket, so an attacker cannot create
+ * unbounded distinct buckets (or unbounded CPU/memory cost) by varying
+ * garbage input, and a malformed target still consumes TARGET-scope
+ * capacity instead of bypassing it. The sentinel string cannot collide with
+ * a real target: it is not shaped like `<kind>:<value>:<memberCode>` and is
+ * hashed the same way, so it is cryptographically distinct from every real
+ * target's key, not a stand-in for any specific valid identity.
  */
-function normalizeTargetMaterial(circleId: string, memberCode: string): string {
+function normalizeTargetMaterial(circleCode: string, memberCode: string): string {
+  const identifier = classifyCircleLoginIdentifier(circleCode);
   const normalizedMemberCode = memberCode.trim().toUpperCase();
 
-  if (CUID_PATTERN.test(circleId) && MEMBER_CODE_PATTERN.test(normalizedMemberCode)) {
-    return `${circleId}:${normalizedMemberCode}`;
+  if (identifier && MEMBER_CODE_LOGIN_PATTERN.test(normalizedMemberCode)) {
+    return `${identifier.kind}:${identifier.value}:${normalizedMemberCode}`;
   }
 
   return MALFORMED_TARGET_MATERIAL;
@@ -89,7 +93,7 @@ function normalizeTargetMaterial(circleId: string, memberCode: string): string {
  * regardless of whether SOURCE or GLOBAL already denied the request, an
  * attacker already blocked by SOURCE can still create a brand-new TARGET
  * row on every subsequent (denied) request simply by varying the
- * circleId/memberCode pair -- being denied does not stop the TARGET
+ * circleCode/memberCode pair -- being denied does not stop the TARGET
  * increment. Malformed targets are the one bounded exception (they all
  * collapse to one shared sentinel row); syntactically-valid-but-nonexistent
  * target pairs are not deduplicated beyond the pair itself. See
@@ -118,7 +122,7 @@ function normalizeTargetMaterial(circleId: string, memberCode: string): string {
  */
 export async function checkMemberAuthenticationRateLimit(input: {
   source: TrustedMemberAuthSource;
-  circleId: string;
+  circleCode: string;
   memberCode: string;
 }): Promise<MemberAuthRateLimitDecision> {
   const secret = getRateLimitSecret();
@@ -129,7 +133,7 @@ export async function checkMemberAuthenticationRateLimit(input: {
     return { allowed: false };
   }
 
-  const targetMaterial = normalizeTargetMaterial(input.circleId, input.memberCode);
+  const targetMaterial = normalizeTargetMaterial(input.circleCode, input.memberCode);
 
   const sourceKeyHash = hmacHex(secret, `SOURCE:${input.source.value}`);
   const targetKeyHash = hmacHex(secret, `TARGET:${targetMaterial}`);

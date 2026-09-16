@@ -9,6 +9,7 @@ import {
   getCompletedCircleSummaryForOwner,
 } from "@/src/services/circle-completed-owner.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 // Live-database fixture tests, same methodology as circle-active-owner
 // .service.test.ts: unique-id-scoped fixtures, FK-ordered cleanup in
@@ -42,6 +43,7 @@ async function createFixtureCircle(
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("CompletedOwnerTestCircle"),
       currency: "USD",
       contributionAmount: "10.00",

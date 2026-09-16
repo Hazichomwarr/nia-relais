@@ -11,6 +11,7 @@ import {
   getActiveCircleSummaryForOwner,
 } from "@/src/services/circle-active-owner.service";
 import { prisma } from "@/src/prisma";
+import { randomTestCircleCode } from "@/src/testing/circle-code-fixture";
 
 const ownedResourceIds = { userIds: new Set<string>(), circleIds: new Set<string>() };
 
@@ -34,6 +35,7 @@ async function createFixtureCircle(ownerId: string, status: CircleStatus, contri
   const circle = await prisma.savingsCircle.create({
     data: {
       ownerId,
+      circleCode: randomTestCircleCode(),
       name: unique("ActiveOwnerTestCircle"),
       currency: "USD",
       contributionAmount,

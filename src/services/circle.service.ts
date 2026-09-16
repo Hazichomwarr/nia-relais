@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { computeActivationReviewFingerprint } from "@/src/domain/circle-activation-review";
 import { roundDueDate } from "@/src/domain/circle-rotation-schedule";
 import { computeExpectedPayoutAmount } from "@/src/domain/payout-accounting";
+import { GeneratedCodeExhaustedError, withGeneratedCodeRetry } from "@/src/domain/generated-code-retry";
 import { assertRoundLifecycleStateIntegrity, RoundLifecycleStateIntegrityError } from "@/src/domain/round-lifecycle";
 import { lockSavingsCircleForUpdate } from "@/src/repositories/circle-lock.repository";
 import {
@@ -48,6 +49,7 @@ import {
   type SetDraftCirclePayoutOrderInput,
   type UpdateImportedDraftCircleConfigurationInput,
 } from "@/src/validations/circle.schema";
+import { HUMAN_CODE_ALPHABET } from "@/src/validations/circle-member-auth.schema";
 
 export class InvalidDraftCircleError extends Error {
   constructor(message: string) {
@@ -81,6 +83,13 @@ export class DraftCircleMemberCodeGenerationError extends Error {
   constructor() {
     super("A secure member code could not be generated. Please try again.");
     this.name = "DraftCircleMemberCodeGenerationError";
+  }
+}
+
+export class DraftCircleCodeGenerationError extends Error {
+  constructor() {
+    super("A secure circle code could not be generated. Please try again.");
+    this.name = "DraftCircleCodeGenerationError";
   }
 }
 
@@ -149,6 +158,7 @@ export const IMPORTED_ACTIVATION_NOT_READY_MESSAGE =
 
 export type DraftCircleResult = {
   id: string;
+  circleCode: string;
   name: string;
   currency: string;
   contributionAmount: string;
@@ -203,8 +213,60 @@ function toUtcDate(value: string) {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+// Shared collision predicate for every server-side human-code generation
+// site below (SavingsCircle.circleCode, CircleMember.memberCode): a P2002
+// violation is the database UNIQUE constraint -- the sole authoritative
+// concurrency-safe guarantee (10E CODE GENERATION AUTHORITY) -- rejecting
+// this specific candidate, never a sign generation itself is broken.
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+// 10E: both human-facing codes draw from the same restricted alphabet
+// (HUMAN_CODE_ALPHABET -- uppercase letters and digits, minus 0/O and
+// 1/I/L) exported by the credential-validation schema, so generation and
+// login validation can never drift out of sync with each other.
+function generateHumanCode(length: number): string {
+  const bytes = randomBytes(length);
+  let code = "";
+  for (let index = 0; index < length; index += 1) {
+    code += HUMAN_CODE_ALPHABET[bytes[index] % HUMAN_CODE_ALPHABET.length];
+  }
+  return code;
+}
+
+/**
+ * "NIA-" + 4 characters from the restricted 31-character alphabet:
+ * 31^4 = 923,521 possible codes. At NIA's realistic circle-creation scale
+ * (savings circles are created one at a time by human organizers, not in
+ * bulk -- hundreds to low thousands over the product's lifetime is a
+ * generous ceiling, not a floor), a pure 4-DIGIT numeric namespace
+ * (10,000 values) would already reach a ~50% chance of at least one
+ * collision by roughly its 120th circle (birthday-paradox approximation
+ * 1.18*sqrt(N)) -- survivable only because collisions are always retried
+ * against the database UNIQUE constraint below, never assumed safe, but
+ * still an avoidable cost. This 31-character alphanumeric alphabet pushes
+ * that same 50%-collision point out to roughly the 1,100th circle while
+ * keeping the human-facing code exactly as short (4 characters) as the
+ * ticket's own "NIA-7K42" / "NIA-K7M4" examples -- the smallest namespace
+ * that stays comfortably ahead of realistic scale without lengthening the
+ * code. Never derived from SavingsCircle.id.
+ */
+function generateCircleCode() {
+  return `NIA-${generateHumanCode(4)}`;
+}
+
+/**
+ * 6 characters from the same restricted alphabet (31^6 ≈ 887 billion).
+ * Uniqueness stays scoped per circle (@@unique([circleId, memberCode]),
+ * unchanged by 10E) rather than global, so this namespace only ever needs
+ * to cover one circle's membership at a time -- far more headroom than
+ * that scope will ever need. Legacy 16-character hex codes issued before
+ * 10E remain valid and untouched; the two shapes never collide with each
+ * other (different lengths).
+ */
 function generateMemberCode() {
-  return randomBytes(8).toString("hex").toUpperCase();
+  return generateHumanCode(6);
 }
 
 function serializeDraftCircleMember(member: DraftCircleMemberRecord): DraftCircleMemberResult {
@@ -481,26 +543,39 @@ export async function createDraftCircle(input: {
     throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Circle details are invalid.");
   }
 
-  const circle = await createDraftCircleRecord({
-    ownerId: input.ownerId,
-    name: parsed.data.name,
-    currency: parsed.data.currency,
-    contributionAmount: new Prisma.Decimal(parsed.data.contributionAmount),
-    frequency: parsed.data.frequency,
-    startDate: toUtcDate(parsed.data.startDate),
-    originKind: "NEW",
-    historicalCompletedRoundCount: 0,
-  });
+  try {
+    const circle = await withGeneratedCodeRetry({
+      maxAttempts: 5,
+      generate: generateCircleCode,
+      isCollision: isUniqueConstraintViolation,
+      attempt: (circleCode) =>
+        createDraftCircleRecord({
+          ownerId: input.ownerId,
+          circleCode,
+          name: parsed.data.name,
+          currency: parsed.data.currency,
+          contributionAmount: new Prisma.Decimal(parsed.data.contributionAmount),
+          frequency: parsed.data.frequency,
+          startDate: toUtcDate(parsed.data.startDate),
+          originKind: "NEW",
+          historicalCompletedRoundCount: 0,
+        }),
+    });
 
-  return {
-    id: circle.id,
-    name: circle.name,
-    currency: circle.currency,
-    contributionAmount: circle.contributionAmount.toFixed(2),
-    frequency: circle.frequency,
-    startDate: circle.startDate.toISOString().slice(0, 10),
-    status: "DRAFT",
-  };
+    return {
+      id: circle.id,
+      circleCode: circle.circleCode,
+      name: circle.name,
+      currency: circle.currency,
+      contributionAmount: circle.contributionAmount.toFixed(2),
+      frequency: circle.frequency,
+      startDate: circle.startDate.toISOString().slice(0, 10),
+      status: "DRAFT",
+    };
+  } catch (error) {
+    if (error instanceof GeneratedCodeExhaustedError) throw new DraftCircleCodeGenerationError();
+    throw error;
+  }
 }
 
 export type ImportedDraftCircleResult = DraftCircleResult & {
@@ -532,28 +607,41 @@ export async function createImportedDraftCircle(input: {
     throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Circle details are invalid.");
   }
 
-  const circle = await createDraftCircleRecord({
-    ownerId: input.ownerId,
-    name: parsed.data.name,
-    currency: parsed.data.currency,
-    contributionAmount: new Prisma.Decimal(parsed.data.contributionAmount),
-    frequency: parsed.data.frequency,
-    startDate: toUtcDate(parsed.data.startDate),
-    originKind: "IMPORTED",
-    historicalCompletedRoundCount: Number(parsed.data.historicalCompletedRoundCount),
-  });
+  try {
+    const circle = await withGeneratedCodeRetry({
+      maxAttempts: 5,
+      generate: generateCircleCode,
+      isCollision: isUniqueConstraintViolation,
+      attempt: (circleCode) =>
+        createDraftCircleRecord({
+          ownerId: input.ownerId,
+          circleCode,
+          name: parsed.data.name,
+          currency: parsed.data.currency,
+          contributionAmount: new Prisma.Decimal(parsed.data.contributionAmount),
+          frequency: parsed.data.frequency,
+          startDate: toUtcDate(parsed.data.startDate),
+          originKind: "IMPORTED",
+          historicalCompletedRoundCount: Number(parsed.data.historicalCompletedRoundCount),
+        }),
+    });
 
-  return {
-    id: circle.id,
-    name: circle.name,
-    currency: circle.currency,
-    contributionAmount: circle.contributionAmount.toFixed(2),
-    frequency: circle.frequency,
-    startDate: circle.startDate.toISOString().slice(0, 10),
-    status: "DRAFT",
-    originKind: "IMPORTED",
-    historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
-  };
+    return {
+      id: circle.id,
+      circleCode: circle.circleCode,
+      name: circle.name,
+      currency: circle.currency,
+      contributionAmount: circle.contributionAmount.toFixed(2),
+      frequency: circle.frequency,
+      startDate: circle.startDate.toISOString().slice(0, 10),
+      status: "DRAFT",
+      originKind: "IMPORTED",
+      historicalCompletedRoundCount: circle.historicalCompletedRoundCount,
+    };
+  } catch (error) {
+    if (error instanceof GeneratedCodeExhaustedError) throw new DraftCircleCodeGenerationError();
+    throw error;
+  }
 }
 
 export type DraftCircleConfigurationResult = {
@@ -666,37 +754,39 @@ export async function addDraftCircleMember(input: {
     throw new InvalidDraftCircleError(parsed.error.issues[0]?.message ?? "Member details are invalid.");
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      return await prisma.$transaction(async (transaction) => {
-        const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
-        if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
+  try {
+    return await withGeneratedCodeRetry({
+      maxAttempts: 5,
+      generate: generateMemberCode,
+      isCollision: isUniqueConstraintViolation,
+      attempt: (memberCode) =>
+        prisma.$transaction(async (transaction) => {
+          const lockedCircle = await lockSavingsCircleForUpdate(transaction, input.circleId);
+          if (!lockedCircle) throw new DraftCircleMemberNotFoundError();
 
-        const circle = await findCircleForDraftMembership(transaction, input.circleId);
-        if (!circle) throw new DraftCircleMemberNotFoundError();
-        assertDraftOwner(circle, input.ownerId);
+          const circle = await findCircleForDraftMembership(transaction, input.circleId);
+          if (!circle) throw new DraftCircleMemberNotFoundError();
+          assertDraftOwner(circle, input.ownerId);
 
-        const pinHash = await hash(parsed.data.pin, 12);
-        const member = await createDraftCircleMember(transaction, {
-          circleId: circle.id,
-          displayName: parsed.data.displayName,
-          email: parsed.data.email,
-          phone: parsed.data.phone,
-          memberCode: generateMemberCode(),
-          pinHash,
-          addedAt: new Date(),
-          addedById: input.ownerId,
-        });
+          const pinHash = await hash(parsed.data.pin, 12);
+          const member = await createDraftCircleMember(transaction, {
+            circleId: circle.id,
+            displayName: parsed.data.displayName,
+            email: parsed.data.email,
+            phone: parsed.data.phone,
+            memberCode,
+            pinHash,
+            addedAt: new Date(),
+            addedById: input.ownerId,
+          });
 
-        return serializeDraftCircleMember(member);
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue;
-      throw error;
-    }
+          return serializeDraftCircleMember(member);
+        }),
+    });
+  } catch (error) {
+    if (error instanceof GeneratedCodeExhaustedError) throw new DraftCircleMemberCodeGenerationError();
+    throw error;
   }
-
-  throw new DraftCircleMemberCodeGenerationError();
 }
 
 export async function removeDraftCircleMember(input: {
