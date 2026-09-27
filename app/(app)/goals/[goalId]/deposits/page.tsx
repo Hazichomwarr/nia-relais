@@ -10,7 +10,7 @@ import { getCustodianAssignmentStatesForOwner } from "@/src/services/custodian.s
 
 import { formatDepositAmount, formatDepositDate } from "./deposit-display";
 import { DepositHistoryFilters, type DepositRangeFilter, type DepositStatusFilter } from "./deposit-history-filters";
-import DepositHistoryItemCard from "./deposit-history-item";
+import { DepositHistoryList } from "./deposit-history-list";
 import { GoalCustodianSection } from "./goal-custodian-section";
 import { GoalRetirementControls } from "./goal-retirement-controls";
 import { PageBackLink } from "@/components/navigation/page-back-link";
@@ -125,8 +125,7 @@ export default async function DepositHistoryPage({ params, searchParams }: { par
                   <Link href={`/goals/${encodeURIComponent(goal.id)}/deposits`} className="mt-3 inline-flex text-sm font-semibold text-[var(--nia-primary)] transition hover:text-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)]">{copy.resetFilters} <span aria-hidden="true">→</span></Link>
                 </section>
               ) : <>
-                <div className="mt-6 flex items-center justify-between gap-4 text-sm text-[var(--nia-text-muted)]"><p>{filteredDeposits.length} {filteredDeposits.length === 1 ? copy.savingFound : copy.savingsFound}</p><p>{copy.newestFirst}</p></div>
-                <ul className="mt-3 space-y-2" aria-label={copy.savingsHistory}>{filteredDeposits.map((deposit) => <DepositHistoryItemCard key={deposit.id} deposit={deposit} currency={goal.currency} dictionary={dictionary} locale={locale} />)}</ul>
+                <DepositHistoryList deposits={filteredDeposits} currency={goal.currency} dictionary={dictionary} locale={locale} filterKey={`${status}:${range}`} />
               </>}
             </>}
           </section>

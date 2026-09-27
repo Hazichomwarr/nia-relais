@@ -27,9 +27,11 @@ test("summary preserves confirmed-only accounting and Decimal-safe progress pres
 });
 
 test("history uses compact navigable rows and preserves friendly canonical status labels", () => {
-  assert.match(itemSource, /<li>/);
+  assert.match(itemSource, /<li className="border-b/);
   assert.match(itemSource, /\/goals\/\$\{encodeURIComponent\(deposit\.goalId\)\}\/deposits\/\$\{encodeURIComponent\(deposit\.id\)\}/);
   assert.doesNotMatch(itemSource, /View record/);
+  assert.match(itemSource, /border-b border-\[var\(--nia-border\)\] last:border-b-0/);
+  assert.doesNotMatch(itemSource, /rounded-2xl border border-\[var\(--nia-border\)\]/);
   assert.match(displaySource, /deposit\.status === "APPROVED"/);
   assert.match(displaySource, /deposit\.status === "PENDING"/);
   assert.match(displaySource, /label: copy\.confirmed/);
