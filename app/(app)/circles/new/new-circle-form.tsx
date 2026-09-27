@@ -8,6 +8,7 @@ import { CIRCLE_ORIGIN_KINDS, DRAFT_CIRCLE_CURRENCIES, DRAFT_CIRCLE_FREQUENCIES 
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import type { Locale } from "@/src/i18n/config";
 import { getCurrencyDisplayCode, getFrequencyLabel as getLocalizedFrequencyLabel } from "@/src/i18n/format";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 import { buildContributionRestatement } from "./new-circle-form-display";
 
@@ -47,6 +48,7 @@ export function NewCircleForm({ dictionary, locale }: { dictionary: Dictionary; 
 
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-0">
+      <PageBackLink href="/circles" label={dictionary.common.susuCircles} />
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{copy.eyebrow}</p><h1 className="mt-3 font-serif text-3xl tracking-tight text-[#173b32] sm:text-4xl">{copy.newTitle}</h1>
       <p className="mt-4 max-w-xl text-base leading-7 text-[#587066]">
         {copy.newDescription}

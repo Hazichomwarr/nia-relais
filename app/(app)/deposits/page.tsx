@@ -5,6 +5,7 @@ import { getDictionary } from "@/src/i18n/get-dictionary";
 import { getLocale } from "@/src/i18n/locale";
 import { getPersonalGoalsForDashboard } from "@/src/services/goal.service";
 import { formatMoney } from "@/src/i18n/format";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 function formatAmount(amount: string, currency: string) {
   return formatMoney(amount, currency);
@@ -23,6 +24,7 @@ export default async function DepositsPage({ searchParams }: { searchParams: Pro
   return (
     <section className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="max-w-2xl">
+        <PageBackLink href="/dashboard" label={dictionary.common.dashboard} />
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#b96549]">{dictionary.common.mySavings}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#173b32] sm:text-4xl">
           {historyView ? copy.retiredGoals : copy.indexTitle}

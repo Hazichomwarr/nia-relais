@@ -5,6 +5,7 @@ import type { OwnerCircleIndexItem } from "@/src/services/circle-owner-index.ser
 import type { Locale } from "@/src/i18n/config";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { formatDate, getFrequencyLabel, getStatusLabel } from "@/src/i18n/format";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 import { formatContributionMoney } from "./[circleId]/contribution-desk-display";
 
@@ -152,6 +153,7 @@ export function CircleIndex({ circles, dictionary, locale, historyView = false }
       <div className="relative mx-auto w-full max-w-5xl">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
+            <PageBackLink href="/dashboard" label={dictionary.common.dashboard} />
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--nia-primary)]">{copy.eyebrow}</p><h1 className="mt-3 font-serif text-4xl tracking-tight sm:text-[2.8rem]">{copy.indexTitle}</h1><p className="mt-3 max-w-xl text-base leading-7 text-[var(--nia-text-muted)]">{copy.indexDescription}</p>
           </div>
           <Link href="/circles/new" className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[var(--nia-primary)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--nia-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--nia-primary)] sm:w-auto">

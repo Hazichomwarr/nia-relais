@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { getStatusLabel } from "@/src/i18n/format";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 export const CIRCLE_WORKSPACE_SECTIONS = ["overview", "contributions", "payouts", "members", "schedule"] as const;
 
@@ -51,7 +52,7 @@ export function CircleWorkspaceNavigation({
           ))}
         </div>
         </div>
-        <Link href="/circles" className="mt-8 inline-flex min-h-11 items-center text-sm font-semibold text-[#587066] hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b96549]">← {dictionary.susuWorkspace.backToCircles}</Link>
+        <PageBackLink href="/circles" label={dictionary.common.susuCircles} className="mt-8" />
       </div>
 
       <div className="md:hidden">
@@ -60,6 +61,7 @@ export function CircleWorkspaceNavigation({
             <WorkspaceLink key={item} circleId={circleId} item={item} section={section} compact labels={labels} />
           ))}
         </div>
+        <PageBackLink href="/circles" label={dictionary.common.susuCircles} className="mt-3" />
       </div>
     </nav>
   );

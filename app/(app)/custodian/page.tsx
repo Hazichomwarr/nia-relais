@@ -14,6 +14,7 @@ import {
 } from "./custodian-inbox-filters";
 import { CustodianPendingDepositCard } from "./custodian-pending-deposit-card";
 import { CustodianRelationshipRow, lifecycleEvent } from "./custodian-relationship-row";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 type CustodianSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -100,6 +101,7 @@ export default async function CustodianPage({
     <main className="min-h-[calc(100vh-73px)] bg-[var(--nia-app-background)] px-4 py-8 text-[#173c35] sm:px-8 sm:py-12">
       <div className="mx-auto w-full max-w-3xl">
         <header className="max-w-2xl">
+          <PageBackLink href="/dashboard" label={dictionary.common.dashboard} />
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#b95035]">{copy.eyebrow}</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight">{copy.title}</h1>
           <p className="mt-4 text-base leading-7 text-[#5a6b61]">

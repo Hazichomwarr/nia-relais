@@ -13,6 +13,7 @@ import type { Locale } from "@/src/i18n/config";
 import type { Dictionary } from "@/src/i18n/dictionaries/types";
 import { localizePersonalSavingsError } from "@/src/i18n/personal-savings-error-presentation";
 import { getCurrencyDisplayCode } from "@/src/i18n/format";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 
 const currencies = ["USD", "XOF", "EUR", "GBP"] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -75,6 +76,7 @@ export default function NewGoalForm({ dictionary, locale }: { dictionary: Dictio
   return (
     <main className="min-h-[calc(100vh-4rem)] bg-[#f8f1e4] px-4 py-8 text-[#173c35] sm:px-8 sm:py-14">
       <div className="mx-auto w-full max-w-3xl">
+        <PageBackLink href="/deposits" label={dictionary.common.mySavings} />
         <header className="rounded-[2rem] bg-[#173c35] px-6 py-8 text-[#fffaf0] shadow-[0_18px_45px_rgba(23,60,53,0.16)] sm:px-10 sm:py-10">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#f2c9af]">{copy.newGoalEyebrow}</p>
           <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl">{copy.newGoalTitle}</h1>

@@ -105,6 +105,7 @@ export type Dictionary = {
   frequency: { weekly: string; biweekly: string; monthly: string };
   dashboard: {
     heroWelcomeBack: string;
+    homeGreeting: string;
     heroDescription: string;
     heroQuote: string;
     summaryLabel: string;
@@ -117,6 +118,15 @@ export type Dictionary = {
     summaryQuote: string;
     personalSavings: string;
     personalSavingsDescription: string;
+    homeSavingsGoalOne: string;
+    homeSavingsGoalsMany: string;
+    homeSavingsDescription: string;
+    homeActiveCircleOne: string;
+    homeActiveCirclesMany: string;
+    homeCirclesDescription: string;
+    homeWaitingOne: string;
+    homeWaitingMany: string;
+    homeTrustedDescription: string;
     viewAll: string;
     newGoal: string;
     noGoalsYet: string;

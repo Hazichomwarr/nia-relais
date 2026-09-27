@@ -67,6 +67,7 @@ export default function DepositForm({ goalId, goal, dictionary }: DepositFormPro
   return (
     <main className="min-h-[calc(100vh-73px)] bg-[#fbf7ef] px-5 py-8 text-[#173b32] sm:px-8 sm:py-12">
       <div className="mx-auto w-full max-w-xl">
+        <Link href={savingsHistoryHref} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#587066] transition hover:text-[#173b32] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b96549]"><span aria-hidden="true">←</span>{copy.backToSavings}</Link>
         <div className="rounded-[1.75rem] border border-[#dfd2c1] bg-[#fffdf8] p-7 shadow-[0_8px_30px_rgba(77,57,40,0.06)] sm:p-10">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a95f45]">{copy.recordSavings}</p>
