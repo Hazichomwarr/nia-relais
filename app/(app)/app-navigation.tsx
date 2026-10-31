@@ -14,9 +14,10 @@ type AppNavigationProps = {
   userName: string;
   locale: Locale;
   dictionary: Dictionary;
+  showAdministration: boolean;
 };
 
-export function AppNavigation({ userName, locale, dictionary }: AppNavigationProps) {
+export function AppNavigation({ userName, locale, dictionary, showAdministration }: AppNavigationProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const isSavingsRoute =
@@ -32,6 +33,7 @@ export function AppNavigation({ userName, locale, dictionary }: AppNavigationPro
       isActive: pathname === "/custodian" || pathname.startsWith("/custodian/"),
     },
     { href: "/circles", label: dictionary.common.susuCircles, isActive: isCirclesRoute },
+    ...(showAdministration ? [{ href: "/admin", label: dictionary.common.administration, isActive: pathname === "/admin" }] : []),
   ];
 
   return (

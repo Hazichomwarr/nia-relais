@@ -1,6 +1,7 @@
 export type Dictionary = {
   common: {
     dashboard: string;
+    administration: string;
     mySavings: string;
     trustedPerson: string;
     susuCircles: string;
@@ -74,6 +75,11 @@ export type Dictionary = {
     enterName: string;
     nameTooLong: string;
     passwordLength: string;
+  };
+  admin: {
+    eyebrow: string;
+    title: string;
+    description: string;
   };
   memberLogin: {
     eyebrow: string;

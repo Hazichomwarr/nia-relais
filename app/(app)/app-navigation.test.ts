@@ -16,6 +16,11 @@ test("the existing nav destinations use typed shared dictionary labels", () => {
   assert.match(source, /<LanguageSwitcher locale=\{locale\}/);
 });
 
+test("Administration is rendered only from the server-provided founder visibility flag", () => {
+  assert.match(source, /showAdministration: boolean/);
+  assert.match(source, /showAdministration \? \[\{ href: "\/admin", label: dictionary\.common\.administration/);
+});
+
 test("mobile navigation is compact behind an accessible menu control", () => {
   assert.match(source, /aria-label=\{dictionary\.common\.openNavigation\}/);
   assert.match(source, /aria-controls="mobile-primary-navigation"/);
