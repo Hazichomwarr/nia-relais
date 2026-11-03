@@ -9,6 +9,10 @@ export type FounderMetricsSummaryRecord = {
   readonly newUsersLast30Days: number | bigint;
   readonly personalSavingsUsers: number | bigint;
   readonly susuCircleOwners: number | bigint;
+  readonly personalOnlyUsers: number | bigint;
+  readonly susuOnlyUsers: number | bigint;
+  readonly bothProductUsers: number | bigint;
+  readonly neitherProductUsers: number | bigint;
   readonly activeProductUsers: number | bigint;
 };
 
@@ -53,14 +57,35 @@ export const founderMetricsRepository: FounderMetricsRepository = {
         WHERE "createdAt" >= ${last30Days}
           AND "createdAt" < ${referenceTime}
           AND "confirmationBasis" = 'MEMBER_CONFIRMED'::"PayoutConfirmationBasis"
+      ),
+      goal_owners AS (
+        SELECT DISTINCT "ownerId"
+        FROM "PersonalGoal"
+      ),
+      circle_owners AS (
+        SELECT DISTINCT "ownerId"
+        FROM "SavingsCircle"
+      ),
+      user_product_ownership AS (
+        SELECT
+          "User"."id",
+          goal_owners."ownerId" IS NOT NULL AS "hasPersonalSavings",
+          circle_owners."ownerId" IS NOT NULL AS "hasSusu"
+        FROM "User"
+        LEFT JOIN goal_owners ON goal_owners."ownerId" = "User"."id"
+        LEFT JOIN circle_owners ON circle_owners."ownerId" = "User"."id"
       )
       SELECT
-        (SELECT COUNT(*) FROM "User") AS "totalRegisteredUsers",
+        (SELECT COUNT(*) FROM user_product_ownership) AS "totalRegisteredUsers",
         (SELECT COUNT(*) FROM "User" WHERE "createdAt" >= ${last24Hours} AND "createdAt" < ${referenceTime}) AS "newUsersLast24Hours",
         (SELECT COUNT(*) FROM "User" WHERE "createdAt" >= ${last7Days} AND "createdAt" < ${referenceTime}) AS "newUsersLast7Days",
         (SELECT COUNT(*) FROM "User" WHERE "createdAt" >= ${last30Days} AND "createdAt" < ${referenceTime}) AS "newUsersLast30Days",
-        (SELECT COUNT(DISTINCT "ownerId") FROM "PersonalGoal") AS "personalSavingsUsers",
-        (SELECT COUNT(DISTINCT "ownerId") FROM "SavingsCircle") AS "susuCircleOwners",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE "hasPersonalSavings") AS "personalSavingsUsers",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE "hasSusu") AS "susuCircleOwners",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE "hasPersonalSavings" AND NOT "hasSusu") AS "personalOnlyUsers",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE NOT "hasPersonalSavings" AND "hasSusu") AS "susuOnlyUsers",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE "hasPersonalSavings" AND "hasSusu") AS "bothProductUsers",
+        (SELECT COUNT(*) FROM user_product_ownership WHERE NOT "hasPersonalSavings" AND NOT "hasSusu") AS "neitherProductUsers",
         (SELECT COUNT(DISTINCT "actorId") FROM product_actions) AS "activeProductUsers"
     `);
 

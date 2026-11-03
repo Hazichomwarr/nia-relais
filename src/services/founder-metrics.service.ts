@@ -18,6 +18,12 @@ export type FounderMetrics = {
   };
   readonly personalSavings: { readonly users: number; readonly adoptionPercent: number };
   readonly susu: { readonly owners: number; readonly adoptionPercent: number };
+  readonly productBreakdown: {
+    readonly personalOnly: number;
+    readonly susuOnly: number;
+    readonly both: number;
+    readonly neither: number;
+  };
   readonly activeProductUsersLast30Days: number;
   readonly registrationGrowth: readonly FounderMetricPoint[];
 };
@@ -44,6 +50,22 @@ function percent(numerator: number, denominator: number): number {
   return denominator === 0 ? 0 : Math.round((numerator / denominator) * 1000) / 10;
 }
 
+function assertProductBreakdown(
+  totalRegisteredUsers: number,
+  personalSavingsUsers: number,
+  susuCircleOwners: number,
+  breakdown: FounderMetrics["productBreakdown"],
+) {
+  const { personalOnly, susuOnly, both, neither } = breakdown;
+  if (
+    personalOnly + susuOnly + both + neither !== totalRegisteredUsers
+    || personalOnly + both !== personalSavingsUsers
+    || susuOnly + both !== susuCircleOwners
+  ) {
+    throw new Error("Founder metrics received an inconsistent product-adoption breakdown");
+  }
+}
+
 /**
  * Founder-only aggregate read model. Authorization is deliberately repeated
  * here so future callers cannot depend on the /admin page as their boundary.
@@ -63,6 +85,13 @@ export async function getFounderMetrics(
   const totalRegisteredUsers = asCount(summary.totalRegisteredUsers);
   const personalSavingsUsers = asCount(summary.personalSavingsUsers);
   const susuCircleOwners = asCount(summary.susuCircleOwners);
+  const productBreakdown = {
+    personalOnly: asCount(summary.personalOnlyUsers),
+    susuOnly: asCount(summary.susuOnlyUsers),
+    both: asCount(summary.bothProductUsers),
+    neither: asCount(summary.neitherProductUsers),
+  };
+  assertProductBreakdown(totalRegisteredUsers, personalSavingsUsers, susuCircleOwners, productBreakdown);
 
   return {
     generatedAt: referenceTime.toISOString(),
@@ -80,6 +109,7 @@ export async function getFounderMetrics(
       owners: susuCircleOwners,
       adoptionPercent: percent(susuCircleOwners, totalRegisteredUsers),
     },
+    productBreakdown,
     activeProductUsersLast30Days: asCount(summary.activeProductUsers),
     registrationGrowth: growth.map((point) => ({
       date: point.date,

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { en } from "@/src/i18n/dictionaries/en";
+import { fr } from "@/src/i18n/dictionaries/fr";
+import { categoryWhere, founderDirectoryWhere } from "@/src/repositories/founder-user-directory.repository";
 import {
   categoryForCounts,
   getFounderUserDirectory,
@@ -56,6 +59,29 @@ test("case-preserving server query parsing safely normalizes filters and invalid
   });
 });
 
+test("all five directory filters use the approved ownership semantics, including users who own both products", () => {
+  assert.deepEqual(categoryWhere("ALL"), {});
+  assert.deepEqual(categoryWhere("PERSONAL_SAVINGS"), { ownedGoals: { some: {} } });
+  assert.deepEqual(categoryWhere("SUSU"), { ownedCircles: { some: {} } });
+  assert.deepEqual(categoryWhere("BOTH"), { ownedGoals: { some: {} }, ownedCircles: { some: {} } });
+  assert.deepEqual(categoryWhere("NEITHER"), { ownedGoals: { none: {} }, ownedCircles: { none: {} } });
+});
+
+test("inclusive product filters retain their ownership predicate when combined with a search", () => {
+  assert.deepEqual(founderDirectoryWhere({ search: "Ada", category: "PERSONAL_SAVINGS" }), {
+    AND: [
+      { ownedGoals: { some: {} } },
+      { OR: [{ name: { contains: "Ada", mode: "insensitive" } }, { email: { contains: "Ada", mode: "insensitive" } }] },
+    ],
+  });
+  assert.deepEqual(founderDirectoryWhere({ search: "Ada", category: "SUSU" }), {
+    AND: [
+      { ownedCircles: { some: {} } },
+      { OR: [{ name: { contains: "Ada", mode: "insensitive" } }, { email: { contains: "Ada", mode: "insensitive" } }] },
+    ],
+  });
+});
+
 test("pagination is capped to the final available page and preserves a complete filtered count", async () => {
   const data = repository([record("c1", 1, 1)]);
   data.count = async (query: unknown) => { data.calls.push(["count", query]); return 21; };
@@ -73,6 +99,17 @@ test("category classification treats archived owned records consistently as owne
 
 const repositorySource = readFileSync(new URL("../repositories/founder-user-directory.repository.ts", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../app/(app)/admin/users/page.tsx", import.meta.url), "utf8");
+
+test("overlapping-product entries receive the correct secondary ownership label in EN and FR", () => {
+  assert.equal(en.adminDirectory.alsoOwnsSusuCircles, "Also owns SUSU circles");
+  assert.equal(en.adminDirectory.alsoOwnsPersonalSavings, "Also owns Personal Savings");
+  assert.equal(fr.adminDirectory.alsoOwnsSusuCircles, "Possède aussi des cercles SUSU");
+  assert.equal(fr.adminDirectory.alsoOwnsPersonalSavings, "Possède aussi une épargne personnelle");
+  assert.match(pageSource, /selectedCategory === "PERSONAL_SAVINGS"/);
+  assert.match(pageSource, /selectedCategory === "SUSU"/);
+  assert.match(pageSource, /copy\.alsoOwnsSusuCircles/);
+  assert.match(pageSource, /copy\.alsoOwnsPersonalSavings/);
+});
 
 test("repository filters before deterministic pagination and selects no credentials or financial histories", () => {
   assert.match(repositorySource, /mode: "insensitive"/);

@@ -22,12 +22,12 @@ const directorySelect = {
 
 export type FounderDirectoryUserRecord = Prisma.UserGetPayload<{ select: typeof directorySelect }>;
 
-function categoryWhere(category: FounderDirectoryCategory): Prisma.UserWhereInput {
+export function categoryWhere(category: FounderDirectoryCategory): Prisma.UserWhereInput {
   switch (category) {
     case "PERSONAL_SAVINGS":
-      return { ownedGoals: { some: {} }, ownedCircles: { none: {} } };
+      return { ownedGoals: { some: {} } };
     case "SUSU":
-      return { ownedGoals: { none: {} }, ownedCircles: { some: {} } };
+      return { ownedCircles: { some: {} } };
     case "BOTH":
       return { ownedGoals: { some: {} }, ownedCircles: { some: {} } };
     case "NEITHER":

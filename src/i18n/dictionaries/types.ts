@@ -87,10 +87,15 @@ export type Dictionary = {
     last7Days: string;
     last30Days: string;
     productAdoption: string;
+    adoptionBreakdown: string;
     personalSavingsUsers: string;
     personalSavingsAdoption: string;
     susuCircleOwners: string;
     susuAdoption: string;
+    personalSavingsOnly: string;
+    susuOnly: string;
+    bothProducts: string;
+    neitherProduct: string;
     activity: string;
     activeProductUsers: string;
     registrationGrowth: string;
@@ -121,6 +126,8 @@ export type Dictionary = {
     next: string;
     results: string;
     backToOverview: string;
+    alsoOwnsSusuCircles: string;
+    alsoOwnsPersonalSavings: string;
   };
   memberLogin: {
     eyebrow: string;

@@ -85,6 +85,18 @@ export function FounderMetricsDashboard({ metrics, dictionary, locale }: { metri
           <MetricCard label={copy.personalSavingsUsers} value={metrics.personalSavings.users} detail={`${percentage(metrics.personalSavings.adoptionPercent)} ${copy.percentOfRegisteredUsers}`} />
           <MetricCard label={copy.susuCircleOwners} value={metrics.susu.owners} detail={`${percentage(metrics.susu.adoptionPercent)} ${copy.percentOfRegisteredUsers}`} />
         </div>
+        <div className="mt-5 rounded-3xl border border-[var(--nia-border)] bg-[var(--nia-surface-soft)] p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 className="font-serif text-xl tracking-tight">{copy.adoptionBreakdown}</h3>
+            <p className="text-sm text-[var(--nia-text-muted)]">{`${copy.registeredUsers}: ${metrics.totalRegisteredUsers}`}</p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <MetricCard label={copy.personalSavingsOnly} value={metrics.productBreakdown.personalOnly} />
+            <MetricCard label={copy.susuOnly} value={metrics.productBreakdown.susuOnly} />
+            <MetricCard label={copy.bothProducts} value={metrics.productBreakdown.both} />
+            <MetricCard label={copy.neitherProduct} value={metrics.productBreakdown.neither} />
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="activity-title">

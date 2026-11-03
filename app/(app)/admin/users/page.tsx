@@ -20,14 +20,26 @@ function hrefFor(query: { search: string; category: string; page?: number }) {
   return serialized ? `/admin/users?${serialized}` : "/admin/users";
 }
 
-function categoryLabel(entry: FounderDirectoryEntry, dictionary: Awaited<ReturnType<typeof getDictionary>>) {
+function productClassification(
+  entry: FounderDirectoryEntry,
+  selectedCategory: string,
+  dictionary: Awaited<ReturnType<typeof getDictionary>>,
+) {
   const copy = dictionary.adminDirectory;
+  if (entry.category === "BOTH" && selectedCategory === "PERSONAL_SAVINGS") {
+    return { label: copy.personalSavings, secondaryLabel: copy.alsoOwnsSusuCircles };
+  }
+  if (entry.category === "BOTH" && selectedCategory === "SUSU") {
+    return { label: copy.susu, secondaryLabel: copy.alsoOwnsPersonalSavings };
+  }
   return {
-    PERSONAL_SAVINGS: copy.personalSavings,
-    SUSU: copy.susu,
-    BOTH: copy.both,
-    NEITHER: copy.neither,
-  }[entry.category];
+    label: {
+      PERSONAL_SAVINGS: copy.personalSavings,
+      SUSU: copy.susu,
+      BOTH: copy.both,
+      NEITHER: copy.neither,
+    }[entry.category],
+  };
 }
 
 export default async function FounderUserDirectoryPage({ searchParams }: { searchParams: SearchParams }) {
@@ -85,7 +97,15 @@ export default async function FounderUserDirectoryPage({ searchParams }: { searc
                   <p className="text-sm text-[var(--nia-text-muted)]"><span className="mr-2 font-semibold md:hidden">{copy.registered}:</span>{dateFormatter.format(new Date(entry.registeredAt))}</p>
                   <p className="text-sm"><span className="mr-2 font-semibold md:hidden">{copy.goals}:</span>{entry.goalCount}</p>
                   <p className="text-sm"><span className="mr-2 font-semibold md:hidden">{copy.circles}:</span>{entry.circleCount}</p>
-                  <span className="w-fit rounded-full bg-[var(--nia-active-soft)] px-3 py-1 text-xs font-bold text-[var(--nia-primary)]">{categoryLabel(entry, dictionary)}</span>
+                  {(() => {
+                    const classification = productClassification(entry, directory.category, dictionary);
+                    return (
+                      <div className="w-fit">
+                        <span className="rounded-full bg-[var(--nia-active-soft)] px-3 py-1 text-xs font-bold text-[var(--nia-primary)]">{classification.label}</span>
+                        {"secondaryLabel" in classification ? <p className="mt-2 text-xs text-[var(--nia-text-muted)]">{classification.secondaryLabel}</p> : null}
+                      </div>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>
