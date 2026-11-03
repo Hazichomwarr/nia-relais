@@ -23,24 +23,27 @@ function hostnameOf(connectionString: string | undefined): string | null {
 
 /**
  * Positive-only safety check: an isolated test database is one that is
- * explicitly configured via TEST_DATABASE_URL AND whose connection target
- * (compared by hostname, not raw string equality, so query-string or
- * credential differences can't mask the same underlying server) is
- * verifiably distinct from both the pooled (DATABASE_URL) and direct
- * (DIRECT_URL) production connections.
+ * explicitly configured via TEST_DATABASE_URL after the Node test bootstrap
+ * has positively verified its Neon branch identity. The bootstrap compares
+ * actual `neon.branch_id` values for the test, pooled, and direct targets;
+ * that is stronger than a hostname comparison and remains safe if endpoints
+ * are renamed or rotated.
  *
- * Comparing hostnames rather than full connection strings or database names
- * matters specifically for this project's database (Neon): every branch of
- * a Neon project can be named identically ("neondb" by default), so
- * comparing database names alone could treat two genuinely different
- * physical databases as "the same" (a false negative) or, worse, the
- * default name being shared could mask a real collision if compared
- * naively. The hostname is what Neon uses to route to a specific
- * project/branch's compute endpoint, so it is the correct identity signal
- * for "is this actually the same database instance."
+ * This helper still validates that TEST_DATABASE_URL is syntactically valid,
+ * but it intentionally does not attempt to re-prove identity from the URL.
+ * The bootstrap is the only layer that opens read-only connections and checks
+ * the provider's branch metadata before test modules can import Prisma.
  */
 export function checkIsolatedTestDatabaseConfiguration(): IsolatedTestDatabaseCheck {
   const testUrl = process.env.TEST_DATABASE_URL;
+
+  if (process.env.NIA_TEST_DATABASE_IDENTITY_VERIFIED !== "1") {
+    return {
+      isolated: false,
+      reason:
+        "The test database identity bootstrap did not verify a dedicated Neon branch. Refusing to run a database-writing test directly.",
+    };
+  }
 
   if (!testUrl || testUrl.trim().length === 0) {
     return {
@@ -55,16 +58,6 @@ export function checkIsolatedTestDatabaseConfiguration(): IsolatedTestDatabaseCh
     return {
       isolated: false,
       reason: "TEST_DATABASE_URL is not a valid connection URL.",
-    };
-  }
-
-  const productionHost = hostnameOf(process.env.DATABASE_URL);
-  const directHost = hostnameOf(process.env.DIRECT_URL);
-
-  if (testHost === productionHost || testHost === directHost) {
-    return {
-      isolated: false,
-      reason: `TEST_DATABASE_URL resolves to the same host ("${testHost}") as the configured production database. Refusing to treat this as isolated.`,
     };
   }
 

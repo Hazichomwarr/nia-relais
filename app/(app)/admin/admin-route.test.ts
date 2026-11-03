@@ -12,8 +12,10 @@ const dashboardSource = readFileSync(new URL("../dashboard/page.tsx", import.met
 
 test("the admin route authorizes on the server before rendering founder content", () => {
   assert.match(routeSource, /await requireSuperAdmin\(\)/);
+  assert.match(routeSource, /getFounderMetrics\(\)/);
   assert.match(routeSource, /PageBackLink href="\/dashboard"/);
   assert.match(routeSource, /dictionary\.admin\.title/);
+  assert.match(routeSource, /href="\/admin\/users"/);
 });
 
 test("administration navigation is conditional, localized, and has no member equivalent", () => {

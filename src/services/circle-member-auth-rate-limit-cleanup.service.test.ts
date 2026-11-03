@@ -80,12 +80,20 @@ test("Guard: refuses when TEST_DATABASE_URL is not a valid URL", () => {
   }
 });
 
-test("Guard: accepts a genuinely distinct hostname", () => {
-  const saved = { test: process.env.TEST_DATABASE_URL, db: process.env.DATABASE_URL, direct: process.env.DIRECT_URL };
+test("Guard: requires the verified identity marker from the test bootstrap", () => {
+  const saved = {
+    test: process.env.TEST_DATABASE_URL,
+    db: process.env.DATABASE_URL,
+    direct: process.env.DIRECT_URL,
+    verified: process.env.NIA_TEST_DATABASE_IDENTITY_VERIFIED,
+  };
   try {
     process.env.DATABASE_URL = "postgresql://user:pass@prod.example.internal:5432/neondb";
     process.env.DIRECT_URL = "postgresql://user:pass@prod.example.internal:5432/neondb";
     process.env.TEST_DATABASE_URL = "postgresql://user:pass@test-branch.example.internal:5432/neondb";
+    delete process.env.NIA_TEST_DATABASE_IDENTITY_VERIFIED;
+    assert.equal(checkIsolatedTestDatabaseConfiguration().isolated, false);
+    process.env.NIA_TEST_DATABASE_IDENTITY_VERIFIED = "1";
     const result = checkIsolatedTestDatabaseConfiguration();
     assert.equal(result.isolated, true);
   } finally {
@@ -93,11 +101,12 @@ test("Guard: accepts a genuinely distinct hostname", () => {
   }
 });
 
-function restoreEnv(saved: { test?: string; db?: string; direct?: string }) {
+function restoreEnv(saved: { test?: string; db?: string; direct?: string; verified?: string }) {
   for (const [key, value] of [
     ["TEST_DATABASE_URL", saved.test],
     ["DATABASE_URL", saved.db],
     ["DIRECT_URL", saved.direct],
+    ["NIA_TEST_DATABASE_IDENTITY_VERIFIED", saved.verified],
   ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;

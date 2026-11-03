@@ -10,5 +10,19 @@
 // local-Postgres default instead of the real configured database.
 import { register } from "node:module";
 import "dotenv/config";
+import { verifyIsolatedTestDatabaseIdentity } from "./test-database-identity.mjs";
+
+if (process.env.NIA_TEST_MODE === "1") {
+  const testUrl = process.env.TEST_DATABASE_URL;
+  await verifyIsolatedTestDatabaseIdentity();
+
+  // Every Prisma import below this point receives the dedicated test target,
+  // never the application's pooled or direct connection string.
+  process.env.NIA_ORIGINAL_DATABASE_URL = process.env.DATABASE_URL ?? "";
+  process.env.NIA_ORIGINAL_DIRECT_URL = process.env.DIRECT_URL ?? "";
+  process.env.NIA_TEST_DATABASE_IDENTITY_VERIFIED = "1";
+  process.env.DATABASE_URL = testUrl;
+  process.env.DIRECT_URL = testUrl;
+}
 
 register("./test-path-alias-loader.mjs", import.meta.url);
