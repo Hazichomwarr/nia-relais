@@ -14,6 +14,12 @@ export type FounderMetricsSummaryRecord = {
   readonly bothProductUsers: number | bigint;
   readonly neitherProductUsers: number | bigint;
   readonly activeProductUsers: number | bigint;
+  readonly personalSavingsSetupUsers: number | bigint;
+  readonly personalSavingsActivatedOwners: number | bigint;
+  readonly susuSetupOwners: number | bigint;
+  readonly susuOperationallyActivatedOwners: number | bigint;
+  readonly activePlatformActorsLast7Days: number | bigint;
+  readonly activePlatformActorsLast30Days: number | bigint;
 };
 
 export type FounderRegistrationGrowthRecord = {
@@ -39,7 +45,7 @@ export const founderMetricsRepository: FounderMetricsRepository = {
     const last30Days = new Date(referenceTime.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const rows = await prisma.$queryRaw<FounderMetricsSummaryRecord[]>(Prisma.sql`
-      WITH product_actions AS (
+      WITH legacy_product_actions AS (
         SELECT "recordedById" AS "actorId"
         FROM "Deposit"
         WHERE "createdAt" >= ${last30Days} AND "createdAt" < ${referenceTime}
@@ -58,6 +64,53 @@ export const founderMetricsRepository: FounderMetricsRepository = {
           AND "createdAt" < ${referenceTime}
           AND "confirmationBasis" = 'MEMBER_CONFIRMED'::"PayoutConfirmationBasis"
       ),
+      action_events AS (
+        SELECT "recordedById" AS "actorId", "createdAt" AS "occurredAt"
+        FROM "Deposit"
+
+        UNION
+
+        SELECT "approvedById" AS "actorId", "approvedAt" AS "occurredAt"
+        FROM "Deposit"
+        WHERE "status" = 'APPROVED'::"DepositStatus"
+          AND "approvedById" IS NOT NULL
+          AND "approvedAt" IS NOT NULL
+
+        UNION
+
+        SELECT "rejectedById" AS "actorId", "rejectedAt" AS "occurredAt"
+        FROM "Deposit"
+        WHERE "status" = 'REJECTED'::"DepositStatus"
+          AND "rejectedById" IS NOT NULL
+          AND "rejectedAt" IS NOT NULL
+
+        UNION
+
+        SELECT "recordedById" AS "actorId", "recordedAt" AS "occurredAt"
+        FROM "ContributionPayment"
+
+        UNION
+
+        SELECT "confirmedById" AS "actorId", "confirmedAt" AS "occurredAt"
+        FROM "ContributionPayment"
+        WHERE "status" = 'CONFIRMED'::"ContributionPaymentStatus"
+          AND "confirmedById" IS NOT NULL
+          AND "confirmedAt" IS NOT NULL
+
+        UNION
+
+        SELECT "activatedById" AS "actorId", "activatedAt" AS "occurredAt"
+        FROM "PayoutRound"
+        WHERE "closureBasis" = 'NIA_MANAGED'::"RoundClosureBasis"
+          AND "activatedById" IS NOT NULL
+          AND "activatedAt" IS NOT NULL
+
+        UNION
+
+        SELECT "recordedById" AS "actorId", "recordedAt" AS "occurredAt"
+        FROM "Payout"
+        WHERE "confirmationBasis" = 'MEMBER_CONFIRMED'::"PayoutConfirmationBasis"
+      ),
       goal_owners AS (
         SELECT DISTINCT "ownerId"
         FROM "PersonalGoal"
@@ -65,6 +118,26 @@ export const founderMetricsRepository: FounderMetricsRepository = {
       circle_owners AS (
         SELECT DISTINCT "ownerId"
         FROM "SavingsCircle"
+      ),
+      new_circle_owners AS (
+        SELECT DISTINCT "ownerId"
+        FROM "SavingsCircle"
+        WHERE "originKind" = 'NEW'::"CircleOriginKind"
+      ),
+      personal_savings_activated_owners AS (
+        SELECT DISTINCT "PersonalGoal"."ownerId"
+        FROM "Deposit"
+        INNER JOIN "PersonalGoal" ON "PersonalGoal"."id" = "Deposit"."goalId"
+        WHERE "Deposit"."status" = 'APPROVED'::"DepositStatus"
+          AND "Deposit"."approvedAt" IS NOT NULL
+      ),
+      susu_operationally_activated_owners AS (
+        SELECT DISTINCT "SavingsCircle"."ownerId"
+        FROM "PayoutRound"
+        INNER JOIN "SavingsCircle" ON "SavingsCircle"."id" = "PayoutRound"."circleId"
+        WHERE "PayoutRound"."closureBasis" = 'NIA_MANAGED'::"RoundClosureBasis"
+          AND "PayoutRound"."activatedAt" IS NOT NULL
+          AND "PayoutRound"."activatedById" IS NOT NULL
       ),
       user_product_ownership AS (
         SELECT
@@ -86,7 +159,13 @@ export const founderMetricsRepository: FounderMetricsRepository = {
         (SELECT COUNT(*) FROM user_product_ownership WHERE NOT "hasPersonalSavings" AND "hasSusu") AS "susuOnlyUsers",
         (SELECT COUNT(*) FROM user_product_ownership WHERE "hasPersonalSavings" AND "hasSusu") AS "bothProductUsers",
         (SELECT COUNT(*) FROM user_product_ownership WHERE NOT "hasPersonalSavings" AND NOT "hasSusu") AS "neitherProductUsers",
-        (SELECT COUNT(DISTINCT "actorId") FROM product_actions) AS "activeProductUsers"
+        (SELECT COUNT(DISTINCT "actorId") FROM legacy_product_actions) AS "activeProductUsers",
+        (SELECT COUNT(*) FROM goal_owners) AS "personalSavingsSetupUsers",
+        (SELECT COUNT(*) FROM personal_savings_activated_owners) AS "personalSavingsActivatedOwners",
+        (SELECT COUNT(*) FROM new_circle_owners) AS "susuSetupOwners",
+        (SELECT COUNT(*) FROM susu_operationally_activated_owners) AS "susuOperationallyActivatedOwners",
+        (SELECT COUNT(DISTINCT "actorId") FROM action_events WHERE "occurredAt" >= ${last7Days} AND "occurredAt" < ${referenceTime}) AS "activePlatformActorsLast7Days",
+        (SELECT COUNT(DISTINCT "actorId") FROM action_events WHERE "occurredAt" >= ${last30Days} AND "occurredAt" < ${referenceTime}) AS "activePlatformActorsLast30Days"
     `);
 
     return firstRow(rows);

@@ -98,6 +98,16 @@ export type Dictionary = {
     neitherProduct: string;
     activity: string;
     activeProductUsers: string;
+    analytics: string;
+    personalSavingsSetup: string;
+    personalSavingsActivation: string;
+    susuSetup: string;
+    susuOperationalActivation: string;
+    activePlatformActors: string;
+    setupDescription: string;
+    activationDescription: string;
+    operationalActivationDescription: string;
+    actorActivityDescription: string;
     registrationGrowth: string;
     registrationGrowthDescription: string;
     noRegistrationsYet: string;

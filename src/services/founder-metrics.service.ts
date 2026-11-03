@@ -25,6 +25,14 @@ export type FounderMetrics = {
     readonly neither: number;
   };
   readonly activeProductUsersLast30Days: number;
+  readonly analytics: {
+    readonly personalSavingsSetupUsers: number;
+    readonly personalSavingsActivatedOwners: number;
+    readonly susuSetupOwners: number;
+    readonly susuOperationallyActivatedOwners: number;
+    readonly activePlatformActorsLast7Days: number;
+    readonly activePlatformActorsLast30Days: number;
+  };
   readonly registrationGrowth: readonly FounderMetricPoint[];
 };
 
@@ -111,6 +119,14 @@ export async function getFounderMetrics(
     },
     productBreakdown,
     activeProductUsersLast30Days: asCount(summary.activeProductUsers),
+    analytics: {
+      personalSavingsSetupUsers: asCount(summary.personalSavingsSetupUsers),
+      personalSavingsActivatedOwners: asCount(summary.personalSavingsActivatedOwners),
+      susuSetupOwners: asCount(summary.susuSetupOwners),
+      susuOperationallyActivatedOwners: asCount(summary.susuOperationallyActivatedOwners),
+      activePlatformActorsLast7Days: asCount(summary.activePlatformActorsLast7Days),
+      activePlatformActorsLast30Days: asCount(summary.activePlatformActorsLast30Days),
+    },
     registrationGrowth: growth.map((point) => ({
       date: point.date,
       registrations: asCount(point.registrations),

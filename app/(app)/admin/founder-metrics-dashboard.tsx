@@ -106,6 +106,18 @@ export function FounderMetricsDashboard({ metrics, dictionary, locale }: { metri
         </div>
       </section>
 
+      <section aria-labelledby="analytics-title">
+        <h2 id="analytics-title" className="font-serif text-2xl tracking-tight">{copy.analytics}</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <MetricCard label={copy.personalSavingsSetup} value={metrics.analytics.personalSavingsSetupUsers} detail={copy.setupDescription} />
+          <MetricCard label={copy.personalSavingsActivation} value={metrics.analytics.personalSavingsActivatedOwners} detail={copy.activationDescription} />
+          <MetricCard label={copy.susuSetup} value={metrics.analytics.susuSetupOwners} detail={copy.setupDescription} />
+          <MetricCard label={copy.susuOperationalActivation} value={metrics.analytics.susuOperationallyActivatedOwners} detail={copy.operationalActivationDescription} />
+          <MetricCard label={`${copy.activePlatformActors} · ${copy.last7Days}`} value={metrics.analytics.activePlatformActorsLast7Days} detail={copy.actorActivityDescription} />
+          <MetricCard label={`${copy.activePlatformActors} · ${copy.last30Days}`} value={metrics.analytics.activePlatformActorsLast30Days} detail={copy.actorActivityDescription} />
+        </div>
+      </section>
+
       <section aria-labelledby="registration-growth-title">
         <h2 id="registration-growth-title" className="font-serif text-2xl tracking-tight">{copy.registrationGrowth}</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--nia-text-muted)]">{copy.registrationGrowthDescription}</p>
